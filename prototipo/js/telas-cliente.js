@@ -827,10 +827,14 @@ TELAS.encontrada = {
     +   '</div>'
     + '</div>'
 
+    /* DECISÃO R3: não existe mais "Recusar e aguardar outra".
+       Deixar o cliente recusar depois de ver a foto e o nome é convite à
+       discriminação por aparência, com registro no banco de dados — e ela
+       já tinha comprometido a agenda. Se houver problema real, o caminho é
+       o suporte, não a recusa. */
     + '<div class="rodape">'
     +   '<button class="btn btn-claro" onclick="abrirPerfil(' + prof.id + ')">Ver perfil completo</button>'
     +   '<button class="btn btn-principal" onclick="confirmarProfissional(' + prof.id + ')">Confirmar contratação</button>'
-    +   '<button class="btn btn-texto" onclick="recusarProfissional(' + prof.id + ')">Recusar e aguardar outra</button>'
     + '</div>';
   }
 };
@@ -855,14 +859,10 @@ function confirmarProfissional(id){
   ir("confirmado", { limparHistorico:true });
 }
 
-function recusarProfissional(id){
-  const p = pedidoAtual();
-  p.recusadas = p.recusadas || [];
-  p.recusadas.push(id);
-  p.situacao = "buscando";
-  salvar();
-  ir(escolherProfissional(p) ? "buscando" : "ninguemAceitou", { limparHistorico:true });
-}
+/* A função recusarProfissional() foi removida junto com o botão (decisão R3).
+   Com ela saiu o único caminho que levava à tela "ninguemAceitou": quando a
+   busca não dá em nada, quem responde agora é a régua da busca, que cancela
+   sozinha aos 30 minutos e abre chamado no suporte (decisão R1). */
 
 /* Quando a busca se esgota. A regra de negócio para este caso (quanto tempo
    esperar, ampliar a região, avisar o suporte) ainda precisa ser decidida —

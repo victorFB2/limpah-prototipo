@@ -99,7 +99,16 @@ body{
 .corpo{flex:1;min-height:0;overflow-y:auto;padding:4px 20px 20px}
 .rodape{
   flex:none;padding:12px 20px calc(16px + env(safe-area-inset-bottom));
-  background:linear-gradient(to top, var(--fundo) 70%, transparent);
+  background:var(--fundo);
+  position:relative;
+}
+/* Faixa que desbota logo acima do rodapé.
+   Em celular baixo o conteúdo não cabe e a parte de cima rola — sem esta
+   faixa o corte parece defeito, em vez de "tem mais coisa aqui embaixo". */
+.rodape::before{
+  content:"";position:absolute;left:0;right:0;top:-26px;height:26px;
+  background:linear-gradient(to top, var(--fundo), transparent);
+  pointer-events:none;
 }
 
 h2.titulo{font-size:22px;line-height:1.25;margin:6px 0 6px;font-weight:800}
