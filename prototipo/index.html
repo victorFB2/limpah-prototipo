@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Limpah — protótipo</title>
+<link rel="stylesheet" href="css/limpah.css">
+</head>
+<body>
+
+  <!-- Moldura de celular. No computador aparece como um telefone no centro da tela.
+       No celular de verdade, ocupa a tela inteira (ver o @media do CSS). -->
+  <div id="telefone">
+    <div id="barra-status">
+      <span>9:41</span>
+      <span class="sinais">▮▮▮ ᯤ ▰</span>
+    </div>
+    <div id="palco"><!-- as telas são desenhadas aqui pelo app.js --></div>
+  </div>
+
+  <div id="aviso-prototipo">
+    <strong>Protótipo fictício.</strong>
+    Nada aqui cobra dinheiro, consulta antecedentes, usa GPS ou envia notificação de verdade.
+    <a href="#" onclick="reiniciarPrototipo();return false;">Reiniciar do zero</a>
+  </div>
+
+  <script charset="utf-8" src="js/dados.js"></script>
+  <script charset="utf-8" src="js/telas-acesso.js"></script>
+  <script charset="utf-8" src="js/telas-cliente.js"></script>
+  <script charset="utf-8" src="js/app.js"></script>
+</body>
+</html>
