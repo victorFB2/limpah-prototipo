@@ -6,15 +6,15 @@
    ========================================================================== */
 
 :root{
-  --roxo:#6C3AD8;
-  --roxo-escuro:#4A22A0;
-  --roxo-noite:#2E1259;
+  --roxo:#6338DE;
+  --roxo-escuro:#3B1D9E;
+  --roxo-noite:#2E1881;
   --roxo-claro:#F2ECFF;
   --roxo-borda:#E1D6FB;
 
   --texto:#241B3A;
   --suave:#6F6786;
-  --fundo:#F7F4FF;
+  --fundo:#F9F9FB;
   --branco:#FFFFFF;
 
   --verde:#16A34A;
@@ -115,7 +115,7 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
   transition:transform .08s, filter .15s;
 }
 .btn:active{transform:scale(.985)}
-.btn-principal{background:var(--roxo);color:#fff;box-shadow:0 6px 18px rgba(108,58,216,.32)}
+.btn-principal{background:var(--roxo);color:#fff;box-shadow:0 6px 18px rgba(99,56,222,.32)}
 .btn-principal:disabled{background:#CFC6E6;color:#fff;box-shadow:none;cursor:not-allowed}
 .btn-claro{background:var(--branco);color:var(--roxo);box-shadow:var(--sombra)}
 .btn-contorno{background:transparent;color:var(--roxo);border:1.5px solid var(--roxo-borda)}
@@ -276,7 +276,7 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 
 /* ---------- telas especiais ---------- */
 .noite{
-  flex:1;background:linear-gradient(165deg,#4A22A0,#2E1259 70%);
+  flex:1;background:linear-gradient(165deg,var(--roxo-escuro),var(--roxo-noite) 70%);
   color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;
   text-align:center;padding:30px;
 }
