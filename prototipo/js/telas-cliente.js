@@ -647,7 +647,12 @@ TELAS.buscando = {
     if(b.modo === "normal"){
       agendar(function(){
         if(E.tela === "buscando" && E.busca.modo === "normal"){
-          ir("encontrada", { limparHistorico:true });
+          /* Ela aceitou. Pela decisão R3 o aceite já vale pelos dois lados,
+             então o serviço nasce confirmado — não há mais o que o cliente
+             confirmar depois. */
+          const p = pedidoAtual();
+          const escolhida = escolherProfissional(p);
+          if(escolhida) confirmarProfissional(escolhida.id);
         }
       }, 3500);
     }
@@ -779,66 +784,6 @@ function semPedidoEmAndamento(){
 /* --------------------------------------------------------------------------
    09. PROFISSIONAL ENCONTRADA
    -------------------------------------------------------------------------- */
-TELAS.encontrada = {
-  html: function(){
-    if(semPedidoEmAndamento()) return TELAS.meusServicos.html();
-    const p = pedidoAtual();
-    const prof = escolherProfissional(p);
-    if(!prof) return TELAS.ninguemAceitou.html();
-
-    const conta = calcularPedido(p);
-    const ehFavorita = E.favoritos.indexOf(prof.id) >= 0;
-
-    let selos = "";
-    prof.verificacoes.forEach(function(v){
-      selos += '<span class="selo verde" style="margin:0 6px 6px 0">✓ ' + esc(v) + '</span>';
-    });
-
-    return ''
-    + '<div class="corpo">'
-    +   '<div style="text-align:center;padding:10px 0 4px">'
-    +     '<div style="font-size:34px">🎉</div>'
-    +     '<h2 class="titulo" style="margin-top:4px">' + esc(conta.categoria.comoChamamos.charAt(0).toUpperCase()
-        + conta.categoria.comoChamamos.slice(1)) + ' disponível!</h2>'
-    +   '</div>'
-
-    +   '<div class="cartao destaque">'
-    +     '<div class="pessoa" style="margin-bottom:14px">'
-    +       avatar(prof.nome, prof.cor, "grande")
-    +       '<div class="info"><b>' + esc(nomeCurto(prof.nome)) + (ehFavorita ? " ❤️" : "") + '</b>'
-    +       '<span>' + estrelas(prof.nota) + ' (' + prof.avaliacoes + ' avaliações)</span>'
-    +       '<span>📍 ' + String(prof.distancia).replace(".", ",") + ' km de você</span></div></div>'
-
-    +     '<div class="grade-2" style="margin-bottom:12px">'
-    +       '<div class="mini"><span>Experiência</span><b>' + prof.anos + ' anos</b></div>'
-    +       '<div class="mini"><span>Serviços</span><b>' + prof.servicos + '+</b></div>'
-    +     '</div>'
-
-    +     '<div style="background:var(--roxo-claro);border-radius:12px;padding:12px;font-size:13px;'
-    +       'line-height:1.5;font-style:italic;color:var(--roxo-escuro)">“' + esc(prof.frase) + '”</div>'
-
-    +     '<div style="margin-top:12px">' + selos + '</div>'
-    +   '</div>'
-
-    +   '<div class="cartao">'
-    +     '<div class="linha"><span class="rot">Data</span><span class="val">' + esc(dataPorExtenso(p.data)) + '</span></div>'
-    +     '<div class="linha"><span class="rot">Período</span><span class="val">' + esc(nomePeriodo(p.periodo)) + '</span></div>'
-    +     '<div class="linha total"><span class="rot">Valor</span><span class="val">' + moeda(p.total) + '</span></div>'
-    +   '</div>'
-    + '</div>'
-
-    /* DECISÃO R3: não existe mais "Recusar e aguardar outra".
-       Deixar o cliente recusar depois de ver a foto e o nome é convite à
-       discriminação por aparência, com registro no banco de dados — e ela
-       já tinha comprometido a agenda. Se houver problema real, o caminho é
-       o suporte, não a recusa. */
-    + '<div class="rodape">'
-    +   '<button class="btn btn-claro" onclick="abrirPerfil(' + prof.id + ')">Ver perfil completo</button>'
-    +   '<button class="btn btn-principal" onclick="confirmarProfissional(' + prof.id + ')">Confirmar contratação</button>'
-    + '</div>';
-  }
-};
-
 /* Escolhe quem "aceitou". Favoritas primeiro, depois as mais próximas —
    é a regra descrita na seção 14 do documento. */
 function escolherProfissional(pedido){
@@ -850,6 +795,8 @@ function escolherProfissional(pedido){
   return pool.slice().sort(function(a,b){ return a.distancia - b.distancia; })[0];
 }
 
+/* Não é mais um botão que o cliente aperta: é o que acontece no instante
+   em que a profissional aceita. Ver decisão R3 e exceção nº 4. */
 function confirmarProfissional(id){
   const p = pedidoAtual();
   p.profissionalId = id;
@@ -894,23 +841,73 @@ TELAS.confirmado = {
     /* rede de segurança: sem pedido ou sem profissional, esta tela não faz
        sentido — volta para a lista em vez de quebrar na cara do usuário */
     if(!prof) return TELAS.meusServicos.html();
+
+    const primeiro = prof.nome.split(" ")[0];
+
+    /* Os selos, do mesmo jeito que aparecem no perfil: é o que o cliente
+       ganha além da faxina, e é o argumento contra combinar por fora. */
+    let selos = "";
+    [["documento","Documento conferido"],
+     ["rosto","Identidade confirmada por selfie"],
+     ["escudo","Antecedentes verificados"]].forEach(function(sv){
+      selos += '<span class="selo verde" style="margin:0 6px 6px 0;gap:6px">'
+        + icone(sv[0], 14) + esc(sv[1]) + '</span>';
+    });
+
+    /* As ações como linhas, e não como botões empilhados no rodapé: é o
+       formato da imagem, e é o que cabe em celular baixo. */
+    const acoes = [
+      { icone:"💬", texto:"Conversar com " + primeiro,     acao:"ir('chatProfissional')" },
+      { icone:"👤", texto:"Ver perfil completo",           acao:"abrirPerfil(" + prof.id + ")" },
+      { icone:"📋", texto:"Ver detalhes do pedido",        acao:"abrirPedido('" + p.id + "')" },
+      { icone:"🗂️", texto:"Ir para meus serviços",         acao:"trocarAba('servicos')" },
+    ];
+    let linhas = "";
+    acoes.forEach(function(a){
+      linhas += '<button class="item" onclick="' + a.acao + '">'
+        + '<div style="font-size:19px;width:26px;text-align:center">' + a.icone + '</div>'
+        + '<div class="txt"><b>' + esc(a.texto) + '</b></div>'
+        + '<div class="seta">›</div></button>';
+    });
+
     return ''
     + '<div class="corpo">'
-    +   '<div class="centro" style="flex:none;padding:26px 10px 10px">'
-    +     '<div class="circulo-ok">✓</div>'
-    +     '<h2 class="titulo">Serviço confirmado! 🎊</h2>'
-    +     '<p class="apoio">' + esc(nomeCurto(prof.nome)) + ' aceitou seu pedido e chega '
+
+    +   '<div style="text-align:center;padding:14px 0 6px">'
+    +     '<div style="display:flex;justify-content:center;margin-bottom:10px">'
+    +       '<div class="circulo-ok" style="width:60px;height:60px;font-size:30px">✓</div></div>'
+    +     '<h2 class="titulo">Diarista confirmada! 🎉</h2>'
+    +     '<p class="apoio" style="margin-bottom:8px">'
+    +       esc(nomeCurto(prof.nome)) + ' aceitou seu pedido e chega '
     +       esc(dataPorExtenso(p.data).toLowerCase()) + ', no período da '
     +       esc(nomePeriodo(p.periodo).split(" ")[0].toLowerCase()) + '.</p>'
     +   '</div>'
+
+    /* o perfil dela, resumido */
+    +   '<div class="cartao destaque">'
+    +     '<div class="pessoa" style="margin-bottom:12px">'
+    +       avatar(prof.nome, prof.cor)
+    +       '<div class="info"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
+    +       '<span>' + estrelas(prof.nota) + ' (' + prof.avaliacoes + ' avaliações)</span>'
+    +       '<span>📍 ' + String(prof.distancia).replace(".", ",") + ' km de você</span></div></div>'
+
+    +     '<div class="grade-2" style="margin-bottom:12px">'
+    +       '<div class="mini"><span>Experiência</span><b>' + prof.anos + ' anos</b></div>'
+    +       '<div class="mini"><span>Serviços</span><b>' + prof.servicos + '+</b></div>'
+    +     '</div>'
+
+    +     '<div style="background:var(--roxo-claro);border-radius:12px;padding:12px;font-size:13px;'
+    +       'line-height:1.5;font-style:italic;color:var(--roxo-escuro)">“' + esc(prof.frase) + '”</div>'
+
+    +     '<div style="margin-top:12px">' + selos + '</div>'
+    +   '</div>'
+
     +   '<div class="aviso verde">🔔<div><b>Você será avisado</b>'
     +     'Enviamos um lembrete na véspera e outro quando ela estiver a caminho.</div></div>'
+
+    +   linhas
     + '</div>'
-    + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'chatProfissional\')">Conversar com ' + esc(prof.nome.split(" ")[0]) + '</button>'
-    +   '<button class="btn btn-claro" onclick="abrirPedido(\'' + p.id + '\')">Ver detalhes do pedido</button>'
-    +   '<button class="btn btn-texto" onclick="trocarAba(\'inicio\')">Ir para o início</button>'
-    + '</div>';
+    + abas("inicio");
   }
 };
 

@@ -274,6 +274,13 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .abas{
   flex:none;display:flex;background:var(--branco);border-top:1px solid var(--borda);
   padding-bottom:env(safe-area-inset-bottom);
+  position:relative;
+}
+/* mesma faixa que desbota do rodapé: avisa que o conteúdo continua acima */
+.abas::before{
+  content:"";position:absolute;left:0;right:0;top:-26px;height:26px;
+  background:linear-gradient(to top, var(--fundo), transparent);
+  pointer-events:none;
 }
 .abas button{
   flex:1;border:0;background:none;padding:9px 0 11px;cursor:pointer;font-family:inherit;
