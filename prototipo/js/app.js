@@ -198,6 +198,56 @@ function estrelas(nota){
   return "⭐ " + Number(nota).toFixed(1).replace(".", ",");
 }
 
+/* --------------------------------------------------------------------------
+   NOME CURTO — regra de privacidade do produto
+
+   O cliente nunca vê o sobrenome inteiro da profissional. "Maria Silva"
+   aparece como "Maria S." em qualquer tela do cliente. É o que impede
+   alguém de procurar a pessoa fora do aplicativo.
+   -------------------------------------------------------------------------- */
+function nomeCurto(nome){
+  const partes = String(nome || "").trim().split(/\s+/);
+  if(partes.length < 2) return partes[0] || "";
+  return partes[0] + " " + partes[partes.length - 1][0].toUpperCase() + ".";
+}
+
+
+/* --------------------------------------------------------------------------
+   ÍCONES EM SVG
+
+   Desenho vetorial escrito aqui dentro, em texto. Não é imagem de fora:
+   não baixa nada, funciona sem internet e fica idêntico em qualquer
+   aparelho — diferente do emoji, que cada sistema desenha do seu jeito.
+
+   `cor` e `tamanho` são opcionais; por padrão herda a cor do texto ao redor.
+   -------------------------------------------------------------------------- */
+const DESENHOS = {
+  /* escudo com um certo dentro: verificação feita */
+  escudo: '<path d="M12 2 4 5v6c0 5 3.4 9.1 8 11 4.6-1.9 8-6 8-11V5l-8-3Z"/>'
+        + '<path d="m8.6 11.8 2.2 2.2 4.6-4.6" stroke="#fff" stroke-width="2" '
+        + 'fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+
+  /* documento com linhas: documento conferido */
+  documento: '<path d="M6 2h7l5 5v15H6V2Z"/>'
+           + '<path d="M13 2v5h5" fill="rgba(255,255,255,.45)"/>'
+           + '<path d="M9 13h6M9 16.5h4" stroke="#fff" stroke-width="1.8" '
+           + 'stroke-linecap="round" fill="none"/>',
+
+  /* rosto dentro de uma moldura: identidade confirmada por selfie */
+  rosto: '<path d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3Z"/>'
+       + '<circle cx="12" cy="10.5" r="2.6"/>'
+       + '<path d="M7.6 17.4c.7-2.2 2.4-3.4 4.4-3.4s3.7 1.2 4.4 3.4" '
+       + 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+};
+
+function icone(nome, tamanho, cor){
+  const d = DESENHOS[nome];
+  if(!d) return "";
+  return '<svg viewBox="0 0 24 24" width="' + (tamanho || 20) + '" height="' + (tamanho || 20) + '" '
+       + 'fill="' + (cor || "currentColor") + '" aria-hidden="true" '
+       + 'style="display:block;flex:none">' + d + '</svg>';
+}
+
 
 /* --------------------------------------------------------------------------
    DATAS — o protótipo sempre mostra os próximos 14 dias a partir de hoje

@@ -181,26 +181,54 @@ const CATALOGO = [
    4. PROFISSIONAIS FICTÍCIAS
    Nenhuma dessas pessoas existe. Servem para as telas terem conteúdo.
    -------------------------------------------------------------------------- */
+/* PRIVACIDADE — regra que vale para o produto todo:
+   o cliente vê primeiro nome + inicial do sobrenome ("Maria S."), nunca o
+   sobrenome inteiro, telefone, rede social ou endereço dela. O sobrenome
+   completo fica guardado aqui só porque o dashboard da empresa precisa
+   dele; nenhuma tela do cliente pode mostrá-lo. */
 const PROFISSIONAIS = [
   { id:1, nome:"Maria Silva",        cor:"#C2410C", nota:4.8, avaliacoes:134, anos:5,
-    servicos:320, distancia:3.2, confianca:96, favorita:true,
+    servicos:320, distancia:3.2, confianca:96, favorita:true, comparecimento:98,
+    naPlataforma:"2 anos e 4 meses",
+    especialidades:["Limpeza pesada","Organização","Pós-obra"],
     frase:"Sou dedicada, caprichosa e gosto de deixar tudo impecável.",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"] },
+    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
+    comentarios:[
+      { de:"Ana P.",     nota:5, quando:"há 2 semanas", texto:"Deixou a casa impecável e ainda organizou os armários. Já agendei de novo." },
+      { de:"Carlos M.",  nota:5, quando:"há 1 mês",     texto:"Pontual e muito caprichosa. Recomendo." },
+      { de:"Fernanda L.",nota:4, quando:"há 2 meses",   texto:"Fez um bom trabalho. Só demorou um pouco na cozinha." },
+    ] },
 
   { id:2, nome:"Joana Ribeiro",      cor:"#9333EA", nota:4.9, avaliacoes:87,  anos:3,
-    servicos:210, distancia:1.8, confianca:98, favorita:true,
+    servicos:210, distancia:1.8, confianca:98, favorita:true, comparecimento:100,
+    naPlataforma:"1 ano e 7 meses",
+    especialidades:["Limpeza do dia a dia","Organização","Passar roupas"],
     frase:"Trabalho com organização e atenção aos detalhes.",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"] },
+    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
+    comentarios:[
+      { de:"Ana P.",    nota:5, quando:"há 1 semana", texto:"Chegou no horário e trabalhou muito bem. Super atenciosa." },
+      { de:"Roberto S.",nota:5, quando:"há 3 semanas",texto:"Nunca faltou em nenhuma das vezes que agendei." },
+    ] },
 
   { id:3, nome:"Cleide Souza",       cor:"#0D9488", nota:4.7, avaliacoes:56,  anos:8,
-    servicos:145, distancia:5.4, confianca:92, favorita:false,
+    servicos:145, distancia:5.4, confianca:92, favorita:false, comparecimento:95,
+    naPlataforma:"11 meses",
+    especialidades:["Limpeza pesada","Área externa"],
     frase:"Oito anos de experiência com limpeza residencial.",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"] },
+    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
+    comentarios:[
+      { de:"Juliana R.", nota:5, quando:"há 1 mês", texto:"Muita experiência, deu conta de uma casa grande sozinha." },
+    ] },
 
   { id:4, nome:"Rosângela Dias",     cor:"#B45309", nota:5.0, avaliacoes:23,  anos:2,
-    servicos:41,  distancia:2.6, confianca:89, favorita:false,
+    servicos:41,  distancia:2.6, confianca:89, favorita:false, comparecimento:100,
+    naPlataforma:"4 meses",
+    especialidades:["Limpeza do dia a dia","Passar roupas"],
     frase:"Sou nova na plataforma, mas muito caprichosa!",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"] },
+    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
+    comentarios:[
+      { de:"Marcos T.", nota:5, quando:"há 3 semanas", texto:"Primeira vez que chamei e já quero de novo." },
+    ] },
 ];
 
 

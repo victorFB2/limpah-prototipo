@@ -20,7 +20,7 @@ TELAS.home = {
       const prof = PROFISSIONAIS.find(function(x){ return x.id === proximo.profissionalId; });
       blocoProximo = '<button class="item" onclick="abrirPedido(\'' + proximo.id + '\')">'
         + avatar(prof.nome, prof.cor, "pequeno")
-        + '<div class="txt"><b>' + esc(prof.nome) + '</b>'
+        + '<div class="txt"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
         + '<span>' + esc(dataPorExtenso(proximo.data)) + ' · ' + esc(nomePeriodo(proximo.periodo)) + '</span></div>'
         + '<span class="selo verde">Confirmado</span></button>';
     } else {
@@ -52,12 +52,14 @@ TELAS.home = {
     if(favoritas.length){
       blocoFavoritas = '<div class="rotulo">Suas favoritas ❤️</div><div class="fileira">';
       favoritas.forEach(function(p){
-        blocoFavoritas += '<div style="flex:none;width:88px;text-align:center;background:var(--branco);'
+        blocoFavoritas += '<button onclick="abrirPerfil(' + p.id + ')" '
+          + 'style="flex:none;width:88px;text-align:center;background:var(--branco);border:0;'
+          + 'font-family:inherit;color:var(--texto);cursor:pointer;'
           + 'border-radius:14px;padding:12px 6px;box-shadow:var(--sombra)">'
           + '<div style="display:flex;justify-content:center;margin-bottom:6px">' + avatar(p.nome, p.cor, "pequeno") + '</div>'
           + '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
           + esc(p.nome.split(" ")[0]) + '</div>'
-          + '<div style="font-size:11px;color:var(--suave);margin-top:2px">' + estrelas(p.nota) + '</div></div>';
+          + '<div style="font-size:11px;color:var(--suave);margin-top:2px">' + estrelas(p.nota) + '</div></button>';
       });
       blocoFavoritas += '</div>';
     }
@@ -803,7 +805,7 @@ TELAS.encontrada = {
     +   '<div class="cartao destaque">'
     +     '<div class="pessoa" style="margin-bottom:14px">'
     +       avatar(prof.nome, prof.cor, "grande")
-    +       '<div class="info"><b>' + esc(prof.nome) + (ehFavorita ? " ❤️" : "") + '</b>'
+    +       '<div class="info"><b>' + esc(nomeCurto(prof.nome)) + (ehFavorita ? " ❤️" : "") + '</b>'
     +       '<span>' + estrelas(prof.nota) + ' (' + prof.avaliacoes + ' avaliações)</span>'
     +       '<span>📍 ' + String(prof.distancia).replace(".", ",") + ' km de você</span></div></div>'
 
@@ -826,6 +828,7 @@ TELAS.encontrada = {
     + '</div>'
 
     + '<div class="rodape">'
+    +   '<button class="btn btn-claro" onclick="abrirPerfil(' + prof.id + ')">Ver perfil completo</button>'
     +   '<button class="btn btn-principal" onclick="confirmarProfissional(' + prof.id + ')">Confirmar contratação</button>'
     +   '<button class="btn btn-texto" onclick="recusarProfissional(' + prof.id + ')">Recusar e aguardar outra</button>'
     + '</div>';
@@ -896,7 +899,7 @@ TELAS.confirmado = {
     +   '<div class="centro" style="flex:none;padding:26px 10px 10px">'
     +     '<div class="circulo-ok">✓</div>'
     +     '<h2 class="titulo">Serviço confirmado! 🎊</h2>'
-    +     '<p class="apoio">' + esc(prof.nome) + ' aceitou seu pedido e chega '
+    +     '<p class="apoio">' + esc(nomeCurto(prof.nome)) + ' aceitou seu pedido e chega '
     +       esc(dataPorExtenso(p.data).toLowerCase()) + ', no período da '
     +       esc(nomePeriodo(p.periodo).split(" ")[0].toLowerCase()) + '.</p>'
     +   '</div>'
@@ -907,6 +910,129 @@ TELAS.confirmado = {
     +   '<button class="btn btn-principal" onclick="ir(\'chatProfissional\')">Conversar com ' + esc(prof.nome.split(" ")[0]) + '</button>'
     +   '<button class="btn btn-claro" onclick="abrirPedido(\'' + p.id + '\')">Ver detalhes do pedido</button>'
     +   '<button class="btn btn-texto" onclick="trocarAba(\'inicio\')">Ir para o início</button>'
+    + '</div>';
+  }
+};
+
+
+/* ==========================================================================
+   78. PERFIL DA PROFISSIONAL
+
+   Aparece DEPOIS que ela aceitou. Como o cliente não pode mais recusar
+   (decisão R3), esta tela não serve para escolher — serve para ele ficar
+   tranquilo com quem já está confirmada.
+
+   Por isso o miolo dela são os SELOS DE VERIFICAÇÃO: é onde o cliente vê o
+   que está comprando além da faxina, e é o argumento mais forte contra
+   combinar por fora.
+
+   UMA TELA SÓ, parametrizada: quem chama diz de quem é o perfil, com
+   abrirPerfil(id). Serve ao aceite, aos favoritos e ao histórico.
+
+   PRIVACIDADE: nome curto ("Maria S."), nunca sobrenome inteiro, telefone,
+   rede social nem endereço. Nada que permita achar a pessoa fora do app.
+   ========================================================================== */
+function abrirPerfil(id){
+  E.profissionalAberta = id;
+  salvar();
+  ir("perfilProfissional");
+}
+
+TELAS.perfilProfissional = {
+  html: function(){
+    const prof = PROFISSIONAIS.find(function(x){ return x.id === E.profissionalAberta; })
+              || PROFISSIONAIS[0];
+    const ehFavorita = E.favoritos.indexOf(prof.id) >= 0;
+
+    /* --- os selos, em destaque: é o coração da tela --- */
+    const selos = [
+      { chave:"documento", titulo:"Documento conferido",
+        detalhe:"Documento oficial com foto, checado pela nossa equipe" },
+      { chave:"rosto",     titulo:"Identidade confirmada por selfie",
+        detalhe:"A foto dela foi comparada com o documento" },
+      { chave:"escudo",    titulo:"Antecedentes verificados",
+        detalhe:"Consulta feita antes da liberação para trabalhar" },
+    ];
+    let blocoSelos = '<div class="cartao" style="border:1.5px solid #BFE7CE;background:var(--verde-claro)">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
+      +   '<span style="color:var(--verde)">' + icone("escudo", 20) + '</span>'
+      +   '<b style="font-size:15px;color:#0F7A38">Verificada pela Limpah</b>'
+      + '</div>';
+    selos.forEach(function(s, i){
+      blocoSelos += '<div style="display:flex;gap:11px;align-items:flex-start;'
+        + 'padding:10px 0' + (i ? ';border-top:1px solid #CDECD9' : '') + '">'
+        + '<span style="color:var(--verde);margin-top:1px">' + icone(s.chave, 19) + '</span>'
+        + '<div><b style="font-size:13.5px;color:#0F7A38;display:block">' + esc(s.titulo) + '</b>'
+        + '<span style="font-size:12px;color:#3C7A57;line-height:1.45;display:block;margin-top:2px">'
+        + esc(s.detalhe) + '</span></div></div>';
+    });
+    blocoSelos += '</div>';
+
+    /* --- números --- */
+    const numeros = [
+      { valor: estrelas(prof.nota),          rotulo: prof.avaliacoes + " avaliações" },
+      { valor: prof.servicos + "+",          rotulo: "serviços feitos" },
+      { valor: prof.naPlataforma,            rotulo: "na plataforma" },
+      { valor: prof.comparecimento + "%",    rotulo: "de comparecimento" },
+    ];
+    let blocoNumeros = '<div class="grade-2">';
+    numeros.forEach(function(n){
+      blocoNumeros += '<div class="mini"><b>' + esc(n.valor) + '</b><span>' + esc(n.rotulo) + '</span></div>';
+    });
+    blocoNumeros += '</div>';
+
+    /* --- especialidades --- */
+    let blocoEspecialidades = '<div class="rotulo">Especialidades</div><div>';
+    (prof.especialidades || []).forEach(function(e){
+      blocoEspecialidades += '<span class="selo" style="margin:0 6px 6px 0">' + esc(e) + '</span>';
+    });
+    blocoEspecialidades += '</div>';
+
+    /* --- comentários de quem já contratou --- */
+    let blocoComentarios = "";
+    if((prof.comentarios || []).length){
+      blocoComentarios = '<div class="rotulo">O que dizem os clientes</div>';
+      prof.comentarios.forEach(function(c){
+        blocoComentarios += '<div class="cartao" style="margin-bottom:10px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+          +   '<b style="font-size:13.5px">' + esc(c.de) + '</b>'
+          +   '<span style="font-size:12px;color:var(--suave)">' + esc(c.quando) + '</span></div>'
+          + '<div style="font-size:12.5px;margin-bottom:6px">' + "⭐".repeat(c.nota) + '</div>'
+          + '<div style="font-size:13.5px;line-height:1.55;color:var(--suave)">' + esc(c.texto) + '</div>'
+          + '</div>';
+      });
+    }
+
+    return ''
+    + cabecalho("Perfil")
+    + '<div class="corpo">'
+
+    +   '<div style="text-align:center;padding:4px 0 16px">'
+    +     '<div style="display:flex;justify-content:center;margin-bottom:10px">'
+    +       avatar(prof.nome, prof.cor, "grande") + '</div>'
+    +     '<b style="font-size:19px">' + esc(nomeCurto(prof.nome)) + (ehFavorita ? " ❤️" : "") + '</b>'
+    +     '<div style="font-size:13px;color:var(--suave);margin-top:4px">'
+    +       esc(prof.anos) + ' anos de experiência</div>'
+    +   '</div>'
+
+    +   blocoSelos
+    +   blocoNumeros
+    +   blocoEspecialidades
+
+    +   '<div class="rotulo">Sobre</div>'
+    +   '<div class="cartao"><div style="font-size:13.5px;line-height:1.6;color:var(--suave)">'
+    +     '“' + esc(prof.frase) + '”</div></div>'
+
+    +   blocoComentarios
+
+    +   '<div class="rodape-seguro">Para a segurança de todos, não mostramos<br>'
+    +     'dados que permitam encontrar a profissional fora do aplicativo.</div>'
+    + '</div>'
+
+    + '<div class="rodape">'
+    +   '<button class="btn btn-contorno" onclick="alternarFavorita(' + prof.id + ')">'
+    +     (ehFavorita ? "❤️ Nas suas favoritas" : "🤍 Adicionar aos favoritos") + '</button>'
+    +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button>'
     + '</div>';
   }
 };
@@ -962,9 +1088,11 @@ TELAS.detalhePedido = {
       const ehFavorita = E.favoritos.indexOf(prof.id) >= 0;
       blocoProfissional = '<div class="rotulo">Profissional</div><div class="cartao">'
         + '<div class="pessoa">' + avatar(prof.nome, prof.cor)
-        + '<div class="info"><b>' + esc(prof.nome) + '</b>'
+        + '<div class="info"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
         + '<span>' + estrelas(prof.nota) + ' · ' + prof.servicos + ' serviços</span></div></div>'
-        + '<button class="btn btn-contorno" style="margin-top:14px" onclick="alternarFavorita(' + prof.id + ')">'
+        + '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirPerfil(' + prof.id + ')">'
+        + 'Ver perfil completo</button>'
+        + '<button class="btn btn-contorno" onclick="alternarFavorita(' + prof.id + ')">'
         + (ehFavorita ? "❤️ Nas suas favoritas" : "🤍 Adicionar aos favoritos") + '</button></div>';
     }
 
@@ -1066,7 +1194,7 @@ TELAS.mensagens = {
     if(prof){
       lista += '<button class="item" onclick="ir(\'chatProfissional\')">'
         + avatar(prof.nome, prof.cor, "pequeno")
-        + '<div class="txt"><b>' + esc(prof.nome) + '</b>'
+        + '<div class="txt"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
         + '<span>Combinado! Chego dentro do período. 😊</span></div>'
         + (E.naoLidas ? '<span class="selo verde">' + E.naoLidas + '</span>' : "") + '</button>';
     }
@@ -1125,7 +1253,7 @@ TELAS.chatProfissional = {
 
     const quando = p ? ("Serviço em " + dataPorExtenso(p.data)) : "Conversa";
 
-    return conversa(prof.nome, quando, prof.cor, [
+    return conversa(nomeCurto(prof.nome), quando, prof.cor, [
       { de:"ela", texto:"Oi! Aceitei seu pedido, pode contar comigo. 😊", hora:"14:32" },
       { de:"ela", texto:"Você prefere que eu comece pela cozinha ou pelos quartos?", hora:"14:32" },
       { de:"eu",  texto:"Oi! Pode começar pela cozinha, por favor.", hora:"14:35" },
