@@ -87,7 +87,12 @@ TELAS.login = {
     +   '<div class="campo"><label>E-mail ou telefone</label>'
     +     '<input id="log-email" type="text" placeholder="Digite seu e-mail ou telefone" value="ana@exemplo.com"></div>'
     +   '<div class="campo"><label>Senha</label>'
-    +     '<input id="log-senha" type="password" placeholder="Digite sua senha" value="123456"></div>'
+    +     '<div style="position:relative">'
+    +       '<input id="log-senha" type="password" placeholder="Digite sua senha" value="123456" style="padding-right:46px">'
+    +       '<button onclick="verSenha(\'log-senha\')" aria-label="Mostrar senha" '
+    +         'style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;'
+    +         'font-size:17px;cursor:pointer;padding:8px;line-height:1">\ud83d\udc41</button>'
+    +     '</div></div>'
 
     +   '<p style="text-align:right;margin:-4px 0 18px">'
     +     '<a href="#" onclick="ir(\'recuperar\');return false;" '
@@ -106,8 +111,6 @@ TELAS.login = {
     +     'Ainda não tem conta? <a href="#" onclick="ir(\'perfil\');return false;" '
     +     'style="color:var(--roxo);font-weight:700;text-decoration:none">Cadastre-se</a></p>'
 
-    +   '<div class="aviso roxo" style="margin-top:10px">💡'
-    +     '<div><b>Protótipo</b>Os campos já vêm preenchidos. Qualquer senha entra.</div></div>'
     + '</div>';
   }
 };
@@ -360,3 +363,10 @@ TELAS.diaristaEmBreve = {
     + '</div>';
   }
 };
+
+
+/* Mostra ou esconde a senha digitada, no olhinho do campo. */
+function verSenha(id){
+  const campo = document.getElementById(id);
+  if(campo) campo.type = (campo.type === "password") ? "text" : "password";
+}

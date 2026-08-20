@@ -74,12 +74,12 @@ TELAS.home = {
 
     +   '<h2 class="titulo">Olá, ' + esc(c.primeiroNome) + '! 👋<br>O que você precisa hoje?</h2>'
 
-    +   '<button class="btn btn-principal" style="margin:18px 0 22px" onclick="comecarPedido()">+ Novo serviço</button>'
+    +   '<button class="btn btn-principal" style="margin:18px 0 22px" onclick="comecarPedido()">Novo serviço</button>'
 
     +   '<div class="rotulo">Próximo serviço</div>'
     +   blocoProximo
-    +   blocoFavoritas
     +   blocoRecentes
+    +   blocoFavoritas
     + '</div>'
     + abas("inicio");
   }
@@ -114,13 +114,11 @@ TELAS.novoServico = {
     });
 
     return ''
-    + cabecalho("Novo serviço", { passo:"1 de 5" })
+    + cabecalho("Novo serviço")
     + '<div class="corpo">'
     +   '<h2 class="titulo">Qual serviço você precisa?</h2>'
     +   '<p class="apoio">Escolha uma categoria para continuar.</p>'
     +   lista
-    +   '<div class="aviso roxo">🚀<div><b>Mais categorias a caminho</b>'
-    +     'A plataforma nasce preparada para eletricistas, encanadores, montadores e outros profissionais.</div></div>'
     + '</div>';
   }
 };
@@ -155,32 +153,31 @@ TELAS.dataHorario = {
 
     let chips = '<div class="fileira">';
     dias.forEach(function(d){
+      /* formato da imagem: o nome do dia em cima, a data embaixo - "Hoje 16/05" */
       chips += '<button class="chip-data ' + (E.pedido.data === d.iso ? "marcada" : "") + '" '
         + 'onclick="escolherData(\'' + d.iso + '\')">'
         + '<span>' + esc(d.rotulo) + '</span>'
-        + '<b>' + d.dia + '</b>'
-        + '<span>' + esc(d.mes) + '</span></button>';
+        + '<b>' + esc(d.curto) + '</b></button>';
     });
     chips += '</div>';
 
     let periodos = "";
     PERIODOS.forEach(function(p){
       const marcado = E.pedido.periodo === p.id;
+      /* a imagem mostra o periodo numa linha so, sem icone: "Manha (8h - 12h)" */
       periodos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" onclick="escolherPeriodo(\'' + p.id + '\')">'
-        + '<div class="icone">' + (p.id === "manha" ? "🌅" : p.id === "tarde" ? "☀️" : "🌆") + '</div>'
-        + '<div class="txt"><b>' + esc(p.nome) + '</b><span>' + esc(p.faixa) + '</span></div>'
+        + '<div class="txt"><b>' + esc(p.nome) + ' (' + esc(p.faixa) + ')</b></div>'
         + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
     });
 
     const pronto = !!(E.pedido.data && E.pedido.periodo);
 
     return ''
-    + cabecalho("Data e horário", { passo:"2 de 5" })
+    + cabecalho("Data e horário")
     + '<div class="corpo">'
     +   '<h2 class="titulo">Para quando você precisa?</h2>'
-    +   '<div class="rotulo">Escolha o dia</div>'
     +   chips
-    +   '<div class="rotulo">Escolha o período</div>'
+    +   '<div class="rotulo">Período</div>'
     +   periodos
     +   '<p class="ajuda">A profissional chega dentro do período escolhido. '
     +     'Você recebe um aviso quando ela estiver a caminho.</p>'
@@ -267,10 +264,10 @@ TELAS.detalhes = {
     }
 
     return ''
-    + cabecalho("Detalhes do serviço", { passo:"3 de 5" })
+    + cabecalho("")
     + '<div class="corpo">'
-    +   '<h2 class="titulo">' + esc(cat.nome) + '</h2>'
-    +   '<p class="apoio">Quanto mais preciso, melhor a profissional se prepara.</p>'
+    +   '<h2 class="titulo">Detalhes do serviço</h2>'
+    +   '<p class="apoio">' + esc(cat.nome) + ' · quanto mais preciso, melhor ela se prepara.</p>'
     +   campos + duas + previa
     + '</div>'
     + '<div class="rodape"><button class="btn btn-principal" onclick="depoisDosDetalhes()">Continuar</button></div>';
@@ -363,7 +360,7 @@ TELAS.adicionais = {
     }
 
     return ''
-    + cabecalho("Adicionais", { passo:"4 de 5" })
+    + cabecalho("Adicionais")
     + '<div class="corpo">'
     +   '<h2 class="titulo">Quer incluir algo a mais?</h2>'
     +   '<p class="apoio">Opcional. Cada adicional aumenta o tempo e o valor do serviço.</p>'
@@ -465,7 +462,7 @@ TELAS.resumo = {
     const obs = E.pedido.respostas.observacoes;
 
     return ''
-    + cabecalho("Confira seu pedido", { passo:"5 de 5" })
+    + cabecalho("Confira seu pedido")
     + '<div class="corpo">'
 
     +   '<div class="cartao">'
@@ -811,8 +808,8 @@ TELAS.encontrada = {
     +       '<span>📍 ' + String(prof.distancia).replace(".", ",") + ' km de você</span></div></div>'
 
     +     '<div class="grade-2" style="margin-bottom:12px">'
-    +       '<div class="mini"><b>' + prof.anos + ' anos</b><span>de experiência</span></div>'
-    +       '<div class="mini"><b>' + prof.servicos + '+</b><span>serviços feitos</span></div>'
+    +       '<div class="mini"><span>Experiência</span><b>' + prof.anos + ' anos</b></div>'
+    +       '<div class="mini"><span>Serviços</span><b>' + prof.servicos + '+</b></div>'
     +     '</div>'
 
     +     '<div style="background:var(--roxo-claro);border-radius:12px;padding:12px;font-size:13px;'
