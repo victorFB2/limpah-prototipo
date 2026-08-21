@@ -262,8 +262,8 @@ const CLIENTE_EXEMPLO = {
 /* Acha em qual faixa de duração um serviço cai.
    Devolve também se estourou o teto de 8 horas por pessoa. */
 function faixaPara(minutosPorPessoa){
-  const horas = minutosPorPessoa / 60;
-  const achou = FAIXAS_DE_PRECO.find(f => horas <= f.horas);
+  /* procura a menor janela em que o trabalho CABE, já descontada a pausa */
+  const achou = FAIXAS_DE_PRECO.find(f => minutosPorPessoa <= trabalhoQueCabeNaJanela(f.horas));
   return achou
     ? { faixa: achou, acimaDoMaximo: false }
     : { faixa: FAIXAS_DE_PRECO[FAIXAS_DE_PRECO.length - 1], acimaDoMaximo: true };
@@ -393,6 +393,31 @@ function impactoDoAdicional(pedido, idDoAdicional){
    com pouca oferta, 4 protege contra frustração. No aplicativo real isto
    vira configuração no dashboard. */
 const ANTECEDENCIA_MINIMA_HORAS = 3;
+
+/* A PAUSA DENTRO DA JANELA (ver decisão R9)
+
+   A plataforma não vende "8 horas de trabalho": vende uma JANELA DE
+   PRESENÇA com um escopo combinado. "Maria estará na sua casa das 8h às
+   16h para fazer estes cômodos."
+
+   Dentro da janela quem administra o tempo é ela — inclusive a pausa. A
+   plataforma não manda na autônoma: mandar seria subordinação, que é
+   justamente o que caracteriza vínculo empregatício.
+
+   Mas a pausa existe, e ocupa a janela. Por isso o trabalho que cabe numa
+   janela é menor que a janela:
+
+     janela de 4h  ->  15 min de pausa  ->  cabem 3h45 de trabalho
+     janela de 6h  ->  15 min de pausa  ->  cabem 5h45 de trabalho
+     janela de 8h  ->  1 hora de pausa  ->  cabem 7h de trabalho
+
+   Sem isto, o app vendia janela de 8h para 8h de trabalho — e o serviço
+   não terminava. */
+const PAUSA_NA_JANELA = { 4: 15, 6: 15, 8: 60 };
+
+function trabalhoQueCabeNaJanela(horasDaJanela){
+  return horasDaJanela * 60 - (PAUSA_NA_JANELA[horasDaJanela] || 0);
+}
 
 /* Até quantos dias para frente o cliente pode agendar.
 

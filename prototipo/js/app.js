@@ -415,6 +415,35 @@ function hojeAindaServe(){
   return PERIODOS.some(function(p){ return periodoAindaServe(hoje, p.id); });
 }
 
+/* --------------------------------------------------------------------------
+   A JANELA DE PRESENÇA (decisão R9)
+
+   O cliente não contrata "8 horas": contrata "das 8h às 16h". Estas funções
+   transformam período escolhido + tamanho da janela em horas de relógio.
+   -------------------------------------------------------------------------- */
+const FIM_DO_DIA = 20;   // ninguém começa serviço que varre a noite adentro
+
+function janelaDoServico(periodoId, horasDaJanela){
+  const p = PERIODOS.find(function(x){ return x.id === periodoId; });
+  if(!p) return null;
+  const inicio = p.inicio;
+  const fim = inicio + horasDaJanela;
+  return {
+    inicio: inicio,
+    fim: fim,
+    cabeNoDia: fim <= FIM_DO_DIA,
+    texto: "das " + inicio + "h às " + fim + "h",
+  };
+}
+
+/* Serviço grande não cabe começando à noite. Quando não cabe, a tela avisa
+   e manda escolher um período mais cedo — em vez de prometer o impossível. */
+function periodosQueComportam(horasDaJanela){
+  return PERIODOS.filter(function(p){
+    return p.inicio + horasDaJanela <= FIM_DO_DIA;
+  });
+}
+
 function nomePeriodo(id){
   const p = PERIODOS.find(function(x){ return x.id === id; });
   return p ? (p.nome + " (" + p.faixa + ")") : "";

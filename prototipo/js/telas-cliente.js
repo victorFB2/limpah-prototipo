@@ -364,11 +364,35 @@ TELAS.detalhes = {
     const conta = calcularPedido(E.pedido);
     let previa = "";
     if(conta){
+      const janela = janelaDoServico(E.pedido.periodo, conta.horas);
       previa = '<div class="cartao destaque" style="margin-top:18px">'
-        + '<div class="linha"><span class="rot">Duração estimada</span>'
-        + '<span class="val">' + conta.horas + ' horas' + (conta.quantidade > 1 ? " (cada uma)" : "") + '</span></div>'
+        + '<div class="linha"><span class="rot">'
+        +   (conta.quantidade > 1 ? "As duas ficam" : "Ela fica") + ' na sua casa</span>'
+        + '<span class="val">' + (janela ? esc(janela.texto) : conta.horas + " horas") + '</span></div>'
         + '<div class="linha"><span class="rot">Valor estimado</span>'
-        + '<span class="val" style="color:var(--roxo)">' + moeda(conta.total) + '</span></div></div>';
+        + '<span class="val" style="color:var(--roxo)">' + moeda(conta.total)
+        + (conta.quantidade > 1 ? ' <span style="font-weight:600;color:var(--suave);font-size:12px">(duas diaristas)</span>' : "")
+        + '</span></div></div>';
+
+      /* Acima de 6h de janela existe pausa, e o cliente precisa saber antes
+         de ver a diarista sentada e achar que está sendo enrolado. */
+      if(conta.horas > 6){
+        previa += '<div class="aviso roxo">☕<div><b>Ela vai fazer uma pausa</b>'
+          + 'Numa janela de ' + conta.horas + ' horas, a lei garante intervalo de descanso. '
+          + 'Quem decide a hora é ela — e o serviço combinado sai do mesmo jeito.</div></div>';
+      }
+
+      /* Serviço grande não cabe começando tarde. */
+      if(janela && !janela.cabeNoDia){
+        const possiveis = periodosQueComportam(conta.horas).map(function(p){ return p.nome; });
+        previa += '<div class="aviso">🕗<div><b>Este serviço precisa começar mais cedo</b>'
+          + 'Uma janela de ' + conta.horas + ' horas começando à ' + esc(nomePeriodo(E.pedido.periodo).split(" ")[0].toLowerCase())
+          + ' terminaria depois das ' + FIM_DO_DIA + 'h. '
+          + (possiveis.length
+             ? 'Volte e escolha ' + esc(possiveis.join(" ou ")) + '.'
+             : 'Reduza o serviço ou peça duas diaristas.')
+          + '</div></div>';
+      }
 
       /* O TETO LEGAL (decisão R8): passou de 8 horas para uma pessoa, o
          pedido para de andar. Não é sugestão — é limite de lei. */
@@ -388,7 +412,9 @@ TELAS.detalhes = {
       }
     }
 
-    const podeContinuar = !conta || !conta.bloqueadoPorLimiteLegal;
+    const janelaEscolhida = conta ? janelaDoServico(E.pedido.periodo, conta.horas) : null;
+    const podeContinuar = !conta
+      || (!conta.bloqueadoPorLimiteLegal && (!janelaEscolhida || janelaEscolhida.cabeNoDia));
 
     return ''
     + cabecalho("")
@@ -541,7 +567,8 @@ function contaViva(conta){
       : "")
   +   '<div style="display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:800;'
   +     'padding-top:8px;margin-top:5px;border-top:1px solid var(--borda)">'
-  +     '<span>Total</span><span style="color:var(--roxo)">' + moeda(conta.total) + '</span></div>'
+  +     '<span>Total' + (conta.quantidade > 1 ? ' <span style="font-weight:600;font-size:11px">(duas)</span>' : "")
+  +     '</span><span style="color:var(--roxo)">' + moeda(conta.total) + '</span></div>'
   + '</div>';
 }
 
@@ -615,7 +642,11 @@ TELAS.resumo = {
     +     detalhes
     +     '<div class="linha"><span class="rot">Data</span><span class="val">' + esc(dataPorExtenso(E.pedido.data)) + '</span></div>'
     +     '<div class="linha"><span class="rot">Período</span><span class="val">' + esc(nomePeriodo(E.pedido.periodo)) + '</span></div>'
-    +     '<div class="linha"><span class="rot">Duração estimada</span><span class="val">' + conta.horas + ' horas</span></div>'
+    +     '<div class="linha"><span class="rot">'
+    +       (conta.quantidade > 1 ? "As duas ficam" : "Ela fica") + ' na sua casa</span>'
+    +       '<span class="val">'
+    +       esc((janelaDoServico(E.pedido.periodo, conta.horas) || {}).texto || (conta.horas + " horas"))
+    +       '</span></div>'
     +     (conta.quantidade > 1
         ? '<div class="linha"><span class="rot">Profissionais</span><span class="val">2 pessoas</span></div>' : "")
     +   '</div>'
@@ -638,7 +669,9 @@ TELAS.resumo = {
     +       '<span class="val">' + moeda(conta.precoServico) + '</span></div>'
     +     linhasAdicionais
     +     linhaTempoExtra(conta)
-    +     '<div class="linha total"><span class="rot">Total</span><span class="val">' + moeda(conta.total) + '</span></div>'
+    +     '<div class="linha total"><span class="rot">Total'
+    +       (conta.quantidade > 1 ? ' <span style="font-weight:600;font-size:12px">(duas diaristas)</span>' : "")
+    +       '</span><span class="val">' + moeda(conta.total) + '</span></div>'
     +   '</div>'
 
     +   '<div class="aviso verde">🛡️<div><b>Pagamento protegido</b>'
@@ -676,7 +709,9 @@ TELAS.pagamento = {
     +   '<p class="apoio">Só cobramos depois que uma profissional aceitar o serviço.</p>'
     +   lista
     +   '<div class="cartao" style="margin-top:16px">'
-    +     '<div class="linha total"><span class="rot">Total a pagar</span>'
+    +     '<div class="linha total"><span class="rot">Total a pagar'
+    +       (conta.quantidade > 1 ? ' <span style="font-weight:600;font-size:12px">(duas diaristas)</span>' : "")
+    +       '</span>'
     +     '<span class="val">' + moeda(conta.total) + '</span></div></div>'
     +   '<div class="aviso roxo">🧪<div><b>Protótipo</b>'
     +     'Nenhuma cobrança de verdade acontece aqui.</div></div>'
@@ -1232,7 +1267,11 @@ TELAS.detalhePedido = {
     +     '</div>'
     +     '<div class="linha"><span class="rot">Data</span><span class="val">' + esc(dataPorExtenso(p.data)) + '</span></div>'
     +     '<div class="linha"><span class="rot">Período</span><span class="val">' + esc(nomePeriodo(p.periodo)) + '</span></div>'
-    +     '<div class="linha"><span class="rot">Duração</span><span class="val">' + p.horas + ' horas</span></div>'
+    +     '<div class="linha"><span class="rot">'
+    +       ((p.quantidade > 1) ? "As duas ficam" : "Ela fica") + ' na sua casa</span>'
+    +       '<span class="val">'
+    +       esc((janelaDoServico(p.periodo, p.horas) || {}).texto || (p.horas + " horas"))
+    +       '</span></div>'
     +   '</div>'
 
     /* o comprovante: a mesma quebra de valores que ele viu ao pedir */
@@ -1253,7 +1292,9 @@ TELAS.detalhePedido = {
         horas: p.horas,
         tempoExtra: p.tempoExtra,
       })
-    +     '<div class="linha total"><span class="rot">Total</span><span class="val">' + moeda(p.total) + '</span></div>'
+    +     '<div class="linha total"><span class="rot">Total'
+    +       (p.quantidade > 1 ? ' <span style="font-weight:600;font-size:12px">(duas diaristas)</span>' : "")
+    +       '</span><span class="val">' + moeda(p.total) + '</span></div>'
     +   '</div>'
     +   blocoProfissional
     + '</div>'
