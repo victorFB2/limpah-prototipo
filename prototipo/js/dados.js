@@ -331,7 +331,20 @@ function calcularPedido(pedido){
     repasseUnitario: Math.round(repasseUnit * 100) / 100,
     repasseTotal:    Math.round(repasseTotal * 100) / 100,
     margem:          Math.round((total - repasseTotal) * 100) / 100,
+
+    /* --- O TETO LEGAL (ver decisão R8 no DECISOES.md) --- */
+
+    /* Quanto trabalho sobra para cada uma, de verdade, sem o teto. */
+    horasPorPessoa: Math.round((minutos / quantidade / 60) * 10) / 10,
+
+    /* Passou das 8 horas por pessoa. Não é "atenção ao tempo": é serviço
+       que a plataforma NÃO PODE vender assim. */
     acimaDoMaximo,
+
+    /* Trava: com este pedido do jeito que está, ninguém pode continuar.
+       As saídas são duas profissionais ou dividir em dois dias. */
+    bloqueadoPorLimiteLegal: acimaDoMaximo,
+
     sugereDuas: acimaDoMaximo && categoria.aceitaDuasProfissionais && quantidade === 1,
   };
 }

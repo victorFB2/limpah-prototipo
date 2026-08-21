@@ -105,12 +105,41 @@ function trocarAba(aba){
   ir(destino, { limparHistorico:true });
 }
 
+let ultimaTelaDesenhada = null;
+
 function desenhar(){
   const tela = TELAS[E.tela];
   if(!tela) return;
   pararRelogios();                 // nenhum contador de uma tela antiga sobrevive
+
   const palco = document.getElementById("palco");
-  palco.innerHTML = '<div class="tela">' + tela.html() + '</div>';
+
+  /* O PISCA-PISCA, e por que ele acontecia:
+
+     Toda vez que o cliente mexia em algo que muda o preço — o contador de
+     cômodos, um adicional, a chave de duas diaristas — a tela era
+     redesenhada inteira. E como a animação de entrada mora no `.tela`, ela
+     recomeçava do zero a cada toque: a tela inteira esmaecia e deslizava de
+     novo. Parecia defeito, e cansava.
+
+     Agora a animação só roda quando a tela REALMENTE muda. Redesenhar a
+     mesma tela é troca de conteúdo, não entrada.
+
+     Junto vai a rolagem: sem guardá-la, mexer num adicional lá embaixo
+     jogava a lista de volta para o topo. */
+  const mesmaTela = (ultimaTelaDesenhada === E.tela);
+  const corpoAntigo = palco.querySelector(".corpo");
+  const rolagem = (mesmaTela && corpoAntigo) ? corpoAntigo.scrollTop : 0;
+
+  palco.innerHTML = '<div class="tela' + (mesmaTela ? " sem-animacao" : "") + '">'
+                  + tela.html() + '</div>';
+  ultimaTelaDesenhada = E.tela;
+
+  if(rolagem){
+    const corpo = palco.querySelector(".corpo");
+    if(corpo) corpo.scrollTop = rolagem;
+  }
+
   if(tela.aoEntrar) tela.aoEntrar();
 }
 

@@ -370,12 +370,25 @@ TELAS.detalhes = {
         + '<div class="linha"><span class="rot">Valor estimado</span>'
         + '<span class="val" style="color:var(--roxo)">' + moeda(conta.total) + '</span></div></div>';
 
-      if(conta.sugereDuas){
-        previa += '<div class="aviso">⏱️<div><b>Serviço grande para uma pessoa só</b>'
-          + 'Pelo que você descreveu, o trabalho passa de 8 horas. '
-          + 'Considere pedir duas ' + esc(cat.comoChamamosPlural) + '.</div></div>';
+      /* O TETO LEGAL (decisão R8): passou de 8 horas para uma pessoa, o
+         pedido para de andar. Não é sugestão — é limite de lei. */
+      if(conta.bloqueadoPorLimiteLegal){
+        const horas = String(conta.horasPorPessoa).replace(".", ",");
+        previa += '<div class="aviso" style="background:var(--vermelho-claro);color:var(--vermelho)">⚖️'
+          + '<div><b>' + (conta.quantidade > 1 ? "Nem duas dão conta em um dia" : "Uma " + esc(cat.comoChamamos) + " não termina esta casa em um dia") + '</b>'
+          + 'Pelo tamanho que você descreveu, o trabalho leva cerca de ' + horas
+          + ' horas' + (conta.quantidade > 1 ? " para cada uma" : "") + '. '
+          + 'A jornada de uma diarista é de no máximo 8 horas por dia — é lei, '
+          + 'não é escolha nossa.'
+          + (conta.sugereDuas
+             ? '<br><br>Marque <b>duas ' + esc(cat.comoChamamosPlural) + '</b> aqui em cima, '
+               + 'ou reduza o serviço e agende o resto para outro dia.'
+             : '<br><br>Reduza o serviço e agende o resto para outro dia.')
+          + '</div></div>';
       }
     }
+
+    const podeContinuar = !conta || !conta.bloqueadoPorLimiteLegal;
 
     return ''
     + cabecalho("")
@@ -384,7 +397,8 @@ TELAS.detalhes = {
     +   '<p class="apoio">' + esc(cat.nome) + ' · quanto mais preciso, melhor ela se prepara.</p>'
     +   campos + duas + previa
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="depoisDosDetalhes()">Continuar</button></div>';
+    + '<div class="rodape"><button class="btn btn-principal" ' + (podeContinuar ? "" : "disabled")
+    +   ' onclick="depoisDosDetalhes()">Continuar</button></div>';
   }
 };
 
@@ -401,6 +415,11 @@ function anotar(id, valor){ E.pedido.respostas[id] = valor; salvar(); }  /* sem 
 function alternarDuas(){ E.pedido.duasProfissionais = !E.pedido.duasProfissionais; salvar(); desenhar(); }
 
 function depoisDosDetalhes(){
+  /* Trava dupla: o botão já fica desabilitado, mas a regra do teto legal
+     não pode depender só do estado de um botão. */
+  const conta = calcularPedido(E.pedido);
+  if(conta && conta.bloqueadoPorLimiteLegal) return;
+
   const cat = CATALOGO.find(function(c){ return c.id === E.pedido.categoria; });
   ir(cat.aceitaAdicionais ? "adicionais" : "resumo");
 }
@@ -466,11 +485,17 @@ TELAS.adicionais = {
         + '</button>';
     });
 
+    /* O mesmo teto legal da tela anterior (R8): os adicionais também podem
+       empurrar o serviço para além das 8 horas, e aí o pedido para. */
     let avisoTeto = "";
-    if(conta && conta.acimaDoMaximo){
-      avisoTeto = '<div class="aviso">⏱️<div><b>Atenção ao tempo</b>'
-        + 'Com esses adicionais o serviço passa de 8 horas. '
-        + 'Talvez seja melhor deixar alguns para a próxima vez.</div></div>';
+    if(conta && conta.bloqueadoPorLimiteLegal){
+      avisoTeto = '<div class="aviso" style="background:var(--vermelho-claro);color:var(--vermelho)">⚖️'
+        + '<div><b>Passou do que cabe em um dia de trabalho</b>'
+        + 'Com estes adicionais o serviço chega a cerca de '
+        + String(conta.horasPorPessoa).replace(".", ",") + ' horas'
+        + (conta.quantidade > 1 ? " para cada uma" : "") + '. '
+        + 'A jornada de uma diarista é de no máximo 8 horas por dia — é lei. '
+        + 'Desmarque algum adicional, ou deixe para a próxima vez.</div></div>';
     }
 
     return ''
@@ -482,7 +507,9 @@ TELAS.adicionais = {
     + '</div>'
     + '<div class="rodape">'
     +   contaViva(conta)
-    +   '<button class="btn btn-principal" onclick="ir(\'resumo\')">'
+    +   '<button class="btn btn-principal" '
+    +     ((conta && conta.bloqueadoPorLimiteLegal) ? "disabled" : "")
+    +     ' onclick="ir(\'resumo\')">'
     +     (E.pedido.adicionais.length
       ? "Continuar com " + E.pedido.adicionais.length + " "
         + (E.pedido.adicionais.length > 1 ? "adicionais" : "adicional")
