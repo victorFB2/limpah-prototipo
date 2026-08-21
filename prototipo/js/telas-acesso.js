@@ -46,14 +46,14 @@ TELAS.perfil = {
     +   '<p class="apoio" style="text-align:center">Escolha uma opção para continuar</p>'
 
     +   '<button class="opcao" onclick="escolherPerfil(\'cliente\')">'
-    +     '<div class="icone">🏠</div>'
+    +     '<div class="icone">' + icone("casaCoracao", 22) + '</div>'
     +     '<div class="txt"><b>Contratar um serviço</b>'
     +       '<span>Encontre a diarista ideal para a sua casa de forma rápida e segura.</span></div>'
     +     '<div class="seta">›</div>'
     +   '</button>'
 
     +   '<button class="opcao" onclick="escolherPerfil(\'diarista\')">'
-    +     '<div class="icone">💼</div>'
+    +     '<div class="icone">' + icone("maleta", 22) + '</div>'
     +     '<div class="txt"><b>Trabalhar como diarista</b>'
     +       '<span>Receba oportunidades de trabalho e aumente sua renda.</span></div>'
     +     '<div class="seta">›</div>'

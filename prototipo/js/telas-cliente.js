@@ -104,12 +104,12 @@ TELAS.novoServico = {
     CATALOGO.forEach(function(cat){
       if(cat.disponivel){
         lista += '<button class="opcao" onclick="escolherCategoria(\'' + cat.id + '\')">'
-          + '<div class="icone">' + cat.icone + '</div>'
+          + '<div class="icone">' + icone(cat.icone, 22) + '</div>'
           + '<div class="txt"><b>' + esc(cat.nome) + '</b><span>' + esc(cat.descricao) + '</span></div>'
           + '<div class="seta">›</div></button>';
       } else {
         lista += '<button class="opcao" disabled>'
-          + '<div class="icone">' + cat.icone + '</div>'
+          + '<div class="icone">' + icone(cat.icone, 22) + '</div>'
           + '<div class="txt"><b>' + esc(cat.nome) + '</b><span>' + esc(cat.descricao) + '</span></div>'
           + '<span class="selo cinza">Em breve</span></button>';
       }
@@ -166,8 +166,11 @@ TELAS.dataHorario = {
     let periodos = "";
     PERIODOS.forEach(function(p){
       const marcado = E.pedido.periodo === p.id;
-      /* a imagem mostra o periodo numa linha so, sem icone: "Manha (8h - 12h)" */
+      /* EXCEÇÃO AUTORIZADA Nº 3: a imagem mostra o período sem ícone, mas o
+         dono achou a tela pobre demais assim. Os ícones voltaram — em SVG,
+         não em emoji, para ficarem iguais em qualquer aparelho. */
       periodos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" onclick="escolherPeriodo(\'' + p.id + '\')">'
+        + '<div class="icone">' + icone(p.id, 22) + '</div>'
         + '<div class="txt"><b>' + esc(p.nome) + ' (' + esc(p.faixa) + ')</b></div>'
         + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
     });
@@ -213,7 +216,7 @@ TELAS.detalhes = {
           const marcado = E.pedido.respostas[p.id] === o.id;
           campos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
             + 'onclick="responder(\'' + p.id + '\',\'' + o.id + '\')">'
-            + '<div class="icone">' + (o.icone || "•") + '</div>'
+            + '<div class="icone">' + (o.icone ? icone(o.icone, 22) : "") + '</div>'
             + '<div class="txt"><b>' + esc(o.nome) + '</b><span>' + esc(o.detalhe || "") + '</span></div>'
             + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
         });
@@ -342,7 +345,7 @@ TELAS.adicionais = {
       lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
         + 'style="flex-direction:column;align-items:stretch" onclick="alternarAdicional(\'' + a.id + '\')">'
         + '<div style="display:flex;align-items:center;gap:12px;width:100%">'
-        +   '<div class="icone">' + a.icone + '</div>'
+        +   '<div class="icone">' + icone(a.icone, 21) + '</div>'
         +   '<div class="txt"><b>' + esc(a.nome) + '</b>'
         +     '<span>' + esc(a.detalhe) + ' · +' + Math.round(a.minutos) + ' min</span></div>'
         +   '<div style="text-align:right;flex:none">'
@@ -457,7 +460,8 @@ TELAS.resumo = {
 
     let linhasAdicionais = "";
     conta.adicionais.forEach(function(a){
-      linhasAdicionais += '<div class="linha"><span class="rot">' + a.icone + " " + esc(a.nome) + '</span>'
+      linhasAdicionais += '<div class="linha"><span class="rot" style="display:flex;gap:7px;align-items:center">'
+        + icone(a.icone, 15) + esc(a.nome) + '</span>'
         + '<span class="val">' + moeda(a.preco) + '</span></div>';
     });
 
@@ -811,29 +815,6 @@ function confirmarProfissional(id){
    busca não dá em nada, quem responde agora é a régua da busca, que cancela
    sozinha aos 30 minutos e abre chamado no suporte (decisão R1). */
 
-/* Quando a busca se esgota. A regra de negócio para este caso (quanto tempo
-   esperar, ampliar a região, avisar o suporte) ainda precisa ser decidida —
-   está anotada no DECISOES.md. */
-TELAS.ninguemAceitou = {
-  html: function(){
-    return ''
-    + '<div class="centro">'
-    +   '<div class="emojao">😕</div>'
-    +   '<h2 class="titulo">Ainda não encontramos ninguém</h2>'
-    +   '<p class="apoio">Não conseguimos uma profissional disponível para esse dia e período. '
-    +     'Você pode tentar outro horário ou falar com o nosso time.</p>'
-    + '</div>'
-    + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'dataHorario\')">Escolher outro horário</button>'
-    +   '<button class="btn btn-contorno" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
-    + '</div>';
-  }
-};
-
-
-/* --------------------------------------------------------------------------
-   10. SERVIÇO CONFIRMADO
-   -------------------------------------------------------------------------- */
 TELAS.confirmado = {
   html: function(){
     const p = pedidoAtual();

@@ -42,19 +42,19 @@ const REPASSE_DO_ADICIONAL = 0.65;
    Cada um tem preço para o cliente e quanto tempo ele acrescenta ao serviço.
    -------------------------------------------------------------------------- */
 const ADICIONAIS = [
-  { id:"passar",    nome:"Passar roupas",              icone:"👔", preco:40, minutos:60,
+  { id:"passar",    nome:"Passar roupas",              icone:"ferro", preco:40, minutos:60,
     detalhe:"Até uma cesta de roupas" },
-  { id:"geladeira", nome:"Interior da geladeira",      icone:"🧊", preco:25, minutos:30,
+  { id:"geladeira", nome:"Interior da geladeira",      icone:"geladeira", preco:25, minutos:30,
     detalhe:"Limpeza interna completa" },
-  { id:"armarios",  nome:"Interior dos armários",      icone:"🚪", preco:30, minutos:45,
+  { id:"armarios",  nome:"Interior dos armários",      icone:"armario", preco:30, minutos:45,
     detalhe:"Armários da cozinha" },
-  { id:"janelas",   nome:"Interior das janelas",       icone:"🪟", preco:35, minutos:45,
+  { id:"janelas",   nome:"Interior das janelas",       icone:"janela", preco:35, minutos:45,
     detalhe:"Somente parte interna, por segurança" },
-  { id:"externa",   nome:"Área externa",               icone:"🌿", preco:30, minutos:45,
+  { id:"externa",   nome:"Área externa",               icone:"planta", preco:30, minutos:45,
     detalhe:"Quintal ou varanda, até 20m²" },
-  { id:"estofado",  nome:"Aspirar tapete ou estofado", icone:"🛋️", preco:20, minutos:30,
+  { id:"estofado",  nome:"Aspirar tapete ou estofado", icone:"sofa", preco:20, minutos:30,
     detalhe:"Um sofá ou um tapete" },
-  { id:"lavar",     nome:"Lavar roupas",               icone:"🧺", preco:30, minutos:45,
+  { id:"lavar",     nome:"Lavar roupas",               icone:"maquina", preco:30, minutos:45,
     detalhe:"Uso da máquina da casa" },
 ];
 
@@ -70,7 +70,7 @@ const CATALOGO = [
     id:"diarista",
     nome:"Diarista",
     descricao:"Limpeza e organização da sua casa",
-    icone:"🧹",
+    icone:"vassoura",
     cor:"#6C3AD8",
     disponivel:true,
     aceitaAdicionais:true,
@@ -80,8 +80,8 @@ const CATALOGO = [
 
     perguntas:[
       { id:"tipo", tipo:"opcao", rotulo:"Tipo de limpeza", opcoes:[
-        { id:"padrao",   nome:"Padrão",   detalhe:"Limpeza do dia a dia",    icone:"🧽" },
-        { id:"completa", nome:"Completa", detalhe:"Limpeza mais detalhada",  icone:"✨" },
+        { id:"padrao",   nome:"Padrão",   detalhe:"Limpeza do dia a dia",    icone:"pano" },
+        { id:"completa", nome:"Completa", detalhe:"Limpeza mais detalhada",  icone:"brilho" },
       ]},
       { id:"comodos",   tipo:"contador", rotulo:"Número de cômodos", min:1, max:12, inicial:3,
         ajuda:"Conte quartos, sala, cozinha e área de serviço." },
@@ -105,7 +105,7 @@ const CATALOGO = [
     id:"faxina-pesada",
     nome:"Faxina pesada",
     descricao:"Limpeza completa e pesada",
-    icone:"🧴",
+    icone:"spray",
     cor:"#7C3AED",
     disponivel:true,
     aceitaAdicionais:true,
@@ -135,7 +135,7 @@ const CATALOGO = [
     id:"passadeira",
     nome:"Passadeira",
     descricao:"Passa as roupas do dia a dia",
-    icone:"👕",
+    icone:"camisa",
     cor:"#DB2777",
     disponivel:true,
     aceitaAdicionais:false,
@@ -169,7 +169,7 @@ const CATALOGO = [
     id:"outros",
     nome:"Outros serviços",
     descricao:"Eletricista, encanador, montador e mais",
-    icone:"🔧",
+    icone:"ferramenta",
     cor:"#0891B2",
     disponivel:false,
     emBreve:"Estamos preparando novas categorias. Comece pela limpeza que o resto vem logo.",
