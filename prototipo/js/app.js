@@ -329,6 +329,7 @@ function icone(nome, tamanho, cor){
    -------------------------------------------------------------------------- */
 const DIAS_SEMANA = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const MESES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+const MESES_LONGOS = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 
 function proximosDias(quantos){
   const lista = [];
@@ -359,6 +360,30 @@ function dataPorExtenso(iso){
   const partes = iso.split("-");
   const d = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
   return DIAS_SEMANA[d.getDay()] + ", " + d.getDate() + " de " + MESES[d.getMonth()];
+}
+
+/* --------------------------------------------------------------------------
+   PRAZOS: o que ainda dá tempo de pedir
+   -------------------------------------------------------------------------- */
+
+/* Quantas horas faltam para este período começar, neste dia. */
+function horasAteOPeriodo(iso, periodoId){
+  const p = PERIODOS.find(function(x){ return x.id === periodoId; });
+  if(!p || !iso) return 999;
+  const partes = iso.split("-");
+  const inicio = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]), p.inicio, 0, 0);
+  return (inicio - new Date()) / 3600000;
+}
+
+/* Este período, neste dia, ainda pode ser pedido? */
+function periodoAindaServe(iso, periodoId){
+  return horasAteOPeriodo(iso, periodoId) >= ANTECEDENCIA_MINIMA_HORAS;
+}
+
+/* Sobrou algum período hoje? Se não sobrou, o botão "Hoje" nem aparece. */
+function hojeAindaServe(){
+  const hoje = proximosDias(1)[0].iso;
+  return PERIODOS.some(function(p){ return periodoAindaServe(hoje, p.id); });
 }
 
 function nomePeriodo(id){

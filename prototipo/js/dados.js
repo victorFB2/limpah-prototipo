@@ -363,8 +363,30 @@ function impactoDoAdicional(pedido, idDoAdicional){
 
 
 /* --------------------------------------------------------------------------
-   7. PERÍODOS DO DIA
+   7. PERÍODOS DO DIA E OS PRAZOS DE AGENDAMENTO
    -------------------------------------------------------------------------- */
+
+/* Quanto tempo precisa faltar para um período começar, para ele ainda poder
+   ser pedido. Ninguém consegue diarista para hoje às 20h.
+
+   A conta que deu esse número:
+     até 30 min  a busca encontrar alguém (régua R1)
+     ~30 min     ela confirmar e se organizar
+     30 a 60 min o deslocamento
+     ~30 min     margem para imprevisto
+   Dá umas 2h30. Arredondado para 3h.
+
+   Com muita oferta dá para baixar para 2 e ganhar pedido de última hora;
+   com pouca oferta, 4 protege contra frustração. No aplicativo real isto
+   vira configuração no dashboard. */
+const ANTECEDENCIA_MINIMA_HORAS = 3;
+
+/* Até quantos dias para frente o cliente pode agendar.
+
+   Quinze, não sessenta. Ninguém sabe a agenda de dois meses — nem ela. E,
+   pior: um pedido marcado para daqui a 60 dias trava a agenda dela por dois
+   meses inteiros, com alta chance de furar. */
+const DIAS_PARA_ESCOLHER = 15;
 const PERIODOS = [
   { id:"manha", nome:"Manhã",  faixa:"8h às 12h",  inicio:8  },
   { id:"tarde", nome:"Tarde",  faixa:"12h às 16h", inicio:12 },

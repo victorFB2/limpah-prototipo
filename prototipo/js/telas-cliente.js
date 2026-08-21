@@ -150,30 +150,66 @@ function escolherCategoria(id){
    -------------------------------------------------------------------------- */
 TELAS.dataHorario = {
   html: function(){
-    const dias = proximosDias(14);
-    if(!E.pedido.data) E.pedido.data = dias[1].iso;   // amanhã, como no desenho
+    const dias = proximosDias(DIAS_PARA_ESCOLHER + 1);
+    const hoje = dias[0], amanha = dias[1];
+    const temHoje = hojeAindaServe();
 
+    /* Se o que estava escolhido deixou de servir (o cliente demorou na tela
+       e passou da hora), cai para amanhã em vez de ficar num dia inválido. */
+    if(!E.pedido.data || (E.pedido.data === hoje.iso && !temHoje)) E.pedido.data = amanha.iso;
+
+    const escolhida = E.pedido.data;
+    const ehOutraData = escolhida !== hoje.iso && escolhida !== amanha.iso;
+
+    /* EXCEÇÃO AUTORIZADA Nº 5: a imagem mostra quatro dias fixos numa fileira
+       que rola. Vira Hoje · Amanhã · Escolher data, porque na imagem não havia
+       como pedir para daqui a duas semanas. */
     let chips = '<div class="fileira">';
-    dias.forEach(function(d){
-      /* formato da imagem: o nome do dia em cima, a data embaixo - "Hoje 16/05" */
-      chips += '<button class="chip-data ' + (E.pedido.data === d.iso ? "marcada" : "") + '" '
-        + 'onclick="escolherData(\'' + d.iso + '\')">'
-        + '<span>' + esc(d.rotulo) + '</span>'
-        + '<b>' + esc(d.curto) + '</b></button>';
-    });
+
+    if(temHoje){
+      chips += '<button class="chip-data ' + (escolhida === hoje.iso ? "marcada" : "") + '" '
+        + 'onclick="escolherData(\'' + hoje.iso + '\')">'
+        + '<span>Hoje</span><b>' + esc(hoje.curto) + '</b></button>';
+    }
+
+    chips += '<button class="chip-data ' + (escolhida === amanha.iso ? "marcada" : "") + '" '
+      + 'onclick="escolherData(\'' + amanha.iso + '\')">'
+      + '<span>Amanhã</span><b>' + esc(amanha.curto) + '</b></button>';
+
+    chips += '<button class="chip-data ' + (ehOutraData ? "marcada" : "") + '" '
+      + 'style="width:auto;padding-left:14px;padding-right:14px" onclick="ir(\'calendario\')">'
+      + '<span>' + (ehOutraData ? "Escolhida" : "Escolher") + '</span>'
+      + '<b>' + (ehOutraData ? esc(dataPorExtenso(escolhida).replace(/^\w+, /, "")) : "data") + '</b>'
+      + '</button>';
+
     chips += '</div>';
+
+    /* Aviso de quando o "Hoje" não cabe mais */
+    let avisoHoje = "";
+    if(!temHoje){
+      avisoHoje = '<p class="ajuda" style="margin:2px 0 0">'
+        + 'Para hoje já não dá tempo: precisamos de pelo menos '
+        + ANTECEDENCIA_MINIMA_HORAS + ' horas para encontrar e avisar a profissional.</p>';
+    }
 
     let periodos = "";
     PERIODOS.forEach(function(p){
       const marcado = E.pedido.periodo === p.id;
-      /* EXCEÇÃO AUTORIZADA Nº 3: a imagem mostra o período sem ícone, mas o
-         dono achou a tela pobre demais assim. Os ícones voltaram — em SVG,
-         não em emoji, para ficarem iguais em qualquer aparelho. */
-      periodos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" onclick="escolherPeriodo(\'' + p.id + '\')">'
+      const serve = periodoAindaServe(escolhida, p.id);
+
+      /* EXCEÇÃO AUTORIZADA Nº 3: os ícones do período. */
+      periodos += '<button class="opcao ' + (marcado && serve ? "marcada" : "") + '" '
+        + (serve ? 'onclick="escolherPeriodo(\'' + p.id + '\')"' : "disabled")
+        + '>'
         + '<div class="icone">' + icone(p.id, 22) + '</div>'
-        + '<div class="txt"><b>' + esc(p.nome) + ' (' + esc(p.faixa) + ')</b></div>'
-        + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
+        + '<div class="txt"><b>' + esc(p.nome) + ' (' + esc(p.faixa) + ')</b>'
+        + (serve ? "" : '<span>já não dá tempo para hoje</span>')
+        + '</div>'
+        + (marcado && serve ? '<div class="seta">✓</div>' : "") + '</button>';
     });
+
+    /* Se o período escolhido deixou de servir, desmarca. */
+    if(E.pedido.periodo && !periodoAindaServe(escolhida, E.pedido.periodo)) E.pedido.periodo = null;
 
     const pronto = !!(E.pedido.data && E.pedido.periodo);
 
@@ -182,6 +218,7 @@ TELAS.dataHorario = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Para quando você precisa?</h2>'
     +   chips
+    +   avisoHoje
     +   '<div class="rotulo">Período</div>'
     +   periodos
     +   '<p class="ajuda">A profissional chega dentro do período escolhido. '
@@ -191,6 +228,78 @@ TELAS.dataHorario = {
     +   ' onclick="ir(\'detalhes\')">Continuar</button></div>';
   }
 };
+
+
+/* --------------------------------------------------------------------------
+   03B. CALENDÁRIO — escolher qualquer dia dentro da janela
+
+   Sem navegação por mês de propósito: a janela é curta (quinze dias), então
+   basta desenhar as semanas que a contêm. Menos botão, menos engano.
+   -------------------------------------------------------------------------- */
+TELAS.calendario = {
+  html: function(){
+    const dias = proximosDias(DIAS_PARA_ESCOLHER + 1);
+    const permitidos = {};
+    dias.forEach(function(d){ permitidos[d.iso] = d; });
+
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const ultimo = new Date(hoje); ultimo.setDate(hoje.getDate() + DIAS_PARA_ESCOLHER);
+
+    /* começa no domingo da semana de hoje e vai até fechar a semana do último dia */
+    const comeco = new Date(hoje); comeco.setDate(hoje.getDate() - hoje.getDay());
+    const fim = new Date(ultimo); fim.setDate(ultimo.getDate() + (6 - ultimo.getDay()));
+
+    let grade = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center">';
+    DIAS_SEMANA.forEach(function(d){
+      grade += '<div style="font-size:11px;color:var(--suave);font-weight:700;padding:6px 0">' + d + '</div>';
+    });
+
+    let mesAtual = -1, cabecalhosDeMes = "";
+    const celulas = [];
+    for(let d = new Date(comeco); d <= fim; d.setDate(d.getDate() + 1)){
+      const iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,10);
+      const dentro = !!permitidos[iso];
+      const ehHoje = iso === dias[0].iso;
+      const podeHoje = !ehHoje || hojeAindaServe();
+      const livre = dentro && podeHoje;
+      const marcado = E.pedido.data === iso;
+      if(d.getMonth() !== mesAtual){ mesAtual = d.getMonth(); }
+      celulas.push(
+        '<button ' + (livre ? 'onclick="escolherDataDoCalendario(\'' + iso + '\')"' : "disabled")
+        + ' style="border:0;border-radius:10px;padding:10px 0;font-family:inherit;font-size:14px;'
+        + 'font-weight:' + (marcado ? "800" : "600") + ';cursor:' + (livre ? "pointer" : "default") + ';'
+        + 'background:' + (marcado ? "var(--roxo)" : (livre ? "var(--branco)" : "transparent")) + ';'
+        + 'color:' + (marcado ? "#fff" : (livre ? "var(--texto)" : "#C9C4D6")) + ';'
+        + (livre && !marcado ? "box-shadow:var(--sombra);" : "")
+        + '">' + d.getDate() + '</button>');
+    }
+    grade += celulas.join("") + '</div>';
+
+    /* nome do mês por extenso, com só a primeira letra maiúscula — o
+       capitalize do CSS deixava "Ago E Set", com o "e" gritando */
+    const m1 = MESES_LONGOS[hoje.getMonth()], m2 = MESES_LONGOS[ultimo.getMonth()];
+    const junto = (m1 === m2) ? m1 : (m1 + " e " + m2);
+    const titulo = junto.charAt(0).toUpperCase() + junto.slice(1);
+
+    return ''
+    + cabecalho("Escolher data")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Qual dia?</h2>'
+    +   '<p class="apoio">Você pode agendar até ' + DIAS_PARA_ESCOLHER + ' dias para frente.</p>'
+    +   '<div class="rotulo">' + esc(titulo) + '</div>'
+    +   grade
+    +   '<p class="ajuda">Os dias apagados estão fora do prazo de agendamento. '
+    +     'Guardar a agenda dela por muito tempo aumenta a chance de o serviço furar.</p>'
+    + '</div>';
+  }
+};
+
+function escolherDataDoCalendario(iso){
+  E.pedido.data = iso;
+  if(E.pedido.periodo && !periodoAindaServe(iso, E.pedido.periodo)) E.pedido.periodo = null;
+  salvar();
+  voltar();
+}
 
 function escolherData(iso){ E.pedido.data = iso; salvar(); desenhar(); }
 function escolherPeriodo(id){ E.pedido.periodo = id; salvar(); desenhar(); }
