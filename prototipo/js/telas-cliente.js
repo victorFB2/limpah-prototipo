@@ -141,8 +141,264 @@ function escolherCategoria(id){
   });
 
   salvar();
-  ir("dataHorario");
+
+  /* NOVA ORDEM (decisão R10): a casa vem antes do horário.
+     Sem saber o tamanho, o app não tem como oferecer horários que caibam. */
+  const casas = (E.cliente && E.cliente.casas) || [];
+  if(casas.length === 0)      ir("cadastrarCasa");
+  else if(casas.length === 1) usarCasa(casas[0].id);
+  else                        ir("escolherCasa");
 }
+
+/* Escolhida a casa, o tamanho dela entra no pedido. */
+function usarCasa(casaId){
+  E.pedido.casaId = casaId;
+  E.pedido.ajustadoDestaVez = false;
+  const casa = casaDoPedido(E.pedido);
+  if(casa){
+    if(E.pedido.respostas.comodos   !== undefined) E.pedido.respostas.comodos   = casa.comodos;
+    if(E.pedido.respostas.banheiros !== undefined) E.pedido.respostas.banheiros = casa.banheiros;
+  }
+  salvar();
+  ir("detalhes");
+}
+
+
+/* ==========================================================================
+   79, 80 e 81. AS CASAS DO CLIENTE (decisão R10)
+
+   A casa é cadastrada uma vez e reaproveitada. Guarda o TAMANHO e o
+   ENDEREÇO — nunca o tipo de limpeza nem os adicionais, que mudam a cada
+   pedido.
+
+   Três telas, uma função cada:
+     escolherCasa   — qual delas, quando há mais de uma
+     cadastrarCasa  — cadastrar ou editar
+     minhasCasas    — a lista, dentro do Perfil
+   ========================================================================== */
+
+function cartaoDeCasa(casa, aoTocar, extra){
+  return '<button class="item" onclick="' + aoTocar + '">'
+    + '<div style="color:var(--roxo);width:26px">'
+    +   icone(casa.tipoImovel === "casa" ? "casa" : (casa.tipoImovel === "escritorio" ? "maleta" : "predio"), 21)
+    + '</div>'
+    + '<div class="txt"><b>' + esc(casa.apelido) + '</b>'
+    +   '<span>' + esc(casa.rua) + (casa.bairro ? " · " + esc(casa.bairro) : "")
+    +     '<br>' + casa.comodos + ' cômodos · ' + casa.banheiros + ' banheiro'
+    +     (casa.banheiros === 1 ? "" : "s") + '</span></div>'
+    + (extra || '<div class="seta">›</div>')
+    + '</button>';
+}
+
+
+/* ---- 79. QUAL CASA ---- */
+TELAS.escolherCasa = {
+  html: function(){
+    const casas = (E.cliente && E.cliente.casas) || [];
+    let lista = "";
+    casas.forEach(function(c){
+      lista += cartaoDeCasa(c, "usarCasa('" + c.id + "')");
+    });
+
+    return ''
+    + cabecalho("Qual casa?")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Onde vai ser o serviço?</h2>'
+    +   '<p class="apoio">Escolha um dos endereços que você já cadastrou.</p>'
+    +   lista
+    +   '<button class="btn btn-contorno" style="margin-top:6px" onclick="novaCasa()">'
+    +     '+ Cadastrar outro endereço</button>'
+    + '</div>';
+  }
+};
+
+
+/* ---- 80. CADASTRAR OU EDITAR A CASA ---- */
+function novaCasa(){
+  E.casaEditando = null;
+  salvar();
+  ir("cadastrarCasa");
+}
+
+function editarCasa(id){
+  E.casaEditando = id;
+  salvar();
+  ir("cadastrarCasa");
+}
+
+TELAS.cadastrarCasa = {
+  html: function(){
+    const casas = (E.cliente && E.cliente.casas) || [];
+    const editando = E.casaEditando
+      ? casas.find(function(c){ return c.id === E.casaEditando; })
+      : null;
+    const c = editando || {
+      apelido:"", tipoImovel:"apartamento", comodos:3, banheiros:1,
+      rua:"", complemento:"", bairro:"", cidade:"São Paulo", estado:"SP", cep:"",
+    };
+    const primeira = casas.length === 0;
+
+    /* tipo de imóvel */
+    let tipos = "";
+    TIPOS_DE_IMOVEL.forEach(function(t){
+      const marcado = (E.casaRascunhoTipo || c.tipoImovel) === t.id;
+      tipos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
+        + 'onclick="escolherTipoDeImovel(\'' + t.id + '\')" style="margin-bottom:8px">'
+        + '<div class="icone">' + icone(t.icone === "predio" ? "predio" : t.icone, 22) + '</div>'
+        + '<div class="txt"><b>' + esc(t.nome) + '</b></div>'
+        + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
+    });
+
+    return ''
+    + cabecalho(editando ? "Editar endereço" : "Sua casa")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">' + (primeira ? "Conte sobre a sua casa" : (editando ? "Editar endereço" : "Novo endereço")) + '</h2>'
+    +   '<p class="apoio">' + (primeira
+        ? "Você faz isso uma vez só. Nos próximos pedidos é só escolher a data."
+        : "Assim você não precisa descrever tudo de novo a cada pedido.") + '</p>'
+
+    +   (c.veioDoHistorico
+        ? '<div class="aviso roxo">👋<div><b>Preenchemos com o que já sabíamos</b>'
+          + 'Tiramos do seu último pedido. Confira se está certo.</div></div>' : "")
+
+    +   '<div class="rotulo">Tipo de imóvel</div>'
+    +   tipos
+
+    +   '<div class="rotulo">Tamanho</div>'
+    +   '<div class="contador">'
+    +     '<span class="nome">Número de cômodos</span>'
+    +     '<span class="controles">'
+    +       '<button onclick="contarNaCasa(\'comodos\',-1)">−</button>'
+    +       '<span class="valor" id="casa-comodos">' + (E.casaRascunhoComodos != null ? E.casaRascunhoComodos : c.comodos) + '</span>'
+    +       '<button onclick="contarNaCasa(\'comodos\',1)">+</button>'
+    +     '</span></div>'
+    +   '<p class="ajuda">Conte quartos, sala, cozinha e área de serviço.</p>'
+    +   '<div class="contador" style="margin-top:10px">'
+    +     '<span class="nome">Banheiros</span>'
+    +     '<span class="controles">'
+    +       '<button onclick="contarNaCasa(\'banheiros\',-1)">−</button>'
+    +       '<span class="valor" id="casa-banheiros">' + (E.casaRascunhoBanheiros != null ? E.casaRascunhoBanheiros : c.banheiros) + '</span>'
+    +       '<button onclick="contarNaCasa(\'banheiros\',1)">+</button>'
+    +     '</span></div>'
+
+    +   '<div class="rotulo">Endereço</div>'
+    +   '<div class="campo"><label>Como você chama este lugar</label>'
+    +     '<input id="casa-apelido" type="text" placeholder="Casa, Apartamento, Escritório..." value="' + esc(c.apelido) + '"></div>'
+    +   '<div class="campo"><label>CEP</label><input id="casa-cep" type="text" value="' + esc(c.cep) + '"></div>'
+    +   '<div class="campo"><label>Endereço</label><input id="casa-rua" type="text" value="' + esc(c.rua) + '"></div>'
+    +   '<div class="campo"><label>Complemento</label><input id="casa-comp" type="text" value="' + esc(c.complemento) + '"></div>'
+    +   '<div class="campo"><label>Bairro</label><input id="casa-bairro" type="text" value="' + esc(c.bairro) + '"></div>'
+    +   '<div class="campo"><label>Cidade e estado</label>'
+    +     '<input id="casa-cidade" type="text" value="' + esc(c.cidade + " - " + c.estado) + '"></div>'
+
+    +   '<div class="aviso roxo">🔒<div><b>Sua privacidade</b>'
+    +     'O endereço completo só é mostrado à profissional depois que ela aceita o serviço.</div></div>'
+    +   '<div id="casa-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="salvarCasa()">'
+    +     (editando ? "Salvar alterações" : "Salvar e continuar") + '</button>'
+    +   (editando && casas.length > 1
+       ? '<button class="btn btn-perigo" onclick="apagarCasa(\'' + editando.id + '\')">Apagar este endereço</button>'
+       : "")
+    + '</div>';
+  }
+};
+
+function escolherTipoDeImovel(id){ E.casaRascunhoTipo = id; salvar(); desenhar(); }
+
+function contarNaCasa(qual, delta){
+  const casas = (E.cliente && E.cliente.casas) || [];
+  const editando = E.casaEditando ? casas.find(function(c){ return c.id === E.casaEditando; }) : null;
+  const limites = { comodos:[1,12], banheiros:[0,6] };
+  const chave = qual === "comodos" ? "casaRascunhoComodos" : "casaRascunhoBanheiros";
+  const atual = (E[chave] != null) ? E[chave] : (editando ? editando[qual] : (qual === "comodos" ? 3 : 1));
+  const novo = atual + delta;
+  if(novo < limites[qual][0] || novo > limites[qual][1]) return;
+  E[chave] = novo;
+  salvar();
+  desenhar();
+}
+
+function salvarCasa(){
+  const valor = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ""; };
+  const apelido = valor("casa-apelido");
+  const rua = valor("casa-rua");
+  if(apelido.length < 2 || rua.length < 3){
+    document.getElementById("casa-erro").textContent =
+      "Preencha ao menos como você chama o lugar e o endereço.";
+    return;
+  }
+  const cidadeEstado = (valor("casa-cidade") || "São Paulo - SP").split("-");
+  const casas = (E.cliente.casas = E.cliente.casas || []);
+  const editando = E.casaEditando ? casas.find(function(c){ return c.id === E.casaEditando; }) : null;
+
+  const dados = {
+    apelido: apelido,
+    tipoImovel: E.casaRascunhoTipo || (editando ? editando.tipoImovel : "apartamento"),
+    comodos:   (E.casaRascunhoComodos   != null) ? E.casaRascunhoComodos   : (editando ? editando.comodos : 3),
+    banheiros: (E.casaRascunhoBanheiros != null) ? E.casaRascunhoBanheiros : (editando ? editando.banheiros : 1),
+    rua: rua,
+    complemento: valor("casa-comp"),
+    bairro: valor("casa-bairro"),
+    cidade: (cidadeEstado[0] || "").trim(),
+    estado: (cidadeEstado[1] || "SP").trim(),
+    cep: valor("casa-cep"),
+  };
+
+  let id;
+  if(editando){
+    Object.assign(editando, dados, { veioDoHistorico:false });
+    id = editando.id;
+  } else {
+    id = "casa-" + Date.now();
+    casas.push(Object.assign({ id:id }, dados));
+  }
+
+  E.casaEditando = null;
+  E.casaRascunhoTipo = null;
+  E.casaRascunhoComodos = null;
+  E.casaRascunhoBanheiros = null;
+  salvar();
+
+  /* Se veio de dentro de um pedido, segue o pedido. Senão, volta para a lista. */
+  if(E.pedido && E.pedido.categoria && !E.pedido.casaId) usarCasa(id);
+  else voltar();
+}
+
+function apagarCasa(id){
+  const casas = (E.cliente && E.cliente.casas) || [];
+  if(casas.length <= 1) return;   // ninguém fica sem nenhuma casa
+  const i = casas.findIndex(function(c){ return c.id === id; });
+  if(i >= 0) casas.splice(i, 1);
+  E.casaEditando = null;
+  salvar();
+  voltar();
+}
+
+
+/* ---- 81. MINHAS CASAS (dentro do Perfil) ---- */
+TELAS.minhasCasas = {
+  html: function(){
+    const casas = (E.cliente && E.cliente.casas) || [];
+    let lista = "";
+    casas.forEach(function(c){
+      lista += cartaoDeCasa(c, "editarCasa('" + c.id + "')");
+    });
+    if(!casas.length) lista = '<div class="vazio">Você ainda não cadastrou nenhum endereço.</div>';
+
+    return ''
+    + cabecalho("Meus endereços")
+    + '<div class="corpo">'
+    +   lista
+    +   '<p class="ajuda">O tamanho fica guardado aqui. O tipo de limpeza você escolhe '
+    +     'a cada pedido — hoje pode ser padrão, no mês que vem completa.</p>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="novaCasa()">+ Cadastrar endereço</button>'
+    + '</div>';
+  }
+};
 
 
 /* --------------------------------------------------------------------------
@@ -188,22 +444,36 @@ TELAS.dataHorario = {
     let avisoHoje = "";
     if(!temHoje){
       avisoHoje = '<p class="ajuda" style="margin:2px 0 0">'
-        + 'Para hoje já não dá tempo: precisamos de pelo menos '
-        + ANTECEDENCIA_MINIMA_HORAS + ' horas para encontrar e avisar a profissional.</p>';
+        + 'Para hoje já não dá tempo: a diarista precisa de pelo menos '
+        + ANTECEDENCIA_MINIMA_HORAS + ' horas para se organizar e chegar até você.</p>';
     }
+
+    /* Agora a tela sabe de quantas horas o serviço precisa, porque ela vem
+       DEPOIS do tamanho da casa (decisão R10). Então só oferece horário que
+       realmente cabe — antes ela oferecia "12h às 16h" e a tela seguinte
+       dizia que o serviço precisava de 8 horas. */
+    const contaDoPedido = calcularPedido(E.pedido);
+    const janelaHoras = contaDoPedido ? contaDoPedido.horas : 4;
 
     let periodos = "";
     PERIODOS.forEach(function(p){
       const marcado = E.pedido.periodo === p.id;
-      const serve = periodoAindaServe(escolhida, p.id);
+      const cabeNoDia = (p.inicio + janelaHoras) <= FIM_DO_DIA;
+      const serve = periodoAindaServe(escolhida, p.id) && cabeNoDia;
 
       /* EXCEÇÃO AUTORIZADA Nº 3: os ícones do período. */
       periodos += '<button class="opcao ' + (marcado && serve ? "marcada" : "") + '" '
         + (serve ? 'onclick="escolherPeriodo(\'' + p.id + '\')"' : "disabled")
         + '>'
         + '<div class="icone">' + icone(p.id, 22) + '</div>'
-        + '<div class="txt"><b>' + esc(p.nome) + ' (' + esc(p.faixa) + ')</b>'
-        + (serve ? "" : '<span>já não dá tempo para hoje</span>')
+        + '<div class="txt"><b>' + esc(p.nome) + ' · das ' + p.inicio + 'h às '
+        +   (p.inicio + janelaHoras) + 'h</b>'
+        + (serve ? "" : '<span>'
+            + (!cabeNoDia
+               ? "uma janela de " + janelaHoras + "h começando aqui passaria das " + FIM_DO_DIA + "h"
+               : "a diarista precisa de pelo menos " + ANTECEDENCIA_MINIMA_HORAS
+                 + "h para se organizar e chegar até você")
+            + '</span>')
         + '</div>'
         + (marcado && serve ? '<div class="seta">✓</div>' : "") + '</button>';
     });
@@ -221,11 +491,11 @@ TELAS.dataHorario = {
     +   avisoHoje
     +   '<div class="rotulo">Período</div>'
     +   periodos
-    +   '<p class="ajuda">A profissional chega dentro do período escolhido. '
-    +     'Você recebe um aviso quando ela estiver a caminho.</p>'
+    +   '<p class="ajuda">Seu serviço precisa de uma janela de ' + janelaHoras
+    +     ' horas. Os horários apagados não comportam essa janela.</p>'
     + '</div>'
     + '<div class="rodape"><button class="btn btn-principal" ' + (pronto ? "" : "disabled")
-    +   ' onclick="ir(\'detalhes\')">Continuar</button></div>';
+    +   ' onclick="ir(\'resumo\')">Continuar</button></div>';
   }
 };
 
@@ -315,8 +585,15 @@ TELAS.detalhes = {
     const cat = CATALOGO.find(function(c){ return c.id === E.pedido.categoria; });
     if(!cat) return '<div class="corpo"><p class="apoio">Escolha um serviço primeiro.</p></div>';
 
+    const casa = casaDoPedido(E.pedido);
+    const mostrarTamanho = E.pedido.ajustadoDestaVez || !casa;
+
     let campos = "";
     cat.perguntas.forEach(function(p){
+      /* O tamanho vem do cadastro da casa e fica escondido, a não ser que o
+         cliente peça para ajustar só desta vez (decisão R10). */
+      if(p.vemDaCasa && !mostrarTamanho) return;
+
       /* o contador já mostra o nome dentro dele, não precisa de título em cima */
       if(p.tipo !== "contador") campos += '<div class="rotulo">' + esc(p.rotulo) + '</div>';
 
@@ -350,6 +627,32 @@ TELAS.detalhes = {
       if(p.ajuda) campos += '<p class="ajuda">' + esc(p.ajuda) + '</p>';
     });
 
+    /* O cartão da casa, com a saída para ajustar só desta vez. */
+    let blocoCasa = "";
+    if(casa){
+      const temTamanho = cat.perguntas.some(function(p){ return p.vemDaCasa; });
+      blocoCasa = '<div class="cartao" style="display:flex;gap:12px;align-items:center">'
+        + '<div style="color:var(--roxo)">' + icone(casa.tipoImovel === "casa" ? "casa" : "predio", 22) + '</div>'
+        + '<div style="flex:1;min-width:0">'
+        +   '<b style="font-size:14.5px">' + esc(casa.apelido) + '</b>'
+        +   '<div style="font-size:12.5px;color:var(--suave);margin-top:2px">'
+        +     esc(casa.bairro || casa.rua)
+        +     (temTamanho ? ' · ' + casa.comodos + ' cômodos · ' + casa.banheiros + ' banheiro'
+              + (casa.banheiros === 1 ? "" : "s") : "")
+        +   '</div>'
+        + '</div>'
+        + (temTamanho
+           ? '<button class="btn btn-texto" style="width:auto;padding:8px 4px;font-size:12.5px" '
+             + 'onclick="ajustarDestaVez()">' + (E.pedido.ajustadoDestaVez ? "pronto" : "ajustar") + '</button>'
+           : "")
+        + '</div>';
+
+      if(E.pedido.ajustadoDestaVez){
+        blocoCasa += '<div class="aviso roxo">✏️<div><b>Ajuste só deste pedido</b>'
+          + 'O cadastro da sua casa continua como estava. Isto vale só para hoje.</div></div>';
+      }
+    }
+
     /* opção de duas profissionais, quando a categoria permite */
     let duas = "";
     if(cat.aceitaDuasProfissionais){
@@ -366,8 +669,14 @@ TELAS.detalhes = {
     if(conta){
       const janela = janelaDoServico(E.pedido.periodo, conta.horas);
       previa = '<div class="cartao destaque" style="margin-top:18px">'
+        /* Nesta altura o horário ainda não foi escolhido — ele vem depois
+           (decisão R10). Então aqui o texto fala do TAMANHO da janela; a
+           janela com hora de relógio aparece a partir da tela de data. */
         + '<div class="linha"><span class="rot">'
-        +   (conta.quantidade > 1 ? "As duas ficam" : "Ela fica") + ' na sua casa</span>'
+        +   (janela
+             ? ((conta.quantidade > 1 ? "As duas ficam" : "Ela fica") + " na sua casa")
+             : ("Tempo necessário" + (conta.quantidade > 1 ? " para cada uma" : "")))
+        + '</span>'
         + '<span class="val">' + (janela ? esc(janela.texto) : conta.horas + " horas") + '</span></div>'
         + '<div class="linha"><span class="rot">Valor estimado</span>'
         + '<span class="val" style="color:var(--roxo)">' + moeda(conta.total)
@@ -421,7 +730,7 @@ TELAS.detalhes = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Detalhes do serviço</h2>'
     +   '<p class="apoio">' + esc(cat.nome) + ' · quanto mais preciso, melhor ela se prepara.</p>'
-    +   campos + duas + previa
+    +   blocoCasa + campos + duas + previa
     + '</div>'
     + '<div class="rodape"><button class="btn btn-principal" ' + (podeContinuar ? "" : "disabled")
     +   ' onclick="depoisDosDetalhes()">Continuar</button></div>';
@@ -440,6 +749,21 @@ function contar(id, delta){
 function anotar(id, valor){ E.pedido.respostas[id] = valor; salvar(); }  /* sem redesenhar: não perde o cursor */
 function alternarDuas(){ E.pedido.duasProfissionais = !E.pedido.duasProfissionais; salvar(); desenhar(); }
 
+/* Abre e fecha os campos de tamanho, sem tocar no cadastro da casa. */
+function ajustarDestaVez(){
+  E.pedido.ajustadoDestaVez = !E.pedido.ajustadoDestaVez;
+  if(!E.pedido.ajustadoDestaVez){
+    /* fechou sem querer guardar: volta ao tamanho da casa */
+    const casa = casaDoPedido(E.pedido);
+    if(casa){
+      if(E.pedido.respostas.comodos   !== undefined) E.pedido.respostas.comodos   = casa.comodos;
+      if(E.pedido.respostas.banheiros !== undefined) E.pedido.respostas.banheiros = casa.banheiros;
+    }
+  }
+  salvar();
+  desenhar();
+}
+
 function depoisDosDetalhes(){
   /* Trava dupla: o botão já fica desabilitado, mas a regra do teto legal
      não pode depender só do estado de um botão. */
@@ -447,7 +771,7 @@ function depoisDosDetalhes(){
   if(conta && conta.bloqueadoPorLimiteLegal) return;
 
   const cat = CATALOGO.find(function(c){ return c.id === E.pedido.categoria; });
-  ir(cat.aceitaAdicionais ? "adicionais" : "resumo");
+  ir(cat.aceitaAdicionais ? "adicionais" : "dataHorario");
 }
 
 
@@ -535,7 +859,7 @@ TELAS.adicionais = {
     +   contaViva(conta)
     +   '<button class="btn btn-principal" '
     +     ((conta && conta.bloqueadoPorLimiteLegal) ? "disabled" : "")
-    +     ' onclick="ir(\'resumo\')">'
+    +     ' onclick="ir(\'dataHorario\')">'
     +     (E.pedido.adicionais.length
       ? "Continuar com " + E.pedido.adicionais.length + " "
         + (E.pedido.adicionais.length > 1 ? "adicionais" : "adicional")
@@ -1443,7 +1767,8 @@ TELAS.perfilCliente = {
     const favoritas = PROFISSIONAIS.filter(function(p){ return E.favoritos.indexOf(p.id) >= 0; });
 
     const itens = [
-      { ic:"📍", nome:"Meus endereços",     detalhe:c.endereco.apelido + " · " + c.endereco.bairro },
+      { ic:"📍", nome:"Meus endereços", tela:"minhasCasas",
+        detalhe: ((c.casas || []).length || 0) + " cadastrado" + (((c.casas || []).length === 1) ? "" : "s") },
       { ic:"💳", nome:"Formas de pagamento", detalhe:"Pix e cartão" },
       { ic:"❤️", nome:"Profissionais favoritas", detalhe:favoritas.length + " salvas" },
       { ic:"🔔", nome:"Notificações",        detalhe:"Lembretes e avisos" },
@@ -1452,7 +1777,7 @@ TELAS.perfilCliente = {
     ];
     let lista = "";
     itens.forEach(function(i){
-      lista += '<button class="item" onclick="ir(\'chatSuporte\')">'
+      lista += '<button class="item" onclick="ir(\'' + (i.tela || "chatSuporte") + '\')">'
         + '<div style="font-size:20px;width:28px;text-align:center">' + i.ic + '</div>'
         + '<div class="txt"><b>' + esc(i.nome) + '</b>'
         + (i.detalhe ? '<span>' + esc(i.detalhe) + '</span>' : "") + '</div>'

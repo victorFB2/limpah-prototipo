@@ -118,7 +118,9 @@ TELAS.login = {
 function fazerLogin(){
   E.logado = true;
   E.perfil = E.perfil || "cliente";
-  E.cliente = E.cliente || Object.assign({}, CLIENTE_EXEMPLO);
+  E.cliente = E.cliente || Object.assign({}, CLIENTE_EXEMPLO, {
+    casas: [Object.assign({}, CASA_EXEMPLO)],
+  });
   salvar();
   ir(E.perfil === "diarista" ? "diaristaEmBreve" : "home", { limparHistorico:true });
 }

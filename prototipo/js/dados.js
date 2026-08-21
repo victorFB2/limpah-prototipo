@@ -83,9 +83,13 @@ const CATALOGO = [
         { id:"padrao",   nome:"Padrão",   detalhe:"Limpeza do dia a dia",    icone:"pano" },
         { id:"completa", nome:"Completa", detalhe:"Limpeza mais detalhada",  icone:"brilho" },
       ]},
+      /* vemDaCasa: estas duas são preenchidas pelo cadastro da casa e não
+         aparecem em toda compra. O cliente só as vê se tocar em
+         "ajustar só desta vez". */
       { id:"comodos",   tipo:"contador", rotulo:"Número de cômodos", min:1, max:12, inicial:3,
-        ajuda:"Conte quartos, sala, cozinha e área de serviço." },
-      { id:"banheiros", tipo:"contador", rotulo:"Banheiros", min:0, max:6, inicial:1 },
+        vemDaCasa:true, ajuda:"Conte quartos, sala, cozinha e área de serviço." },
+      { id:"banheiros", tipo:"contador", rotulo:"Banheiros", min:0, max:6, inicial:1,
+        vemDaCasa:true },
       { id:"observacoes", tipo:"texto", rotulo:"Observações (opcional)",
         exemplo:"Ex.: tenho um cachorro, o portão é o do lado direito..." },
     ],
@@ -119,8 +123,8 @@ const CATALOGO = [
         { id:"mudanca",   nome:"Mudança",        detalhe:"Casa vazia, antes ou depois",   icone:"📦" },
         { id:"acumulada", nome:"Muito tempo sem limpar", detalhe:"Sujeira acumulada",     icone:"🕰️" },
       ]},
-      { id:"comodos",   tipo:"contador", rotulo:"Número de cômodos", min:1, max:12, inicial:3 },
-      { id:"banheiros", tipo:"contador", rotulo:"Banheiros", min:0, max:6, inicial:1 },
+      { id:"comodos",   tipo:"contador", rotulo:"Número de cômodos", min:1, max:12, inicial:3, vemDaCasa:true },
+      { id:"banheiros", tipo:"contador", rotulo:"Banheiros", min:0, max:6, inicial:1, vemDaCasa:true },
       { id:"observacoes", tipo:"texto", rotulo:"Observações (opcional)",
         exemplo:"Ex.: sobrou entulho da reforma na área de serviço." },
     ],
@@ -235,6 +239,20 @@ const PROFISSIONAIS = [
 /* --------------------------------------------------------------------------
    5. CONTA FICTÍCIA DO CLIENTE
    -------------------------------------------------------------------------- */
+const CASA_EXEMPLO = {
+  id: "casa-1",
+  apelido: "Casa",
+  tipoImovel: "apartamento",
+  comodos: 3,
+  banheiros: 1,
+  rua: "Rua das Flores, 123",
+  complemento: "Apto 42",
+  bairro: "Vila Madalena",
+  cidade: "São Paulo",
+  estado: "SP",
+  cep: "05435-000",
+};
+
 const CLIENTE_EXEMPLO = {
   nome:"Ana Paula Moreira",
   primeiroNome:"Ana",
@@ -373,6 +391,21 @@ function impactoDoAdicional(pedido, idDoAdicional){
     diferenca: Math.abs(agora.faixa.clientePaga - alternativo.faixa.clientePaga) * agora.quantidade,
   };
 }
+
+
+/* --------------------------------------------------------------------------
+   6B. AS CASAS DO CLIENTE (decisão R10)
+
+   A casa é cadastrada uma vez e reaproveitada. Ela guarda o TAMANHO e o
+   ENDEREÇO — nunca o serviço. Tipo de limpeza e adicionais mudam a cada
+   pedido: hoje padrão, no mês que vem completa. Se a casa guardasse isso, o
+   cliente teria que desconfigurar toda vez.
+   -------------------------------------------------------------------------- */
+const TIPOS_DE_IMOVEL = [
+  { id:"apartamento", nome:"Apartamento", icone:"predio" },
+  { id:"casa",        nome:"Casa",        icone:"casa" },
+  { id:"escritorio",  nome:"Escritório",  icone:"maleta" },
+];
 
 
 /* --------------------------------------------------------------------------

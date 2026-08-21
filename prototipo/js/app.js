@@ -31,6 +31,8 @@ function estadoNovo(){
 function pedidoNovo(){
   return {
     categoria: null,
+    casaId: null,          // qual casa está sendo atendida
+    ajustadoDestaVez: false,   // o cliente mexeu no tamanho só neste pedido
     respostas: {},
     adicionais: [],
     duasProfissionais: false,
@@ -62,6 +64,63 @@ function carregar(){
   }catch(e){}
   E = estadoNovo();
   return false;
+}
+
+/* --------------------------------------------------------------------------
+   QUEM JÁ USAVA O APP ANTES DAS CASAS EXISTIREM (decisão R10)
+
+   O protótipo tinha cliente com endereço, histórico e favoritos. Ao mudar a
+   ordem das telas, esse cliente ficaria sem casa nenhuma — e o app pareceria
+   uma conta nova, com o histórico órfão.
+
+   Então, na primeira vez que o app abre depois da mudança, a casa é criada a
+   partir do que já existia: o endereço que ele cadastrou, e o tamanho do
+   último pedido que ele fez. Ninguém precisa recadastrar nada.
+   -------------------------------------------------------------------------- */
+function criarCasaDeQuemJaUsava(){
+  if(!E.cliente) return;
+  if(E.cliente.casas && E.cliente.casas.length) return;   // já tem casa
+
+  const en = E.cliente.endereco || {};
+
+  /* o tamanho vem do pedido mais recente que tiver essa informação */
+  let comodos = 3, banheiros = 1;
+  const comTamanho = (E.pedidos || []).find(function(p){
+    return p.respostas && p.respostas.comodos;
+  });
+  if(comTamanho){
+    comodos   = comTamanho.respostas.comodos;
+    banheiros = comTamanho.respostas.banheiros || 0;
+  }
+
+  const casa = {
+    id: "casa-" + Date.now(),
+    apelido: en.apelido || "Casa",
+    tipoImovel: "apartamento",
+    comodos: comodos,
+    banheiros: banheiros,
+    rua: en.rua || "",
+    complemento: en.complemento || "",
+    bairro: en.bairro || "",
+    cidade: en.cidade || "",
+    estado: en.estado || "",
+    cep: en.cep || "",
+    veioDoHistorico: true,   // para a tela poder avisar "confira se está certo"
+  };
+
+  E.cliente.casas = [casa];
+
+  /* os pedidos antigos passam a apontar para ela, e o histórico deixa de
+     ficar solto */
+  (E.pedidos || []).forEach(function(p){ if(!p.casaId) p.casaId = casa.id; });
+
+  salvar();
+}
+
+function casaDoPedido(pedido){
+  const casas = (E.cliente && E.cliente.casas) || [];
+  return casas.find(function(c){ return c.id === (pedido || E.pedido).casaId; })
+      || casas[0] || null;
 }
 
 function reiniciarPrototipo(){
@@ -322,6 +381,10 @@ const DESENHOS = {
   /* --- barra de abas --- */
   casa: '<path d="M12 2.6 2.6 11h2.8v9.4h5V15h3.2v5.4h5V11h2.8L12 2.6Z"/>',
 
+  predio: '<path d="M5 2h9a1 1 0 0 1 1 1v19H4V3a1 1 0 0 1 1-1Z"/>'
+        + '<path d="M16 9h4a1 1 0 0 1 1 1v12h-5V9Z" opacity=".65"/>'
+        + '<path d="M7 6h2v2H7V6Zm3.5 0h2v2h-2V6ZM7 10h2v2H7v-2Zm3.5 0h2v2h-2v-2ZM7 14h2v2H7v-2Zm3.5 0h2v2h-2v-2Z" fill="#fff"/>',
+
   lista: '<path d="M6 2h9l5 5v15H6V2Z"/><path d="M14 2v5h5" fill="rgba(255,255,255,.4)"/>'
        + '<path d="M9 12h7M9 15.5h5" stroke="#fff" stroke-width="1.7" stroke-linecap="round" fill="none"/>',
 
@@ -454,6 +517,7 @@ function nomePeriodo(id){
    LIGAR O APP
    -------------------------------------------------------------------------- */
 carregar();
+criarCasaDeQuemJaUsava();
 
 /* Se a pessoa já usou o protótipo antes, não faz sentido mostrar o splash
    e a escolha de perfil de novo — o documento pede exatamente isso na
