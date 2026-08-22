@@ -513,6 +513,111 @@ function trabalhoQueCabeNaJanela(horasDaJanela){
    pior: um pedido marcado para daqui a 60 dias trava a agenda dela por dois
    meses inteiros, com alta chance de furar. */
 const DIAS_PARA_ESCOLHER = 15;
+
+/* ==========================================================================
+   DISPONIBILIDADE, ALERTA E AGENDA (decisão R22, 22/08/2026)
+
+   O produto inteiro depende disto: o cliente pede, e quem está disponível
+   perto recebe um alerta. Sem alerta que funcione, a plataforma vira um
+   catálogo — que é exatamente o que ela não quer ser.
+   ========================================================================== */
+
+const DISPONIBILIDADE = {
+  /* 3 MINUTOS para responder ao alerta.
+
+     A primeira proposta era 90 segundos. O dono corrigiu, com razão: ela
+     pode estar dentro de um serviço, no ônibus, com a mão molhada. Perder
+     por um minuto e meio é frustração à toa.
+
+     E cabe: a régua prometida ao cliente avisa aos 15 minutos e desiste aos
+     30. Com ondas de 3 minutos são 5 ondas antes do aviso e 10 antes do
+     limite — porque cada onda alerta VÁRIAS profissionais ao mesmo tempo,
+     não uma de cada vez. */
+  alertaExpiraEmSegundos: 180,
+
+  /* Depois de 3 alertas ignorados SEGUIDOS, o app pergunta se ela ainda
+     está disponível. Sem resposta, desliga sozinho.
+
+     Isto NÃO É PUNIÇÃO, e as três regras abaixo existem para nunca virar:
+       1. recusar NÃO conta como ignorado — recusar é resposta, e resposta
+          boa, porque libera a onda na hora;
+       2. qualquer sinal de vida zera a conta (aceitar, recusar, abrir o app);
+       3. desligar assim NÃO mexe na posição dela na fila. Se mexesse, seria
+          punição escondida — pior que punição assumida.
+
+     A razão de existir não é cobrar dela: é que enquanto ela figura como
+     disponível e não responde, o cliente espera à toa e as ondas se gastam. */
+  alertasIgnoradosAtePerguntar: 3,
+
+  /* 5 minutos para responder à pergunta — mais que os 3 do alerta normal,
+     porque aqui não tem cliente esperando do outro lado. */
+  segundosParaResponderAPergunta: 300,
+};
+
+/* As ondas: quem recebe o alerta, e quando. O raio cresce junto com a
+   régua da busca que o cliente vê (REGUA_DA_BUSCA, em telas-cliente.js). */
+const ONDAS = [
+  { onda: 1, comecaAos:  0, raioKm: 3 },
+  { onda: 2, comecaAos:  3, raioKm: 5 },
+  { onda: 3, comecaAos:  6, raioKm: DESLOCAMENTO.raioMaximoKm },
+  { onda: 4, comecaAos:  9, raioKm: DESLOCAMENTO.raioMaximoKm },
+  { onda: 5, comecaAos: 12, raioKm: DESLOCAMENTO.raioMaximoKm },
+];
+
+const AGENDA = {
+  /* 1 hora entre um serviço e outro.
+
+     Não basta comparar relógio: um serviço que termina às 16h na Vila
+     Madalena e outro que começa às 16h30 em Guarulhos não se sobrepõem e
+     mesmo assim são impossíveis. O deslocamento faz parte da agenda.
+
+     Fixo em 1 hora no protótipo. O raio de 7 km segura isso. Quando virar
+     cálculo por distância, muda só este número por uma função. */
+  folgaEntreServicosMinutos: 60,
+
+  /* O teto legal (LC 150/2015) já vale por serviço. Aqui ele vale pelo DIA:
+     duas janelas de 4h somam 8h e cabem; 4h + 6h não cabem. */
+  tetoDeHorasPorDia: 8,
+};
+
+/* A janela ocupada por um serviço é a contratada MAIS a folga.
+   Devolve em minutos desde a meia-noite, que é mais fácil de comparar. */
+function janelaOcupada(servico){
+  return {
+    data: servico.data,
+    de:  servico.inicio * 60,
+    ate: servico.fim * 60 + AGENDA.folgaEntreServicosMinutos,
+  };
+}
+
+/* Este serviço cabe na agenda dela? Devolve o motivo quando não cabe —
+   sem motivo, a tela só sabe dizer "não", e "não" sem motivo parece defeito. */
+function cabeNaAgenda(candidato, agenda){
+  agenda = agenda || [];
+  const doDia = agenda.filter(function(s){ return s.data === candidato.data; });
+
+  /* 1. bate de frente com algum serviço já aceito? */
+  const meuDe  = candidato.inicio * 60;
+  const meuAte = candidato.fim * 60 + AGENDA.folgaEntreServicosMinutos;
+  for(let i = 0; i < doDia.length; i++){
+    const o = janelaOcupada(doDia[i]);
+    if(meuDe < o.ate && o.de < meuAte){
+      return { cabe:false, motivo:"você já tem serviço das " + doDia[i].inicio
+                              + "h às " + doDia[i].fim + "h nesse dia" };
+    }
+  }
+
+  /* 2. estoura as 8 horas do dia? */
+  let horas = candidato.fim - candidato.inicio;
+  doDia.forEach(function(s){ horas += (s.fim - s.inicio); });
+  if(horas > AGENDA.tetoDeHorasPorDia){
+    return { cabe:false, motivo:"passaria de " + AGENDA.tetoDeHorasPorDia
+                              + " horas de trabalho nesse dia" };
+  }
+
+  return { cabe:true, motivo:"" };
+}
+
 const PERIODOS = [
   { id:"manha", nome:"Manhã",  faixa:"8h às 12h",  inicio:8  },
   { id:"tarde", nome:"Tarde",  faixa:"12h às 16h", inicio:12 },

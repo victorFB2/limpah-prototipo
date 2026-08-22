@@ -38,6 +38,17 @@ function diaristaNova(){
     bairros: [],
     situacao: "novo",        // novo · analise · aprovada
     disponivel: false,
+
+    /* Quando ela aceita receber alerta. Vazio = qualquer dia, qualquer
+       período — é o começo mais generoso, e ela aperta depois se quiser. */
+    diasDeTrabalho: {},
+
+    /* Os serviços que ela já aceitou. É isto que impede o app de oferecer
+       um horário que ela não tem. */
+    agenda: [],
+
+    /* Alertas ignorados SEGUIDOS. Zera em qualquer sinal de vida. */
+    ignoradosSeguidos: 0,
     /* o que já foi entregue */
     feito: {
       dados: false, regiao: false,
@@ -191,30 +202,32 @@ function terminarPortaoUm(){
    Se a tabela de preços mudar, esta tela muda junto — nenhum valor aqui é
    escrito à mão. */
 const OPORTUNIDADES = [
-  { quando:"Amanhã", periodo:"manha", bairro:"Vila Madalena", km:2.1,
+  { emDias:1, periodo:"manha", bairro:"Vila Madalena", km:2.1,
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1}, adicionais:[] } },
-  { quando:"Amanhã", periodo:"tarde", bairro:"Pinheiros", km:3.4,
+  { emDias:1, periodo:"tarde", bairro:"Pinheiros", km:3.4,
     pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:4, banheiros:2}, adicionais:["passar"] } },
-  { quando:"Sexta",  periodo:"manha", bairro:"Perdizes", km:4.8,
+  { emDias:2, periodo:"manha", bairro:"Perdizes", km:4.8,
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:5, banheiros:2}, adicionais:[] } },
-  { quando:"Sexta",  periodo:"tarde", bairro:"Butantã", km:5.9,
+  { emDias:2, periodo:"tarde", bairro:"Butantã", km:5.9,
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
-  { quando:"Sábado", periodo:"manha", bairro:"Lapa", km:4.2,
+  { emDias:3, periodo:"manha", bairro:"Lapa", km:4.2,
     pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:2}, adicionais:[] } },
-  { quando:"Sábado", periodo:"manha", bairro:"Pompeia", km:6.3,
+  { emDias:3, periodo:"tarde", bairro:"Pompeia", km:6.3,
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
-  { quando:"Segunda", periodo:"tarde", bairro:"Perdizes", km:4.6,
+  { emDias:4, periodo:"tarde", bairro:"Perdizes", km:4.6,
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:2}, adicionais:["geladeira"] } },
 ];
 
 const NOME_DA_LIMPEZA = { padrao:"Limpeza padrão", completa:"Limpeza completa" };
 
-/* Só mostra o que está nos bairros que ela escolheu. Prometer "oportunidades
-   na sua região" e listar bairro que ela não marcou é quebrar a promessa na
-   primeira tela — e é o tipo de detalhe que faz ela desconfiar do resto. */
-function oportunidadesDaRegiao(){
+/* Monta a lista inteira, com data, horário e o veredito da agenda.
+
+   Só entra bairro que ela escolheu. Prometer "oportunidades na sua região" e
+   listar bairro que ela não marcou é quebrar a promessa na primeira tela. */
+function todasAsOportunidades(){
   const d = euSouDiarista();
   const meus = d.bairros || [];
+  const dias = proximosDias(8);
 
   return OPORTUNIDADES
     .map(function(c, i){ return { caso:c, id:i }; })
@@ -224,9 +237,15 @@ function oportunidadesDaRegiao(){
       const conta = calcularPedido(c.pedido);
       const janela = janelaDoServico(c.periodo, conta.horas);
       const tipo = NOME_DA_LIMPEZA[c.pedido.respostas.tipo] || conta.categoria.nome;
-      return {
+      const dia = dias[c.emDias] || dias[0];
+
+      const o = {
         id: x.id,
-        quando: c.quando,
+        data: dia.iso,
+        quando: dia.rotulo + ", " + dia.curto,
+        periodo: c.periodo,
+        inicio: janela ? janela.inicio : 8,
+        fim: janela ? janela.fim : 12,
         bairro: c.bairro,
         km: c.km,
         janela: janela ? janela.texto : conta.horas + "h",
@@ -236,13 +255,32 @@ function oportunidadesDaRegiao(){
               + c.pedido.respostas.banheiros
               + (c.pedido.respostas.banheiros === 1 ? " banheiro" : " banheiros"),
       };
+
+      const veredito = cabeNaAgenda(o, d.agenda);
+      o.cabe = veredito.cabe;
+      o.porQueNaoCabe = veredito.motivo;
+      o.jaAceito = (d.agenda || []).some(function(s){ return s.oportunidadeId === o.id; });
+      return o;
     });
+}
+
+/* O que ela pode aceitar: cabe na agenda e ainda não é dela. */
+function oportunidadesDaRegiao(){
+  return todasAsOportunidades().filter(function(o){ return o.cabe && !o.jaAceito; });
+}
+
+/* O que ficou de fora por conflito — e a tela DIZ isso.
+
+   Sumir com a oportunidade sem explicar parece defeito, e ela ficaria
+   achando que o app está escondendo trabalho dela. */
+function oportunidadesQueNaoCabem(){
+  return todasAsOportunidades().filter(function(o){ return !o.cabe && !o.jaAceito; });
 }
 
 /* A oportunidade aberta é procurada pelo id, não pela posição — a lista
    encolhe quando ela muda de bairro, e a posição deixaria de valer. */
 function oportunidadePorId(id){
-  const lista = oportunidadesDaRegiao();
+  const lista = todasAsOportunidades();
   const achada = lista.filter(function(o){ return o.id === id; })[0];
   return achada || lista[0] || null;
 }
@@ -293,10 +331,20 @@ TELAS.diaristaHome = {
     +   (pode
       ? '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" onclick="alternarDisponivel()">'
         + '<div class="txt"><b>Disponível para trabalhar</b>'
-        + '<span>' + (d.disponivel ? "Você está recebendo oportunidades." : "Ligue para receber oportunidades.") + '</span></div>'
+        + '<span>' + (d.disponivel
+            ? "O celular toca quando aparecer pedido para voc\u00ea."
+            : "Ligue para ser avisada de novos pedidos.") + '</span></div>'
         + '<div class="botao"></div></div>'
+        /* Sempre vis\u00edvel, n\u00e3o s\u00f3 com a chave ligada: ela precisa poder
+           acertar os dias ANTES de come\u00e7ar a receber alerta. */
+        + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
+        /* \ud83d\udcc5 e n\u00e3o \ud83d\uddd3: o segundo sai como quadradinho vazio no Windows. */
+        +   'onclick="ir(\'diaristaDisponibilidade\')">\ud83d\udcc5 Meus dias de trabalho \u203a</button>'
+        + avisoDeQuePausou()
+        + cartaoDoAlerta()
       : "")
 
+    +   agendaDela()
     +   '<div class="rotulo">Oportunidades na sua região</div>'
     +   (lista.length ? cards
       : '<div class="aviso roxo">🔍<div><b>Nada nos seus bairros agora</b>'
@@ -304,18 +352,35 @@ TELAS.diaristaHome = {
         + 'suas chances — dá para mudar quando quiser.</div></div>'
         + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">'
         + 'Escolher mais bairros</button>')
+    +   escondidasPorConflito()
     +   '<div class="rodape-seguro">Estes são pedidos reais da sua região.<br>'
     +     'O endereço exato aparece quando você aceita.</div>'
+    +   avisoDoPushParaOTime()
     + '</div>'
     + abasDaDiarista("inicio");
-  }
+  },
+
+  /* O relógio do alerta vive aqui: desenhar() apaga todos os relógios, e o
+     aoEntrar roda a cada desenho, então ele se rearma sozinho. */
+  aoEntrar: function(){ relogioDoAlerta(); }
 };
 
 function alternarDisponivel(){
   const d = euSouDiarista();
   if(!podeAceitarServico()) return;
   d.disponivel = !d.disponivel;
+
+  /* ligar de novo é sinal de vida, e apaga o aviso da pausa automática */
+  E.desligouSozinho = false;
+  d.ignoradosSeguidos = 0;
+  if(!d.disponivel){ E.alerta = null; }
   salvar();
+
+  /* O toque nesta chave é o que libera o som no navegador: ele só deixa
+     tocar depois que a pessoa tocou em alguma coisa. Um bip curtinho aqui
+     confirma para ela que o som funciona — e destrava o alerta de verdade. */
+  if(d.disponivel) tocarAlerta();
+
   desenhar();
 }
 
@@ -355,7 +420,7 @@ TELAS.diaristaOportunidade = {
     + '</div>'
     + '<div class="rodape">'
     +   (pode
-      ? '<button class="btn btn-principal" onclick="ir(\'diaristaAceitou\')">Aceitar este serviço</button>'
+      ? '<button class="btn btn-principal" onclick="aceitarOportunidade()">Aceitar este serviço</button>'
         + '<button class="btn btn-texto" onclick="voltar()">Agora não</button>'
       : '<div class="aviso roxo" style="margin:0 0 10px">' + icone("escudo", 18)
         + '<div><b>Falta pouco para você aceitar</b>'
@@ -689,6 +754,447 @@ TELAS.diaristaExperiencia = {
 };
 
 
+
+
+
+/* O que ela já aceitou, no alto da tela — é o que dá sentido ao resto:
+   sem ver a própria agenda, "esse horário não cabe" vira mistério. */
+function agendaDela(){
+  const d = euSouDiarista();
+  const marcados = (d.agenda || []).slice().sort(function(a, b){
+    return (a.data + a.inicio) < (b.data + b.inicio) ? -1 : 1;
+  });
+  if(!marcados.length) return "";
+
+  let itens = "";
+  marcados.forEach(function(s){
+    itens += '<div class="linha"><span class="rot">' + esc(dataPorExtenso(s.data))
+      + '</span><span class="val">' + s.inicio + 'h às ' + s.fim + 'h · '
+      + esc(s.bairro) + '</span></div>';
+  });
+  return '<div class="rotulo">Você já tem</div><div class="cartao">' + itens + '</div>';
+}
+
+/* O que NÃO aparece, e por quê.
+
+   Sumir com a oportunidade sem explicar parece defeito — ela ficaria
+   achando que o app está escondendo trabalho dela. Dizer o motivo transforma
+   uma ausência suspeita numa proteção visível. */
+function escondidasPorConflito(){
+  const fora = oportunidadesQueNaoCabem();
+  if(!fora.length) return "";
+  let itens = "";
+  fora.forEach(function(o){
+    itens += '<div style="font-size:12.5px;color:var(--suave);padding:7px 0;line-height:1.5">'
+      + '· ' + esc(o.quando) + ', ' + esc(o.bairro) + ' — ' + esc(o.porQueNaoCabe) + '</div>';
+  });
+  return '<div class="cartao" style="background:transparent;box-shadow:none;'
+    + 'border:1px dashed var(--borda);padding:13px 15px">'
+    + '<b style="font-size:13px">' + fora.length
+    + (fora.length === 1 ? ' pedido não aparece' : ' pedidos não aparecem')
+    + ' na sua lista</b>' + itens
+    + '<div style="font-size:11.5px;color:var(--suave);margin-top:5px;line-height:1.5">'
+    + 'A gente separa ' + AGENDA.folgaEntreServicosMinutos + ' minutos entre um serviço e '
+    + 'outro, para você ter tempo de chegar sem correria.</div></div>';
+}
+
+/* ⚠️ O aviso mais importante desta tela — e ele é para o TIME DE
+   DESENVOLVIMENTO, não para a diarista. Fica visível de propósito: um
+   protótipo que parece pronto e não está é pior que um que assume o que
+   falta. */
+function avisoDoPushParaOTime(){
+  return '<div class="cartao" style="border:1.5px dashed var(--ambar,#B45309);background:#FFF8EC;'
+    + 'margin-top:16px">'
+    + '<b style="font-size:13px;color:#B45309">⚠️ PARA QUEM VAI DESENVOLVER O APP</b>'
+    + '<div style="font-size:12.5px;color:var(--texto);margin-top:7px;line-height:1.6">'
+    +   'Neste protótipo o som <b>só toca com esta tela aberta</b>. Um site não '
+    +   'consegue tocar nada com o aplicativo fechado ou o celular no bolso — e '
+    +   'é exatamente assim que a diarista vai estar.<br><br>'
+    +   'No aplicativo de verdade isto é <b>notificação do celular</b> (push): '
+    +   'chega com a tela apagada, toca, vibra e abre no pedido certo.<br><br>'
+    +   '<b>Não é acabamento, é o coração do produto.</b> Alerta que só funciona '
+    +   'com o app aberto é o mesmo que alerta nenhum.</div></div>';
+}
+
+/* Aceitar de verdade: entra na agenda dela. É isto que faz o próximo pedido
+   do mesmo horário parar de aparecer. */
+function aceitarOportunidade(){
+  const d = euSouDiarista();
+  if(!podeAceitarServico()) return;               // a trava, de novo e por último
+
+  const o = oportunidadePorId(E.oportunidadeAberta || 0);
+  if(!o) return;
+
+  /* confere outra vez na hora de aceitar: entre ver e tocar, ela pode ter
+     aceitado outro pedido pelo alerta */
+  const veredito = cabeNaAgenda(o, d.agenda);
+  if(!veredito.cabe){
+    E.recusadoPelaAgenda = veredito.motivo;
+    salvar();
+    ir("diaristaConflito");
+    return;
+  }
+
+  d.agenda = (d.agenda || []).concat([{
+    oportunidadeId: o.id, data: o.data, inicio: o.inicio, fim: o.fim,
+    bairro: o.bairro, resumo: o.resumo, receber: o.receber,
+  }]);
+  E.alerta = null;
+  d.ignoradosSeguidos = 0;
+  salvar();
+  ir("diaristaAceitou", { limparHistorico:true });
+}
+
+/* Quando o horário some debaixo dela. Raro, mas precisa ter tela: um "não"
+   sem explicação parece defeito do aplicativo. */
+TELAS.diaristaConflito = {
+  html: function(){
+    return ''
+    + cabecalho("Não deu")
+    + '<div class="corpo">'
+    +   '<div class="centro" style="flex:none;padding:20px 6px 6px">'
+    +     '<div class="emojao">📅</div>'
+    +     '<h2 class="titulo">Esse horário não cabe mais</h2>'
+    +     '<p class="apoio">' + esc(E.recusadoPelaAgenda || "Você já tem serviço nesse dia.")
+    +       '.<br>Nada foi anotado contra você.</p>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
+    +     'Ver outros pedidos</button>'
+    + '</div>';
+  }
+};
+
+/* ==========================================================================
+   O ALERTA (decisão R22)
+
+   É a ideia central do produto: o cliente pede, e quem está disponível perto
+   é avisada. Sem isso a plataforma vira catálogo.
+
+   ⚠️  PARA O TIME DE DESENVOLVIMENTO — O QUE ESTE PROTÓTIPO NÃO FAZ
+
+   Aqui o som só toca com o aplicativo ABERTO na tela dela. Um site não
+   consegue tocar nada com o aplicativo fechado ou o celular no bolso — e é
+   exatamente assim que a diarista vai estar na vida real.
+
+   NO APLICATIVO DE VERDADE isto é NOTIFICAÇÃO PUSH do celular (APNs no
+   iPhone, FCM no Android), que chega com a tela apagada, faz o aparelho
+   tocar e vibrar, e abre no serviço certo quando ela toca no aviso.
+
+   **Isso não é detalhe de acabamento: é o coração do produto.** Um alerta
+   que só funciona com o app aberto é o mesmo que alerta nenhum. Está
+   escrito também na tela, em cima, para ninguém achar que está pronto.
+   ========================================================================== */
+
+/* O SOM, FABRICADO POR CÓDIGO.
+
+   Não existe arquivo de som no projeto, e não vai existir: a regra da stack
+   é nada de arquivo externo, nada de baixar nada. O navegador consegue
+   sintetizar o som na hora — duas notas curtas, como um sino.
+
+   E ele só deixa tocar depois que a pessoa tocou em alguma coisa. Como ela
+   acabou de tocar em "Disponível", esse toque é justamente o que libera. */
+function tocarAlerta(){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    const ctx = new Ctx();
+    [880, 1174.7].forEach(function(hz, i){
+      const quando = ctx.currentTime + i * 0.19;
+      const osc = ctx.createOscillator();
+      const vol = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = hz;
+      vol.gain.setValueAtTime(0.0001, quando);
+      vol.gain.exponentialRampToValueAtTime(0.22, quando + 0.02);
+      vol.gain.exponentialRampToValueAtTime(0.0001, quando + 0.17);
+      osc.connect(vol);
+      vol.connect(ctx.destination);
+      osc.start(quando);
+      osc.stop(quando + 0.19);
+    });
+  }catch(e){ /* celular sem som, ou navegador que não deixa: segue sem */ }
+
+  /* vibração: funciona no Android, o iPhone ignora sem reclamar */
+  try{ if(navigator.vibrate) navigator.vibrate([120, 70, 120]); }catch(e){}
+}
+
+
+/* A grade "meus dias de trabalho" diz se este período serve para ela. */
+function periodoServeParaEla(dataIso, periodoId){
+  const d = euSouDiarista();
+  const grade = d.diasDeTrabalho || {};
+  if(!Object.keys(grade).length) return true;      // nada marcado = tudo serve
+  const partes = dataIso.split("-");
+  const dia = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2])).getDay();
+  const doDia = grade[dia];
+  if(!doDia || !doDia.length) return false;
+  return doDia.indexOf(periodoId) >= 0;
+}
+
+/* O que pode virar alerta: cabe na agenda, cabe na grade dela, e ela ainda
+   não viu. */
+function proximaParaAlertar(){
+  return oportunidadesDaRegiao().filter(function(o){
+    return periodoServeParaEla(o.data, o.periodo)
+        && (E.jaAlertadas || []).indexOf(o.id) < 0;
+  })[0] || null;
+}
+
+/* Dispara o alerta — só se ela estiver disponível e aprovada. */
+function dispararAlerta(){
+  const d = euSouDiarista();
+  if(!d.disponivel || !podeAceitarServico()) return;
+  if(E.alerta) return;                       // um de cada vez
+
+  const o = proximaParaAlertar();
+  if(!o) return;
+
+  E.jaAlertadas = (E.jaAlertadas || []).concat([o.id]);
+  E.alerta = { oportunidadeId: o.id, restam: DISPONIBILIDADE.alertaExpiraEmSegundos,
+               pergunta: false };
+  salvar();
+  tocarAlerta();
+  desenhar();
+}
+
+/* A pergunta "ainda está disponível?", depois de 3 ignorados seguidos. */
+function perguntarSeAindaEsta(){
+  E.alerta = { oportunidadeId: null, pergunta: true,
+               restam: DISPONIBILIDADE.segundosParaResponderAPergunta };
+  salvar();
+  tocarAlerta();
+  desenhar();
+}
+
+/* O relógio do alerta. Mora no aoEntrar da home, porque desenhar() apaga
+   todos os relógios — então ele se rearma sozinho a cada desenho, e quem
+   guarda o tempo é o estado, não o relógio. */
+function relogioDoAlerta(){
+  const d = euSouDiarista();
+
+  if(!E.alerta){
+    /* nada na tela: se ela está disponível, um pedido chega em instantes */
+    if(d.disponivel && podeAceitarServico() && proximaParaAlertar()){
+      agendar(dispararAlerta, 4000);
+    }
+    return;
+  }
+
+  repetir(function(){
+    if(!E.alerta) return;
+    E.alerta.restam -= 1;
+    if(E.alerta.restam > 0){ salvar(); desenhar(); return; }
+
+    if(E.alerta.pergunta){
+      /* não respondeu à pergunta: desliga sozinho, sem punição nenhuma */
+      E.alerta = null;
+      d.disponivel = false;
+      d.ignoradosSeguidos = 0;
+      E.desligouSozinho = true;
+      salvar();
+      desenhar();
+      return;
+    }
+
+    /* o alerta expirou sem resposta */
+    E.alerta = null;
+    d.ignoradosSeguidos = (d.ignoradosSeguidos || 0) + 1;
+    salvar();
+    if(d.ignoradosSeguidos >= DISPONIBILIDADE.alertasIgnoradosAtePerguntar){
+      perguntarSeAindaEsta();
+    } else {
+      desenhar();
+    }
+  }, 1000);
+}
+
+/* Qualquer sinal de vida zera a conta de ignorados. Recusar TAMBÉM — recusar
+   é resposta, e resposta boa: libera a onda na hora em vez de gastar três
+   minutos esperando. Punir quem recusa seria punir o comportamento que a
+   gente quer. */
+function deiSinalDeVida(){
+  const d = euSouDiarista();
+  d.ignoradosSeguidos = 0;
+  salvar();
+}
+
+function aceitarDoAlerta(){
+  const id = E.alerta ? E.alerta.oportunidadeId : null;
+  E.alerta = null;
+  deiSinalDeVida();
+  if(id === null || id === undefined){ desenhar(); return; }
+  E.oportunidadeAberta = id;
+  salvar();
+  aceitarOportunidade();
+}
+
+function recusarDoAlerta(){
+  E.alerta = null;
+  deiSinalDeVida();
+  salvar();
+  desenhar();
+}
+
+function continuoDisponivel(){
+  E.alerta = null;
+  deiSinalDeVida();
+  desenhar();
+}
+
+function pausarAgora(){
+  const d = euSouDiarista();
+  E.alerta = null;
+  d.disponivel = false;
+  d.ignoradosSeguidos = 0;
+  salvar();
+  desenhar();
+}
+
+/* O cartão do alerta, no alto da tela dela. */
+function cartaoDoAlerta(){
+  if(!E.alerta) return "";
+  const m = Math.floor(E.alerta.restam / 60);
+  const seg = String(E.alerta.restam % 60).padStart(2, "0");
+  const tempo = m + ":" + seg;
+
+  if(E.alerta.pergunta){
+    return '<div class="cartao destaque" style="border-color:var(--roxo);background:var(--roxo-claro)">'
+      + '<b style="font-size:15.5px">Você ainda está disponível? \u{1F44B}</b>'
+      + '<div style="font-size:13px;color:var(--texto);margin-top:6px;line-height:1.55">'
+      +   'Passamos alguns pedidos e você não respondeu — o que é normal, '
+      +   'a vida acontece. <b>Isto não é advertência e não muda nada no seu '
+      +   'perfil.</b> Só queremos não deixar o cliente esperando à toa.</div>'
+      + '<div style="font-size:12px;color:var(--suave);margin-top:8px">'
+      +   'Sem resposta em <b>' + tempo + '</b>, a gente pausa por você. '
+      +   'Você religa quando quiser.</div>'
+      + '<div style="display:flex;gap:8px;margin-top:13px">'
+      +   '<button class="btn btn-principal" style="margin:0" onclick="continuoDisponivel()">'
+      +     'Estou aqui</button>'
+      +   '<button class="btn btn-claro" style="margin:0" onclick="pausarAgora()">Pausar</button>'
+      + '</div></div>';
+  }
+
+  const o = oportunidadePorId(E.alerta.oportunidadeId);
+  if(!o) return "";
+  const apertado = E.alerta.restam <= 30;
+
+  return '<div class="cartao destaque" style="border-color:var(--roxo);background:var(--roxo-claro)">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +   '<b style="font-size:15.5px">Novo pedido para você! \u{1F514}</b>'
+    +   '<span style="font-size:15px;font-weight:800;color:'
+    +     (apertado ? "var(--vermelho)" : "var(--roxo)") + '">' + tempo + '</span>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+    +   '<div style="flex:1;min-width:0;font-size:13px;line-height:1.6">'
+    +     '<b>' + esc(o.quando) + ' · ' + esc(o.janela) + '</b><br>'
+    +     esc(o.resumo) + '<br>\u{1F4CD} ' + esc(o.bairro) + ' · '
+    +     String(o.km).replace(".", ",") + ' km</div>'
+    +   '<div style="text-align:right;flex:none">'
+    +     '<div style="font-size:11px;color:var(--suave)">você recebe</div>'
+    +     '<div style="font-size:19px;font-weight:800;color:var(--verde)">'
+    +       moeda(o.receber) + '</div></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:13px">'
+    +   '<button class="btn btn-principal" style="margin:0" onclick="aceitarDoAlerta()">'
+    +     'Aceitar</button>'
+    +   '<button class="btn btn-claro" style="margin:0" onclick="recusarDoAlerta()">Agora não</button>'
+    + '</div>'
+    + '<div style="font-size:11.5px;color:var(--suave);margin-top:9px;line-height:1.5">'
+    +   'Deixar passar não é falta. Não conta nada contra você.</div>'
+    + '</div>';
+}
+
+/* O aviso de que o próprio app pausou. */
+function avisoDeQuePausou(){
+  if(!E.desligouSozinho) return "";
+  return '<div class="aviso roxo">\u{1F634}<div><b>Pausamos por você</b>'
+    + 'Você não respondeu aos últimos pedidos, então paramos de mandar para não '
+    + 'deixar cliente esperando. <b>Nada foi anotado contra você e sua posição '
+    + 'continua a mesma.</b> É só ligar de novo aí em cima.</div></div>';
+}
+
+
+/* --------------------------------------------------------------------------
+   MEUS DIAS DE TRABALHO
+
+   Sem isto, uma diarista que só trabalha terça e quinta de manhã seria
+   acordada às 6h de domingo. Alerta que incomoda é desligado para sempre —
+   e aí perdemos ela inteira, não só aquele domingo.
+
+   E tem um lado jurídico a favor: ela definir a própria agenda reforça que é
+   trabalhadora autônoma. Plataforma que decide quando ela trabalha caminha
+   para vínculo empregatício — o mesmo motivo da janela de presença (R9).
+   -------------------------------------------------------------------------- */
+TELAS.diaristaDisponibilidade = {
+  html: function(){
+    const d = euSouDiarista();
+    const grade = d.diasDeTrabalho || {};
+    const tudoAberto = !Object.keys(grade).length;
+
+    let linhas = "";
+    DIAS_SEMANA.forEach(function(nome, dia){
+      const marcados = grade[dia] || [];
+      let botoes = "";
+      PERIODOS.forEach(function(p){
+        const on = tudoAberto || marcados.indexOf(p.id) >= 0;
+        botoes += '<button onclick="alternarPeriodoDoDia(' + dia + ',\'' + p.id + '\')" '
+          + 'style="flex:1;min-height:44px;border-radius:10px;font-family:inherit;font-size:12.5px;'
+          + 'font-weight:700;cursor:pointer;border:1.5px solid '
+          + (on ? "var(--roxo)" : "var(--borda)") + ';'
+          + 'background:' + (on ? "var(--roxo-claro)" : "var(--branco)") + ';'
+          + 'color:' + (on ? "var(--roxo)" : "var(--suave)") + '">'
+          + esc(p.nome) + '</button>';
+      });
+      linhas += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        + '<div style="width:38px;flex:none;font-size:13px;font-weight:700;color:var(--suave)">'
+        +   esc(nome) + '</div>'
+        + '<div style="flex:1;display:flex;gap:6px">' + botoes + '</div></div>';
+    });
+
+    return ''
+    + cabecalho("Meus dias de trabalho")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Quando você quer ser avisada?</h2>'
+    +   '<p class="apoio">Só chega alerta nos dias e períodos que você marcar. '
+    +     'Dá para mudar quando quiser.</p>'
+    +   linhas
+    +   (tudoAberto
+      ? '<div class="aviso roxo">✨<div><b>Está tudo aberto</b>'
+        + 'Você recebe alerta em qualquer dia e período. Desmarque o que não '
+        + 'serve para você.</div></div>'
+      : '')
+    +   '<div class="aviso verde">' + icone("escudo", 18) + '<div><b>Quem manda na sua agenda é você</b>'
+    +     'A gente não escolhe seus dias, nem cobra nada por você ficar fora. '
+    +     'Ficar indisponível não penaliza você.</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="voltar()">Pronto</button>'
+    + '</div>';
+  }
+};
+
+function alternarPeriodoDoDia(dia, periodoId){
+  const d = euSouDiarista();
+  if(!d.diasDeTrabalho) d.diasDeTrabalho = {};
+
+  /* Se nada estava marcado, tudo estava valendo — então o primeiro toque
+     precisa partir de "tudo ligado", senão ela toca para DESmarcar um
+     período e o app entende que ela marcou só aquele. */
+  if(!Object.keys(d.diasDeTrabalho).length){
+    DIAS_SEMANA.forEach(function(_, i){
+      d.diasDeTrabalho[i] = PERIODOS.map(function(p){ return p.id; });
+    });
+  }
+
+  const lista = d.diasDeTrabalho[dia] || [];
+  const i = lista.indexOf(periodoId);
+  if(i >= 0) lista.splice(i, 1); else lista.push(periodoId);
+  d.diasDeTrabalho[dia] = lista;
+  salvar();
+  desenhar();
+}
 
 /* --------------------------------------------------------------------------
    A CONTA DELA — e a porta de saída
