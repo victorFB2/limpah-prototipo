@@ -96,6 +96,112 @@ function progressoDoCadastro(){
   return { pct: pct, falta: falta };
 }
 
+
+/* ==========================================================================
+   EM QUE ESTADO ELA ESTÁ — e o que cada tela diz sobre isso (decisão R24)
+
+   Em 22/08/2026 o dono terminou o cadastro e as telas se contradisseram:
+   o mapa dizia "complete o segundo passo" com o segundo passo todo feito,
+   os cartões diziam "complete seu cadastro" sem nada a completar, e a faixa
+   tinha sumido.
+
+   **A causa não foi um bug — foi cada tela decidindo sozinha o que dizer**,
+   a partir de um sim/não (`podeAceitarServico`). Sim/não não comporta três
+   estados. Enquanto cada tela fizer a própria conta, elas voltam a discordar.
+
+   Agora existe UM lugar que decide, e as telas só leem daqui. Frase nova
+   sobre o estado dela entra NESTA tabela, nunca solta dentro de uma tela.
+   ========================================================================== */
+function situacaoDaDiarista(){
+  const d = euSouDiarista();
+  const p = progressoDoCadastro();
+  const portao2 = ["documentos", "selfie", "antecedentes", "termos"];
+  const portao2Pronto = portao2.every(function(x){ return d.feito[x]; });
+
+  /* APROVADA — pode trabalhar */
+  if(d.situacao === "aprovada"){
+    const faltaReceber = !d.feito.recebimento;
+    return {
+      chave: "aprovada",
+      podeAceitar: true,
+      /* na faixa do topo */
+      faixaTitulo: faltaReceber ? "Falta onde você recebe" : "",
+      faixaFrase:  faltaReceber ? "sem isso o dinheiro não tem para onde ir" : "",
+      faixaDestino: "diaristaRecebimento",
+      /* no interruptor */
+      interruptorTravado: false,
+      /* no cartão de oportunidade */
+      noCartao: "",
+      /* no mapa do cadastro */
+      mapaFrase: "Você já pode aceitar serviços. O resto melhora seu perfil.",
+      /* na tela de uma oportunidade */
+      oportunidadeTitulo: "",
+      oportunidadeFrase: "",
+      pct: p.pct,
+    };
+  }
+
+  /* EM ANÁLISE — mandou tudo, espera a gente */
+  if(d.situacao === "analise" || portao2Pronto){
+    return {
+      chave: "analise",
+      podeAceitar: false,
+      faixaTitulo: "Cadastro completo",
+      faixaFrase:  "aguardando nossa aprovação",
+      faixaDestino: "diaristaAnalise",
+      /* Aqui a porcentagem seria contradição: ela conta também o Portão 3,
+         que NÃO é exigido para aprovar. Dizer "Cadastro completo" ao lado de
+         "90%" é o mesmo erro que o dono encontrou, em miniátura. */
+      faixaSelo: "✓",
+      faixaTrilho: 100,
+      interruptorTravado: true,
+      interruptorFrase: "Liga assim que a gente aprovar. Já estamos conferindo.",
+      noCartao: "Você poderá aceitar assim que aprovarmos",
+      mapaFrase: "Está tudo enviado. Agora é com a gente — e a gente avisa você.",
+      oportunidadeTitulo: "Seu cadastro está em análise",
+      oportunidadeFrase: "Você não precisa fazer mais nada. Assim que aprovarmos, "
+                       + "este botão libera sozinho.",
+      pct: p.pct,
+    };
+  }
+
+  /* INCOMPLETO — ainda falta documento */
+  return {
+    chave: "incompleto",
+    podeAceitar: false,
+    faixaTitulo: "Cadastro " + p.pct + "%",
+    faixaFrase:  p.falta || "faltam os documentos para você aceitar serviços",
+    faixaDestino: "diaristaCadastro",
+    interruptorTravado: true,
+    interruptorFrase: "Liga quando seu cadastro for aprovado.",
+    noCartao: "Complete seu cadastro para aceitar",
+    mapaFrase: "Complete o segundo passo para começar a aceitar serviços.",
+    oportunidadeTitulo: "Falta pouco para você aceitar",
+    oportunidadeFrase: "Envie seus documentos e, assim que a gente aprovar, "
+                     + "este botão libera.",
+    pct: p.pct,
+  };
+}
+
+/* O atalho do protótipo, que precisa estar visível onde ela está esperando.
+
+   Ele existia só dentro da tela de análise — e essa tela só era alcançável
+   uma vez, no instante em que o cadastro fechava, com o histórico limpo.
+   Quem saísse dali nunca mais voltava, e o dono ficou preso com o cadastro
+   completo e nenhum caminho adiante. */
+function atalhoDeAprovacao(){
+  if(situacaoDaDiarista().chave !== "analise") return "";
+  return '<div class="cartao" style="border:1.5px dashed var(--ambar);background:#FFF8EC">'
+    + '<b style="font-size:13px;color:var(--ambar)">⚙ ATALHO DO PROTÓTIPO</b>'
+    + '<div style="font-size:12.5px;color:var(--texto);margin-top:6px;line-height:1.55">'
+    +   'No aplicativo de verdade quem aprova é a nossa equipe, depois de '
+    +   'conferir os documentos — leva algumas horas. Aqui dá para pular a '
+    +   'espera.</div>'
+    + '<button class="btn btn-principal" style="margin:12px 0 0" '
+    +   'onclick="simularAprovacao()">Simular: cadastro aprovado</button></div>';
+}
+
+
 /* A FAIXA DO CADASTRO — fixa no alto, fora da rolagem.
 
    Ela já existia como cartão no meio da tela. Em 22/08/2026 o dono abriu o
@@ -112,19 +218,23 @@ function progressoDoCadastro(){
    2. **Cartão branco entre cartões brancos parece conteúdo, não botão.**
       Agora é roxa cheia, com seta — a mesma linguagem dos botões principais. */
 function faixaDoCadastro(){
-  const p = progressoDoCadastro();
-  if(p.pct >= 100) return "";
-  const emAnalise = (euSouDiarista().situacao === "analise");
+  const e = situacaoDaDiarista();
 
-  return '<button class="faixa-cadastro" onclick="ir(\'diaristaCadastro\')">'
+  /* Sem título não há o que dizer — é o caso de quem está aprovada e com
+     tudo em dia. Antes a faixa sumia a 100%, o que deixou o dono a 100% e
+     em análise sem faixa nenhuma: completo, esperando, e sem saber disso. */
+  if(!e.faixaTitulo) return "";
+
+  return '<button class="faixa-cadastro" onclick="ir(\'' + e.faixaDestino + '\')">'
     +   '<div class="txt">'
-    +     '<b>' + (emAnalise ? "Cadastro em análise" : "Cadastro " + p.pct + "%") + '</b>'
-    +     (p.falta ? '<span>' + esc(p.falta) + '</span>' : "")
+    +     '<b>' + esc(e.faixaTitulo) + '</b>'
+    +     (e.faixaFrase ? '<span>' + esc(e.faixaFrase) + '</span>' : "")
     +   '</div>'
-    +   '<div class="anel">' + p.pct + '%</div>'
+    +   '<div class="anel">' + (e.faixaSelo || (e.pct + "%")) + '</div>'
     +   '<div class="seta">›</div>'
     + '</button>'
-    + '<div class="faixa-trilho"><div style="width:' + p.pct + '%"></div></div>';
+    + '<div class="faixa-trilho"><div style="width:'
+    +   (e.faixaTrilho !== undefined ? e.faixaTrilho : e.pct) + '%"></div></div>';
 }
 
 /* nome antigo, ainda usado na tela de perfil dela */
@@ -141,17 +251,16 @@ function barraDoCadastro(){ return faixaDoCadastro(); }
    motivo escrito e o caminho ao lado. É a mesma escolha do cadeado nas
    oportunidades: mostrar o que existe e dizer o que falta, em vez de sumir. */
 function interruptorTravado(){
-  const d = euSouDiarista();
-  const emAnalise = (d.situacao === "analise");
+  const e = situacaoDaDiarista();
   return '<div class="chave travada">'
     +   '<div class="txt"><b>🔒 Disponível para trabalhar</b>'
-    +     '<span>' + (emAnalise
-          ? "Liga assim que a gente aprovar seu cadastro. Já estamos conferindo."
-          : "Liga quando seu cadastro for aprovado.") + '</span></div>'
+    +     '<span>' + esc(e.interruptorFrase) + '</span></div>'
     +   '<div class="botao"></div>'
     + '</div>'
-    + (emAnalise ? "" :
-        '<button class="btn btn-principal" style="margin-bottom:14px" '
+    + (e.chave === "analise"
+      ? '<button class="btn btn-contorno" style="margin-bottom:14px" '
+        + 'onclick="ir(\'diaristaAnalise\')">Ver como está meu cadastro</button>'
+      : '<button class="btn btn-principal" style="margin-bottom:14px" '
         + 'onclick="ir(\'diaristaCadastro\')">Continuar meu cadastro</button>');
 }
 
@@ -352,7 +461,7 @@ TELAS.diaristaHome = {
             + '<span class="btn btn-principal" style="padding:11px;font-size:14px">Ver detalhes</span></div>'
           : '<div style="display:flex;align-items:center;gap:7px;margin-top:12px;padding-top:11px;'
             + 'border-top:1px solid var(--borda);font-size:12.5px;color:var(--roxo);font-weight:600">'
-            + icone("escudo", 15) + 'Complete seu cadastro para aceitar</div>')
+            + icone("escudo", 15) + esc(situacaoDaDiarista().noCartao) + '</div>')
         + '</button>';
     });
 
@@ -463,10 +572,17 @@ TELAS.diaristaOportunidade = {
     +   (pode
       ? '<button class="btn btn-principal" onclick="aceitarOportunidade()">Aceitar este serviço</button>'
         + '<button class="btn btn-texto" onclick="voltar()">Agora não</button>'
-      : '<div class="aviso roxo" style="margin:0 0 10px">' + icone("escudo", 18)
-        + '<div><b>Falta pouco para você aceitar</b>'
-        + 'Envie seus documentos e, assim que a gente aprovar, este botão libera.</div></div>'
-        + '<button class="btn btn-principal" onclick="ir(\'diaristaCadastro\')">Completar meu cadastro</button>')
+      : (function(){
+          const e = situacaoDaDiarista();
+          return '<div class="aviso roxo" style="margin:0 0 10px">' + icone("escudo", 18)
+            + '<div><b>' + esc(e.oportunidadeTitulo) + '</b>'
+            + esc(e.oportunidadeFrase) + '</div></div>'
+            + (e.chave === "analise"
+              ? '<button class="btn btn-contorno" onclick="ir(\'diaristaAnalise\')">'
+                + 'Ver como está meu cadastro</button>'
+              : '<button class="btn btn-principal" onclick="ir(\'diaristaCadastro\')">'
+                + 'Completar meu cadastro</button>');
+        })())
     + '</div>';
   }
 };
@@ -494,6 +610,7 @@ TELAS.diaristaCadastro = {
   html: function(){
     const d = euSouDiarista();
     const p = progressoDoCadastro();
+    const est = situacaoDaDiarista();
 
     function passo(feito, titulo, detalhe, destino, bloqueado){
       return '<button class="item" ' + (bloqueado ? "disabled" : 'onclick="ir(\'' + destino + '\')"') + '>'
@@ -507,10 +624,10 @@ TELAS.diaristaCadastro = {
     return ''
     + cabecalho("Meu cadastro")
     + '<div class="corpo">'
-    +   '<h2 class="titulo">Cadastro ' + p.pct + '%</h2>'
-    +   '<p class="apoio">' + (podeAceitarServico()
-        ? "Você já pode aceitar serviços. O resto melhora seu perfil."
-        : "Complete o segundo passo para começar a aceitar serviços.") + '</p>'
+    +   '<h2 class="titulo">' + (est.chave === "analise"
+        ? "Cadastro completo ✅" : "Cadastro " + p.pct + "%") + '</h2>'
+    +   '<p class="apoio">' + esc(est.mapaFrase) + '</p>'
+    +   atalhoDeAprovacao()
 
     +   '<div class="rotulo">1 · Entrar e ver <span class="selo verde">feito</span></div>'
     +   passo(d.feito.dados,  "Seus dados", "Nome e telefone", "diaristaCadastro", true)
@@ -709,13 +826,10 @@ TELAS.diaristaAnalise = {
     +     'Costuma levar algumas horas — a gente avisa assim que terminar.</p>'
     +   '<div class="girando roxo"></div>'
     + '</div>'
+    + '<div class="corpo" style="flex:none">' + atalhoDeAprovacao() + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-contorno" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
+    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
     +     'Ver oportunidades enquanto isso</button>'
-    /* Atalho só do protótipo: no app real quem aprova é a equipe. Fica com
-       altura de dedo (44px) porque é por aqui que se atravessa a análise. */
-    +   '<button class="btn btn-texto" style="min-height:44px;color:var(--suave);font-size:13px" '
-    +     'onclick="simularAprovacao()">⚙ simular: cadastro aprovado</button>'
     + '</div>';
   }
 };
