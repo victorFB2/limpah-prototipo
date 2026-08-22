@@ -958,17 +958,42 @@ function escondidasPorConflito(){
    protótipo que parece pronto e não está é pior que um que assume o que
    falta. */
 function avisoDoPushParaOTime(){
-  return '<div class="cartao" style="border:1.5px dashed var(--ambar,#B45309);background:#FFF8EC;'
+  function linha(faz, texto){
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0">'
+      + '<span style="flex:none;width:16px">' + (faz ? "✅" : "❌") + '</span>'
+      + '<span>' + texto + '</span></div>';
+  }
+
+  return '<div class="cartao" style="border:2px solid var(--ambar);background:#FFF8EC;'
     + 'margin-top:16px">'
-    + '<b style="font-size:13px;color:#B45309">⚠️ PARA QUEM VAI DESENVOLVER O APP</b>'
-    + '<div style="font-size:12.5px;color:var(--texto);margin-top:7px;line-height:1.6">'
-    +   'Neste protótipo o som <b>só toca com esta tela aberta</b>. Um site não '
-    +   'consegue tocar nada com o aplicativo fechado ou o celular no bolso — e '
-    +   'é exatamente assim que a diarista vai estar.<br><br>'
-    +   'No aplicativo de verdade isto é <b>notificação do celular</b> (push): '
-    +   'chega com a tela apagada, toca, vibra e abre no pedido certo.<br><br>'
-    +   '<b>Não é acabamento, é o coração do produto.</b> Alerta que só funciona '
-    +   'com o app aberto é o mesmo que alerta nenhum.</div></div>';
+    + '<b style="font-size:14px;color:var(--ambar)">'
+    +   '⚠️ ESTE PROTÓTIPO NÃO DEMONSTRA O ALERTA</b>'
+
+    + '<div style="font-size:12.5px;color:var(--texto);margin-top:9px;line-height:1.6">'
+    +   'O que você acabou de ouvir é <b>o desenho da tela</b>, não o alerta. '
+    +   'Um site não consegue avisar ninguém com o aplicativo fechado — e é '
+    /* Sem citar aplicativo de mensagem por nome: o teste 3 varre as telas
+       atrás de contato vazado, e ele está certo em não abrir exceção para
+       texto que "é só um exemplo". Regra com exceção deixa de ser regra. */
+    +   'exatamente assim que a diarista vai estar: no ônibus, dentro de outro '
+    +   'serviço, respondendo uma mensagem.</div>'
+
+    + '<div style="font-size:12.5px;margin-top:11px;line-height:1.5">'
+    +   linha(true,  'som gerado por código, repetindo a cada '
+                   + DISPONIBILIDADE.repeteOSomACadaSegundos + 's')
+    +   linha(true,  'vibração junto, no Android')
+    +   linha(false, '<b>com o app fechado</b> — impossível num site')
+    +   linha(false, '<b>no modo silencioso</b>')
+    +   linha(false, '<b>na central de notificações</b>')
+    +   linha(false, '<b>botões Aceitar / Agora não no aviso</b>')
+    + '</div>'
+
+    + '<div style="font-size:12.5px;color:var(--texto);margin-top:11px;padding-top:11px;'
+    +   'border-top:1px solid #EBD9B8;line-height:1.6">'
+    +   '<b>As quatro linhas vermelhas são o produto</b>, e nenhuma delas dá para '
+    +   'ver aqui. Quem for construir <b>precisa ler <code>ESPEC-ALERTA.md</code></b>, '
+    +   'na pasta do projeto: está tudo lá, inclusive o que depende de aprovação '
+    +   'da Apple e do Google.</div></div>';
 }
 
 /* Aceitar de verdade: entra na agenda dela. É isto que faz o próximo pedido
@@ -1140,6 +1165,23 @@ function relogioDoAlerta(){
   repetir(function(){
     if(!E.alerta) return;
     E.alerta.restam -= 1;
+
+    /* O SOM REPETINDO.
+
+       Ele mora aqui dentro, e não num relógio próprio, porque desenhar()
+       apaga todos os relógios uma vez por segundo — um relógio de 15s nunca
+       chegaria aos 15s. Quem conta é o ESTADO: toca quando o tempo já
+       decorrido é múltiplo de 15. Sobrevive a qualquer redesenho. */
+    const total = E.alerta.pergunta
+      ? DISPONIBILIDADE.segundosParaResponderAPergunta
+      : DISPONIBILIDADE.alertaExpiraEmSegundos;
+    const decorrido = total - E.alerta.restam;
+    if(E.alerta.restam > 0
+       && decorrido > 0
+       && decorrido % DISPONIBILIDADE.repeteOSomACadaSegundos === 0){
+      tocarAlerta();
+    }
+
     if(E.alerta.restam > 0){ salvar(); desenhar(); return; }
 
     if(E.alerta.pergunta){

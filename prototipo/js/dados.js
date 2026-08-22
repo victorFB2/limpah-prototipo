@@ -535,6 +535,16 @@ const DISPONIBILIDADE = {
      não uma de cada vez. */
   alertaExpiraEmSegundos: 180,
 
+  /* O som REPETE, não toca uma vez.
+
+     O dono comparou com Uber e iFood e apontou o óbvio: um bip único se
+     perde. Ela pode estar com o celular no bolso, com a mão molhada, dentro
+     de outro serviço. Se o som não insiste, o alerta não serve.
+
+     15 segundos: 12 toques ao longo dos 3 minutos. Insiste sem virar
+     tortura — e para no primeiro toque dela, aceitando ou recusando. */
+  repeteOSomACadaSegundos: 15,
+
   /* Depois de 3 alertas ignorados SEGUIDOS, o app pergunta se ela ainda
      está disponível. Sem resposta, desliga sozinho.
 
