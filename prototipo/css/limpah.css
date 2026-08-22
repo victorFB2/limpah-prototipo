@@ -199,7 +199,8 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .contador .nome{font-size:14.5px;font-weight:600;padding-left:6px}
 .contador .controles{display:flex;align-items:center;gap:4px}
 .contador button{
-  width:36px;height:36px;border:0;border-radius:10px;background:var(--roxo-claro);
+  /* 44px: o mínimo que o dedo acerta. Ver R21. */
+  width:44px;height:44px;border:0;border-radius:12px;background:var(--roxo-claro);
   color:var(--roxo);font-size:20px;font-weight:700;cursor:pointer;line-height:1;
   font-family:inherit;display:flex;align-items:center;justify-content:center;padding:0;
 }
@@ -345,3 +346,25 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .passos i.feito{background:var(--roxo)}
 
 .rodape-seguro{font-size:11.5px;color:var(--suave);text-align:center;line-height:1.5;padding:14px 4px 0}
+
+
+/* ---------- alvos de dedo (decisão R21, 22/08/2026) ----------
+
+   O dono achou no celular três botões pequenos demais. Abaixo de 44px o
+   dedo erra — e errar num campo de senha ou numa data é pior do que
+   parecer apertado. Onde o desenho pede um alvo visualmente pequeno, o
+   BOTÃO cresce por dentro e o desenho fica igual. */
+
+.olho{
+  position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+  border:0;background:none;font-size:17px;cursor:pointer;line-height:1;padding:0;
+  border-radius:50%;
+}
+
+/* Dia do calendário: continua estreito (são sete numa linha), mas alto o
+   bastante para o dedo. Alto e estreito acerta; baixo e estreito não. */
+.dia-calendario{
+  min-height:44px;display:flex;align-items:center;justify-content:center;
+  border:0;border-radius:10px;font-family:inherit;font-size:14px;
+}

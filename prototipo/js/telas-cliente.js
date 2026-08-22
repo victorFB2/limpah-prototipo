@@ -535,8 +535,9 @@ TELAS.calendario = {
       const marcado = E.pedido.data === iso;
       if(d.getMonth() !== mesAtual){ mesAtual = d.getMonth(); }
       celulas.push(
-        '<button ' + (livre ? 'onclick="escolherDataDoCalendario(\'' + iso + '\')"' : "disabled")
-        + ' style="border:0;border-radius:10px;padding:10px 0;font-family:inherit;font-size:14px;'
+        '<button class="dia-calendario" '
+        + (livre ? 'onclick="escolherDataDoCalendario(\'' + iso + '\')"' : "disabled")
+        + ' style="'
         + 'font-weight:' + (marcado ? "800" : "600") + ';cursor:' + (livre ? "pointer" : "default") + ';'
         + 'background:' + (marcado ? "var(--roxo)" : (livre ? "var(--branco)" : "transparent")) + ';'
         + 'color:' + (marcado ? "#fff" : (livre ? "var(--texto)" : "#C9C4D6")) + ';'
@@ -642,7 +643,8 @@ TELAS.detalhes = {
         +   '</div>'
         + '</div>'
         + (temTamanho
-           ? '<button class="btn btn-texto" style="width:auto;padding:8px 4px;font-size:12.5px" '
+           ? '<button class="btn btn-texto" style="width:auto;padding:0 8px;font-size:12.5px;'
+             + 'min-height:44px;flex:none" '
              + 'onclick="ajustarDestaVez()">' + (E.pedido.ajustadoDestaVez ? "pronto" : "ajustar") + '</button>'
            : "")
         + '</div>';

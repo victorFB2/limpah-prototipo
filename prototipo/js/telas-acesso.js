@@ -90,8 +90,7 @@ TELAS.login = {
     +     '<div style="position:relative">'
     +       '<input id="log-senha" type="password" placeholder="Digite sua senha" value="123456" style="padding-right:46px">'
     +       '<button onclick="verSenha(\'log-senha\')" aria-label="Mostrar senha" '
-    +         'style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;'
-    +         'font-size:17px;cursor:pointer;padding:8px;line-height:1">\ud83d\udc41</button>'
+    +         'class="olho">\ud83d\udc41</button>'
     +     '</div></div>'
 
     +   '<p style="text-align:right;margin:-4px 0 18px">'
