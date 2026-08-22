@@ -1804,6 +1804,7 @@ TELAS.perfilCliente = {
 
 function sairDaConta(){
   E.logado = false;
+  E.perfil = null;          // senão o próximo login herda o lado anterior
   E.tela = "perfil";
   E.historico = [];
   salvar();

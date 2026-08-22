@@ -89,14 +89,23 @@ body{
   padding:6px 20px 12px;
 }
 .cabecalho .voltar{
-  width:36px;height:36px;flex:none;border:0;background:var(--branco);border-radius:50%;
+  /* 44px é o menor alvo que o dedo acerta sem errar. Estava 36px, e o dono
+     reclamou com razão: em celular, 8px fazem diferença de verdade. */
+  width:44px;height:44px;flex:none;border:0;background:var(--branco);border-radius:50%;
   box-shadow:var(--sombra);font-size:18px;color:var(--texto);cursor:pointer;
   /* centraliza pelo flex: cada celular desenha a seta numa altura diferente
      dentro da linha, e sem isso ela fica torta */
   display:flex;align-items:center;justify-content:center;line-height:1;padding:0;
   font-family:inherit;
 }
-.cabecalho h1{font-size:17px;margin:0;font-weight:700}
+/* O título encolhe e corta com "..." antes de empurrar as bolinhas de passo
+   para fora da tela. Em 22/08/2026 um título de 12 letras junto com as cinco
+   bolinhas vazou 11px num celular de 320px. */
+.cabecalho h1{
+  font-size:17px;margin:0;font-weight:700;
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.cabecalho .passos{flex:none}
 .cabecalho .passo{margin-left:auto;font-size:12px;color:var(--suave);font-weight:600}
 
 .corpo{flex:1;min-height:0;overflow-y:auto;padding:4px 20px 20px}

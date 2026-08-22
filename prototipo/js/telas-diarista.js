@@ -487,7 +487,7 @@ TELAS.diaristaDocumentos = {
         + '<div style="font-size:20px;color:var(--roxo)">📷</div></div>';
     });
     return ''
-    + cabecalho("Documentos", { passos:[3,5] })
+    + cabecalho("", { passos:[3,5] })
     + '<div class="corpo">'
     +   '<h2 class="titulo">Envie seus documentos</h2>'
     +   '<p class="apoio">São conferidos por uma pessoa da nossa equipe, não por robô.</p>'
@@ -505,7 +505,7 @@ TELAS.diaristaDocumentos = {
 TELAS.diaristaSelfie = {
   html: function(){
     return ''
-    + cabecalho("Selfie", { passos:[4,5] })
+    + cabecalho("", { passos:[4,5] })
     + '<div class="corpo">'
     +   '<h2 class="titulo">Agora uma selfie 🤳</h2>'
     +   '<p class="apoio">Comparamos com a foto do documento para confirmar que é você.</p>'
@@ -535,7 +535,7 @@ TELAS.diaristaAntecedentes = {
         + '<span style="color:var(--verde)">' + icone("escudo", 18) + '</span>' + esc(i) + '</div>';
     });
     return ''
-    + cabecalho("Antecedentes", { passos:[5,5] })
+    + cabecalho("", { passos:[5,5] })
     + '<div class="corpo">'
     +   '<h2 class="titulo">Verificação de antecedentes</h2>'
     +   '<p class="apoio">Para a segurança de todos, verificamos seus antecedentes. '
@@ -606,9 +606,10 @@ TELAS.diaristaAnalise = {
     + '<div class="rodape">'
     +   '<button class="btn btn-contorno" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
     +     'Ver oportunidades enquanto isso</button>'
-    +   '<p class="ajuda" style="text-align:center;margin-top:10px">'
-    +     '⚙ <a href="#" onclick="simularAprovacao();return false;" style="color:var(--suave)">'
-    +     'simular: cadastro aprovado</a></p>'
+    /* Atalho só do protótipo: no app real quem aprova é a equipe. Fica com
+       altura de dedo (44px) porque é por aqui que se atravessa a análise. */
+    +   '<button class="btn btn-texto" style="min-height:44px;color:var(--suave);font-size:13px" '
+    +     'onclick="simularAprovacao()">⚙ simular: cadastro aprovado</button>'
     + '</div>';
   }
 };
@@ -688,6 +689,75 @@ TELAS.diaristaExperiencia = {
 };
 
 
+
+/* --------------------------------------------------------------------------
+   A CONTA DELA — e a porta de saída
+
+   Esta tela nasceu de um travamento real: o dono entrou como diarista e não
+   conseguiu mais voltar para a tela que escolhe entre cliente e diarista.
+
+   O lado do cliente sempre teve "Sair da conta" dentro do perfil dele. O lado
+   da diarista não tinha equivalente nenhum — a aba "Perfil" abria o mapa do
+   cadastro, que não tem saída. Entrou, ficou.
+
+   Toda parte do aplicativo onde dá para entrar precisa ter por onde sair.
+   -------------------------------------------------------------------------- */
+TELAS.diaristaPerfil = {
+  html: function(){
+    const d = euSouDiarista();
+    const p = progressoDoCadastro();
+    const verificada = podeAceitarServico();
+
+    return ''
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Minha conta</h2>'
+
+    +   '<div class="cartao">'
+    +     '<div style="display:flex;align-items:center;gap:13px">'
+    +       '<div style="width:52px;height:52px;border-radius:50%;background:var(--roxo);'
+    +         'color:#fff;display:flex;align-items:center;justify-content:center;flex:none">'
+    +         icone("pessoa", 27) + '</div>'
+    +       '<div style="flex:1;min-width:0">'
+    +         '<b style="font-size:16px">' + esc(d.nome || "Sua conta") + '</b>'
+    +         '<div style="font-size:12.5px;color:var(--suave);margin-top:3px">'
+    +           esc(d.telefone || "telefone não informado") + '</div>'
+    +       '</div>'
+    +     '</div>'
+    +     (verificada
+      ? '<div style="display:flex;align-items:center;gap:7px;margin-top:13px;padding-top:12px;'
+        + 'border-top:1px solid var(--borda);font-size:12.5px;color:var(--verde);font-weight:600">'
+        + icone("escudo", 16) + 'Profissional verificada</div>'
+      : "")
+    +   '</div>'
+
+    +   barraDoCadastro()
+
+    +   '<div class="rotulo">Sua conta</div>'
+    +   '<button class="item" onclick="ir(\'diaristaCadastro\')">'
+    +     '<div class="txt"><b>Meu cadastro</b><span>' + p.pct + '% completo</span></div>'
+    +     '<div class="seta">›</div></button>'
+    +   '<button class="item" onclick="ir(\'diaristaRegiao\')">'
+    +     '<div class="txt"><b>Onde eu trabalho</b><span>'
+    +       esc(d.regiao || "nenhum bairro escolhido") + '</span></div>'
+    +     '<div class="seta">›</div></button>'
+    +   '<button class="item" onclick="ir(\'diaristaRecebimento\')">'
+    +     '<div class="txt"><b>Onde eu recebo</b><span>'
+    +       (d.feito.recebimento ? "Pix cadastrado" : "ainda não informado") + '</span></div>'
+    +     '<div class="seta">›</div></button>'
+
+    +   '<div class="rotulo">Ajuda</div>'
+    +   '<button class="item" onclick="ir(\'diaristaEmBreve\')">'
+    +     '<div class="txt"><b>Falar com o suporte</b><span>Uma pessoa responde</span></div>'
+    +     '<div class="seta">›</div></button>'
+
+    +   '<button class="btn btn-perigo" style="margin-top:18px" onclick="sairDaConta()">'
+    +     'Sair da conta</button>'
+    + '</div>'
+    + abasDaDiarista("perfil");
+  }
+};
+
+
 /* --------------------------------------------------------------------------
    A BARRA DE ABAS DELA
    -------------------------------------------------------------------------- */
@@ -696,7 +766,7 @@ function abasDaDiarista(ativa){
     { id:"inicio",  ic:"casa",   nome:"Início",  tela:"diaristaHome" },
     { id:"agenda",  ic:"lista",  nome:"Agenda",  tela:"diaristaEmBreve" },
     { id:"ganhos",  ic:"escudo", nome:"Ganhos",  tela:"diaristaEmBreve" },
-    { id:"perfil",  ic:"pessoa", nome:"Perfil",  tela:"diaristaCadastro" },
+    { id:"perfil",  ic:"pessoa", nome:"Perfil",  tela:"diaristaPerfil" },
   ];
   return '<div class="abas">' + itens.map(function(i){
     return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="ir(\'' + i.tela + '\')">'

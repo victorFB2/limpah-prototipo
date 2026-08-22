@@ -151,9 +151,19 @@ function ir(nome, opcoes){
   if(corpo) corpo.scrollTop = 0;
 }
 
+/* O destino de emergência do botão voltar, quando não há histórico.
+
+   Antes era sempre "home" — que é a tela inicial do CLIENTE. Uma diarista
+   apertando voltar sem histórico ia parar dentro do aplicativo do cliente,
+   um lugar que não é dela e de onde ela não sabia sair. */
+function telaInicialDeQuemEstaUsando(){
+  if(!E.logado) return "perfil";
+  return (E.perfil === "diarista") ? "diaristaHome" : "home";
+}
+
 function voltar(){
   const anterior = E.historico.pop();
-  E.tela = anterior || "home";
+  E.tela = anterior || telaInicialDeQuemEstaUsando();
   salvar();
   desenhar();
 }
