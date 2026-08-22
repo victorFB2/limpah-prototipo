@@ -122,7 +122,7 @@ function fazerLogin(){
     casas: [Object.assign({}, CASA_EXEMPLO)],
   });
   salvar();
-  ir(E.perfil === "diarista" ? "diaristaEmBreve" : "home", { limparHistorico:true });
+  ir(E.perfil === "diarista" ? "diaristaHome" : "home", { limparHistorico:true });
 }
 
 
@@ -312,56 +312,41 @@ TELAS.cadastroDiarista = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Vamos começar! 🧹</h2>'
     +   '<p class="apoio">Crie sua conta para receber oportunidades de trabalho.</p>'
-    +   '<div class="campo"><label>Nome completo</label><input type="text" placeholder="Digite seu nome completo"></div>'
-    +   '<div class="campo"><label>E-mail</label><input type="email" placeholder="Digite seu e-mail"></div>'
-    +   '<div class="campo"><label>Telefone</label><input type="tel" placeholder="(11) 99999-9999"></div>'
-    +   '<div class="campo"><label>Senha</label><input type="password" placeholder="Crie uma senha"></div>'
-    +   '<div class="aviso roxo">✨<div><b>Cadastro completo = mais confiança</b>'
-    +     'Quem termina todas as etapas recebe mais oportunidades.</div></div>'
+    +   '<div class="campo"><label>Nome completo</label>'
+    +     '<input id="dia-nome" type="text" placeholder="Digite seu nome completo"></div>'
+    +   '<div class="campo"><label>Telefone</label>'
+    +     '<input id="dia-tel" type="tel" placeholder="(11) 99999-9999"></div>'
+    +   '<div class="campo"><label>Senha</label>'
+    +     '<input type="password" placeholder="Crie uma senha"></div>'
+    +   '<div id="dia-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
+
+    /* PORTÃO 1 (decisão R18): aqui não se pede documento nenhum.
+       São dois minutos até ela ver oportunidades reais com valores reais.
+       O documento vem depois, quando ela já sabe o que tem a ganhar. */
+    +   '<div class="aviso roxo">⏱️<div><b>Dois minutos e você já vê as oportunidades</b>'
+    +     'Documento só depois, quando você decidir que vale a pena.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'diaristaEmBreve\')">Continuar</button>'
+    +   '<button class="btn btn-principal" onclick="salvarDadosDaDiarista()">Continuar</button>'
     +   '<p class="apoio" style="text-align:center;margin:12px 0 0">Já tem uma conta? '
     +     '<a href="#" onclick="ir(\'login\');return false;" style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
     + '</div>';
   }
 };
 
+/* Agenda e Ganhos ainda não existem, mas a aba não pode dar em nada:
+   ela mostra o que vem e devolve a pessoa para a home (regra: sem becos). */
 TELAS.diaristaEmBreve = {
   html: function(){
-    const etapas = [
-      "Dados pessoais",
-      "Endereço e região de atuação",
-      "Experiência profissional",
-      "Envio de documentos (RG, CPF, comprovante)",
-      "Selfie e prova de vida",
-      "Verificação de antecedentes",
-      "Dados para recebimento",
-      "Termos e regras de conduta",
-      "Análise da plataforma",
-      "Aprovação e liberação do modo Disponível",
-    ];
-    let lista = "";
-    etapas.forEach(function(nome, i){
-      const feito = i === 0;
-      lista += '<div class="linha">'
-        + '<span class="rot" style="display:flex;gap:10px;align-items:center">'
-        +   '<span class="selo ' + (feito ? "verde" : "cinza") + '" style="width:24px;justify-content:center">'
-        +     (feito ? "✓" : (i + 1)) + '</span>' + esc(nome) + '</span></div>';
-    });
-
     return ''
-    + cabecalho("Cadastro da profissional")
+    + cabecalho("Em construção")
     + '<div class="corpo">'
-    +   '<div class="aviso roxo">🚧<div><b>Esta parte está sendo construída</b>'
-    +     'O fluxo completo da diarista é o próximo passo do protótipo. '
-    +     'Abaixo estão as 10 etapas já definidas no documento do projeto.</div></div>'
-    +   '<div class="cartao">' + lista + '</div>'
-    +   '<p class="ajuda">A profissional só consegue ficar disponível e receber oportunidades '
-    +     'depois que a plataforma aprova o cadastro dela.</p>'
+    +   '<div class="aviso roxo">🚧<div><b>Esta parte ainda está sendo construída</b>'
+    +     'Sua agenda e seus ganhos entram no próximo passo do protótipo.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-contorno" onclick="ir(\'perfil\',{limparHistorico:true})">Voltar ao início</button>'
+    +   '<button class="btn btn-contorno" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
+    +     'Voltar ao início</button>'
     + '</div>';
   }
 };
