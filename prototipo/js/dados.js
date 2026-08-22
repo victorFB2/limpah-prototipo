@@ -541,9 +541,13 @@ const DISPONIBILIDADE = {
      perde. Ela pode estar com o celular no bolso, com a mão molhada, dentro
      de outro serviço. Se o som não insiste, o alerta não serve.
 
-     15 segundos: 12 toques ao longo dos 3 minutos. Insiste sem virar
-     tortura — e para no primeiro toque dela, aceitando ou recusando. */
-  repeteOSomACadaSegundos: 15,
+     8 SEGUNDOS — escolha do dono, em 22/08/2026, e a conta dele:
+     a cada 3 segundos seriam 60 toques em 3 minutos, e viraria tortura;
+     ela desliga o aplicativo e não volta. Uber e iFood ficam entre 5 e 10.
+     8 dá 22 toques: insiste de verdade sem passar do ponto.
+
+     E para no primeiro toque dela, aceitando ou recusando. */
+  repeteOSomACadaSegundos: 8,
 
   /* Depois de 3 alertas ignorados SEGUIDOS, o app pergunta se ela ainda
      está disponível. Sem resposta, desliga sozinho.

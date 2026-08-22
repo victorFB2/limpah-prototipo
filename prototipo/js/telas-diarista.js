@@ -485,6 +485,7 @@ TELAS.diaristaHome = {
             ? "O celular toca quando aparecer pedido para voc\u00ea."
             : "Ligue para ser avisada de novos pedidos.") + '</span></div>'
         + '<div class="botao"></div></div>'
+        + botaoDeTestarOSom()
         /* Sempre vis\u00edvel, n\u00e3o s\u00f3 com a chave ligada: ela precisa poder
            acertar os dias ANTES de come\u00e7ar a receber alerta. */
         + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
@@ -1075,31 +1076,146 @@ TELAS.diaristaConflito = {
 
    E ele só deixa tocar depois que a pessoa tocou em alguma coisa. Como ela
    acabou de tocar em "Disponível", esse toque é justamente o que libera. */
-function tocarAlerta(){
-  try{
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if(!Ctx) return;
-    const ctx = new Ctx();
-    [880, 1174.7].forEach(function(hz, i){
-      const quando = ctx.currentTime + i * 0.19;
-      const osc = ctx.createOscillator();
-      const vol = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = hz;
-      vol.gain.setValueAtTime(0.0001, quando);
-      vol.gain.exponentialRampToValueAtTime(0.22, quando + 0.02);
-      vol.gain.exponentialRampToValueAtTime(0.0001, quando + 0.17);
-      osc.connect(vol);
-      vol.connect(ctx.destination);
-      osc.start(quando);
-      osc.stop(quando + 0.19);
-    });
-  }catch(e){ /* celular sem som, ou navegador que não deixa: segue sem */ }
+/* ==========================================================================
+   O SOM — e por que a primeira versão não tocava no iPhone
 
-  /* vibração: funciona no Android, o iPhone ignora sem reclamar */
-  try{ if(navigator.vibrate) navigator.vibrate([120, 70, 120]); }catch(e){}
+   O dono testou no iPhone e não ouviu nada. A primeira versão usava Web
+   Audio, criando um contexto de som novo a cada toque. Isso tinha TRÊS
+   problemas, todos específicos do iPhone:
+
+   1. **Contexto criado fora de um toque nasce mudo.** O iPhone só libera som
+      para o contexto criado DENTRO de um toque da pessoa. O primeiro bip
+      (no toque da chave "Disponível") até saía; do segundo em diante o som
+      vinha do relógio, sem toque nenhum — e nascia suspenso, mudo.
+
+   2. **O iPhone limita quantos contextos de som existem** (por volta de 4).
+      Criando um a cada 15 segundos, os seguintes simplesmente falhavam.
+
+   3. **Web Audio obedece à chavinha de silencioso.** Mesmo tudo certo, com
+      o celular no mudo não sai som nenhum.
+
+   A SAÍDA: um elemento <audio> comum, com o som fabricado em código e
+   entregue como texto (data URI). No iPhone o <audio> usa o canal de mídia,
+   que **não obedece à chavinha de silencioso** — é por isso que vídeo no
+   Safari toca com o celular no mudo. E, uma vez liberado por um toque, ele
+   pode ser tocado de novo pelo relógio, quantas vezes for preciso.
+
+   ⚠️ Continua sem arquivo externo: o som é CALCULADO aqui, amostra por
+   amostra, e vira texto. Nada é baixado.
+   ========================================================================== */
+
+/* Fabrica um WAV de duas notas curtas e devolve como texto. */
+function fabricarSomDeAlerta(){
+  const taxa = 22050;
+  const partes = [
+    { hz: 880,    dur: 0.15 },
+    { hz: 0,      dur: 0.04 },   // silêncio entre as notas
+    { hz: 1174.7, dur: 0.17 },
+  ];
+  let amostras = 0;
+  partes.forEach(function(p){ amostras += Math.floor(p.dur * taxa); });
+
+  const bytes = 44 + amostras * 2;
+  const buf = new ArrayBuffer(bytes);
+  const v = new DataView(buf);
+  function escrever(pos, txt){
+    for(let i = 0; i < txt.length; i++) v.setUint8(pos + i, txt.charCodeAt(i));
+  }
+  /* cabeçalho WAV: mono, 16 bits */
+  escrever(0, "RIFF");  v.setUint32(4, bytes - 8, true);  escrever(8, "WAVE");
+  escrever(12, "fmt "); v.setUint32(16, 16, true);        v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);      v.setUint32(24, taxa, true);
+  v.setUint32(28, taxa * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  escrever(36, "data"); v.setUint32(40, amostras * 2, true);
+
+  let pos = 44;
+  partes.forEach(function(p){
+    const n = Math.floor(p.dur * taxa);
+    for(let k = 0; k < n; k++){
+      let amostra = 0;
+      if(p.hz){
+        /* sobe e desce o volume nas bordas, senão estala */
+        const env = Math.min(1, k / 220, (n - k) / 600);
+        amostra = Math.sin(2 * Math.PI * p.hz * k / taxa) * env * 0.75;
+      }
+      v.setInt16(pos, Math.max(-1, Math.min(1, amostra)) * 32767, true);
+      pos += 2;
+    }
+  });
+
+  let texto = "";
+  const arr = new Uint8Array(buf);
+  for(let i = 0; i < arr.length; i++) texto += String.fromCharCode(arr[i]);
+  return "data:audio/wav;base64," + btoa(texto);
 }
 
+let SOM_DO_ALERTA = null;
+
+/* Toca. Precisa ter sido chamada UMA vez de dentro de um toque dela — e foi:
+   o toque na chave "Disponível" é exatamente isso. Daí em diante o relógio
+   pode tocar sozinho. */
+function tocarAlerta(){
+  try{
+    if(!SOM_DO_ALERTA){
+      SOM_DO_ALERTA = new Audio(fabricarSomDeAlerta());
+      SOM_DO_ALERTA.preload = "auto";
+      SOM_DO_ALERTA.setAttribute("playsinline", "");
+    }
+    SOM_DO_ALERTA.currentTime = 0;
+    const promessa = SOM_DO_ALERTA.play();
+    if(promessa && promessa.then){
+      promessa.then(function(){ E.somBloqueado = false; })
+              .catch(function(){ E.somBloqueado = true; });
+    }
+  }catch(e){ E.somBloqueado = true; }
+
+  /* quantas vezes já tocou neste alerta — aparece na tela, para dar para
+     saber se o som foi PEDIDO mesmo quando não dá para ouvir */
+  E.toquesDoAlerta = (E.toquesDoAlerta || 0) + 1;
+
+  /* vibração: funciona no Android; o iPhone ignora sem reclamar */
+  try{ if(navigator.vibrate) navigator.vibrate([140, 70, 140]); }catch(e){}
+}
+
+/* Botão de testar o som.
+
+   Existe porque eu NÃO consigo testar no iPhone do dono — o navegador dos
+   meus testes não tem alto-falante. Sem isto, a única forma de saber se o
+   som funciona é ele tentar e me contar. */
+function testarOSom(){
+  E.toquesDoAlerta = 0;
+  tocarAlerta();
+  E.testouOSom = true;
+  salvar();
+  agendar(desenhar, 400);
+}
+
+
+
+/* O botão de testar o som.
+
+   Existe porque eu não consigo testar no celular do dono: o navegador dos
+   meus testes não tem alto-falante. Sem isto, a única forma de saber se o
+   som sai é esperar o alerta chegar e torcer.
+
+   E ele também é o desbloqueio: o iPhone só libera som depois de um toque
+   dela, e este é um toque. */
+function botaoDeTestarOSom(){
+  const bloqueado = !!E.somBloqueado;
+  return '<button class="btn btn-texto" style="min-height:44px;margin:-6px 0 4px" '
+    +   'onclick="testarOSom()">🔊 Testar o som do alerta</button>'
+    + (E.testouOSom && !bloqueado
+      ? '<div style="font-size:12px;color:var(--verde);text-align:center;margin-bottom:10px">'
+        + 'Som enviado. Não ouviu? Confira o volume — e no iPhone, a chavinha '
+        + 'lateral de silencioso.</div>'
+      : "")
+    + (bloqueado
+      ? '<div class="aviso ambar" style="margin-top:6px">🔇<div>'
+        + '<b>Seu navegador bloqueou o som</b>'
+        + 'Toque em "Testar o som do alerta" uma vez — o navegador só libera '
+        + 'som depois que você toca em alguma coisa.</div></div>'
+      : "");
+}
 
 /* A grade "meus dias de trabalho" diz se este período serve para ela. */
 function periodoServeParaEla(dataIso, periodoId){
@@ -1134,9 +1250,14 @@ function dispararAlerta(){
   E.jaAlertadas = (E.jaAlertadas || []).concat([o.id]);
   E.alerta = { oportunidadeId: o.id, restam: DISPONIBILIDADE.alertaExpiraEmSegundos,
                pergunta: false };
+  E.toquesDoAlerta = 0;
+
+  /* De onde ela veio — para o "Agora não" devolver ela no mesmo lugar.
+     Tomar a tela é aceitável; tomar a tela E perder o lugar dela não é. */
+  E.telaAntesDoAlerta = E.tela;
   salvar();
   tocarAlerta();
-  desenhar();
+  ir("diaristaAlerta");
 }
 
 /* A pergunta "ainda está disponível?", depois de 3 ignorados seguidos. */
@@ -1200,9 +1321,11 @@ function relogioDoAlerta(){
     d.ignoradosSeguidos = (d.ignoradosSeguidos || 0) + 1;
     salvar();
     if(d.ignoradosSeguidos >= DISPONIBILIDADE.alertasIgnoradosAtePerguntar){
+      E.telaAntesDoAlerta = null;
+      ir("diaristaHome", { limparHistorico:true });
       perguntarSeAindaEsta();
     } else {
-      desenhar();
+      voltarDeOndeVeio();
     }
   }, 1000);
 }
@@ -1227,11 +1350,18 @@ function aceitarDoAlerta(){
   aceitarOportunidade();
 }
 
+function voltarDeOndeVeio(){
+  const antes = E.telaAntesDoAlerta;
+  E.telaAntesDoAlerta = null;
+  salvar();
+  ir(antes && TELAS[antes] ? antes : "diaristaHome", { limparHistorico:true });
+}
+
 function recusarDoAlerta(){
   E.alerta = null;
   deiSinalDeVida();
   salvar();
-  desenhar();
+  voltarDeOndeVeio();
 }
 
 function continuoDisponivel(){
@@ -1249,9 +1379,13 @@ function pausarAgora(){
   desenhar();
 }
 
-/* O cartão do alerta, no alto da tela dela. */
+/* O cartão — agora só para a pergunta "ainda está disponível?".
+
+   O alerta de serviço virou tela inteira (decisão do dono, opção B). A
+   pergunta continua cartão de propósito: ali não tem cliente esperando do
+   outro lado, e tomar a tela para uma conversa nossa com ela seria abuso. */
 function cartaoDoAlerta(){
-  if(!E.alerta) return "";
+  if(!E.alerta || !E.alerta.pergunta) return "";
   const m = Math.floor(E.alerta.restam / 60);
   const seg = String(E.alerta.restam % 60).padStart(2, "0");
   const tempo = m + ":" + seg;
@@ -1302,6 +1436,88 @@ function cartaoDoAlerta(){
     +   'Deixar passar não é falta. Não conta nada contra você.</div>'
     + '</div>';
 }
+
+
+/* --------------------------------------------------------------------------
+   O ALERTA EM TELA INTEIRA (opção B, escolhida pelo dono em 22/08/2026)
+
+   Era um cartão no meio da lista. O dono comparou com Uber e iFood e pediu
+   "impossível não ver" — e cartão entre cartões é exatamente o contrário.
+
+   E é honesto: no aplicativo real isto é uma notificação de tela cheia
+   (`setFullScreenIntent` no Android, ver ESPEC-ALERTA.md). A tela cheia aqui
+   representa o que vai acontecer lá, em vez de inventar um formato que o
+   produto não vai ter.
+   -------------------------------------------------------------------------- */
+TELAS.diaristaAlerta = {
+  html: function(){
+    /* Sem alerta de pé esta tela não tem assunto. Pode acontecer ao recarregar
+       a página depois de expirar — e tela sem assunto não pode ficar em branco. */
+    if(!E.alerta || E.alerta.pergunta || !podeAceitarServico()){
+      return ''
+      + '<div class="centro">'
+      +   '<div class="emojao">⏰</div>'
+      +   '<h2 class="titulo">Esse pedido já passou</h2>'
+      +   '<p class="apoio">Ele foi para outra profissional. Aparecem pedidos '
+      +     'novos o dia inteiro.</p>'
+      + '</div>'
+      + '<div class="rodape">'
+      +   '<button class="btn btn-principal" onclick="voltarDeOndeVeio()">'
+      +     'Ver outros pedidos</button>'
+      + '</div>';
+    }
+
+    const o = oportunidadePorId(E.alerta.oportunidadeId);
+    if(!o) return TELAS.diaristaHome.html();
+
+    const restam = E.alerta.restam;
+    const total = DISPONIBILIDADE.alertaExpiraEmSegundos;
+    const m = Math.floor(restam / 60);
+    const seg = String(restam % 60).padStart(2, "0");
+    const apertado = restam <= 30;
+    const fatia = Math.max(0, Math.min(100, (restam / total) * 100));
+
+    return ''
+    + '<div class="alerta-cheio' + (apertado ? " apertado" : "") + '">'
+
+    +   '<div class="topo">'
+    +     '<div class="sino">🔔</div>'
+    +     '<div class="chamada">Novo pedido para você!</div>'
+    +     '<div class="relogio">' + m + ':' + seg + '</div>'
+    +     '<div class="trilho"><div style="width:' + fatia + '%"></div></div>'
+    +   '</div>'
+
+    +   '<div class="miolo">'
+    +     '<div class="rotulo-valor">você recebe</div>'
+    +     '<div class="valorzao">' + moeda(o.receber) + '</div>'
+
+    +     '<div class="ficha">'
+    +       '<div class="linha"><span class="rot">Quando</span>'
+    +         '<span class="val">' + esc(o.quando) + '</span></div>'
+    +       '<div class="linha"><span class="rot">Você fica na casa</span>'
+    +         '<span class="val">' + esc(o.janela) + '</span></div>'
+    +       '<div class="linha"><span class="rot">Serviço</span>'
+    +         '<span class="val">' + esc(o.resumo) + '</span></div>'
+    +       '<div class="linha"><span class="rot">Onde</span>'
+    +         '<span class="val">' + esc(o.bairro) + ' · '
+    +           String(o.km).replace(".", ",") + ' km</span></div>'
+    +     '</div>'
+    +   '</div>'
+
+    +   '<div class="pe">'
+    +     '<button class="btn btn-principal grandao" onclick="aceitarDoAlerta()">'
+    +       'Aceitar agora</button>'
+    +     '<button class="btn btn-claro" onclick="recusarDoAlerta()">Agora não</button>'
+    +     '<div class="miudo">Deixar passar não é falta. Não conta nada contra você.'
+    +       '<br>🔊 o som tocou ' + (E.toquesDoAlerta || 0)
+    +       (E.toquesDoAlerta === 1 ? ' vez' : ' vezes')
+    +       ' · repete a cada ' + DISPONIBILIDADE.repeteOSomACadaSegundos + 's</div>'
+    +   '</div>'
+    + '</div>';
+  },
+
+  aoEntrar: function(){ relogioDoAlerta(); }
+};
 
 /* O aviso de que o próprio app pausou. */
 function avisoDeQuePausou(){
