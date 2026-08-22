@@ -24,11 +24,45 @@ const TELAS = {};
 /* --------------------------------------------------------------------------
    1. TABELA DE PREÇOS  (documento, seção 11)
    -------------------------------------------------------------------------- */
+/* A TABELA (decisão R15, aprovada em 21/08/2026)
+
+   As "horas" são a JANELA DE PRESENÇA, não horas de trabalho — ver R9.
+
+   | Janela | Cliente | Ela recebe | Margem | R$/h dela |
+   |    4h  | R$ 160  |  R$ 110    |  31%   |  R$ 27,50 |
+   |    6h  | R$ 205  |  R$ 150    |  27%   |  R$ 25,00 |
+   |    8h  | R$ 270  |  R$ 200    |  26%   |  R$ 25,00 |
+
+   Piso de R$ 25/h para ela em qualquer duração. Isso mata o incentivo
+   perverso da tabela antiga, onde ela ganhava R$ 27,50/h numa diária de 4h
+   e R$ 18,75/h numa de 8h — e ia perceber.
+
+   Somos mais caros que a Mary Help para o cliente (R$ 160 contra R$ 131 na
+   faixa de 4h) e pagamos bem melhor para ela (R$ 110 contra R$ 71). É
+   proposital: sem oferta de profissional não existe plataforma. As
+   garantias justificam o preço maior.
+
+   A faixa de 2h foi adiada: dava margem líquida negativa no volume de
+   lançamento, e o deslocamento pesa demais num serviço curto. */
 const FAIXAS_DE_PRECO = [
   { horas: 4, clientePaga: 160, profissionalRecebe: 110 },
-  { horas: 6, clientePaga: 181, profissionalRecebe: 131 },
-  { horas: 8, clientePaga: 200, profissionalRecebe: 150 },
+  { horas: 6, clientePaga: 205, profissionalRecebe: 150 },
+  { horas: 8, clientePaga: 270, profissionalRecebe: 200 },
 ];
+
+/* DESLOCAMENTO (decisão R16)
+
+   Não sai do bolso da plataforma: é cobrado do cliente como linha separada
+   e repassado INTEGRALMENTE a ela. Foi o que evitou a reclamação que
+   aparece na concorrência — lá o cliente paga condução e a diarista diz
+   que não recebe.
+
+   E o raio pequeno resolve de graça o que o subsídio resolveria caro. */
+const DESLOCAMENTO = {
+  raioMaximoKm: 7,      // acima disso a plataforma nem oferece o serviço
+  gratisAteKm: 5,
+  valor: 10,            // vai 100% para ela
+};
 
 /* Quanto do valor de um ADICIONAL vai para a profissional.
    0.65 = 65% para ela, 35% fica com a plataforma.
@@ -97,10 +131,22 @@ const CATALOGO = [
     /* Quanto tempo o serviço deve levar, em minutos.
        >>> Esta fórmula foi criada por mim. O material original não definia
            como o número de cômodos vira duração. Precisa da sua revisão. */
+    /* RECALIBRADO em 21/08/2026 (decisão R15).
+
+       A "completa" assumia ser 50% mais lenta que a padrão. Uma simulação de
+       10.752 combinações mostrou o estrago: 69,8% de TODAS as combinações
+       passavam de 8 horas e travavam, e um apartamento comum de 3 quartos
+       com 2 banheiros já ia para a faixa de 8h.
+
+       Passou para 25% mais lenta. Nas casas típicas, os travamentos caíram
+       de 14,7% para 2,6%, e aquele apartamento voltou para 6h.
+
+       A "padrão" não mudou: ela bate com a referência de mercado (até 40m²
+       = 4h, até 70m² = 6h). */
     estimarMinutos: function(r){
-      const base    = (r.tipo === "completa") ? 90 : 60;
-      const porComodo   = (r.tipo === "completa") ? 45 : 30;
-      const porBanheiro = (r.tipo === "completa") ? 45 : 30;
+      const base        = (r.tipo === "completa") ? 75 : 60;
+      const porComodo   = (r.tipo === "completa") ? 38 : 30;
+      const porBanheiro = (r.tipo === "completa") ? 38 : 30;
       return base + (r.comodos * porComodo) + (r.banheiros * porBanheiro);
     },
   },
@@ -150,20 +196,29 @@ const CATALOGO = [
     /* Repare: esta categoria NÃO pergunta cômodos nem banheiros.
        As perguntas são outras — e as telas se adaptam sozinhas.
        É esta a prova de que a estrutura não é exclusiva de limpeza. */
+    /* VENDIDA POR JANELA, não por peça (decisão R15).
+
+       A versão antiga perguntava quantos cestos e tentava estimar quantas
+       peças cabem em quantas horas. Ninguém sabe isso com precisão — nem
+       quem passa roupa. E a estimativa errada vira briga sobre a roupa que
+       sobrou.
+
+       Agora o cliente compra a janela direto, com uma referência
+       aproximada. O escopo passa a ser o TEMPO, que é o que a plataforma
+       consegue garantir. É a mesma lógica da janela de presença (R9). */
     perguntas:[
-      { id:"volume", tipo:"opcao", rotulo:"Quanta roupa?", opcoes:[
-        { id:"pouca",  nome:"Até 1 cesto",  detalhe:"Aproximadamente 20 peças", icone:"🧺" },
-        { id:"media",  nome:"2 cestos",     detalhe:"Aproximadamente 40 peças", icone:"🧺" },
-        { id:"muita",  nome:"3 ou mais",    detalhe:"Acima de 60 peças",        icone:"🧺" },
+      { id:"janela", tipo:"opcao", rotulo:"Quanto tempo você precisa?", opcoes:[
+        { id:"4", nome:"4 horas", detalhe:"Dá para cerca de um cesto e meio", icone:"camisa" },
+        { id:"6", nome:"6 horas", detalhe:"Dá para cerca de dois cestos e meio", icone:"camisa" },
       ]},
-      { id:"delicadas", tipo:"contador", rotulo:"Peças delicadas (seda, linho)", min:0, max:20, inicial:0 },
       { id:"observacoes", tipo:"texto", rotulo:"Observações (opcional)",
         exemplo:"Ex.: as camisas sociais precisam de goma." },
     ],
 
     estimarMinutos: function(r){
-      const porVolume = { pouca:120, media:240, muita:360 };
-      return (porVolume[r.volume] || 120) + (r.delicadas * 5);
+      /* devolve exatamente o trabalho que cabe na janela escolhida, para a
+         faixa cair certinho nela */
+      return trabalhoQueCabeNaJanela(Number(r.janela) || 4);
     },
   },
 
