@@ -3,8 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!-- O iPhone transforma sozinho data, hora, telefone e endereco em link azul
+     sublinhado, sem pedir licenca. No print do dono, "Amanha, 23/08 - das 8h
+     as 12h" tinha virado link no meio do cartao. Nao e link, e o titulo do
+     cartao - e tocar nele abria o calendario em vez de abrir o servico. -->
+<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
 <title>Limpah — protótipo</title>
-<link rel="stylesheet" href="css/limpah.css?v=3a5ba38f">
+<link rel="stylesheet" href="css/limpah.css?v=bb679483">
 </head>
 <body>
 
@@ -24,10 +30,10 @@
     <a href="#" onclick="reiniciarPrototipo();return false;">Reiniciar do zero</a>
   </div>
 
-  <script charset="utf-8" src="js/dados.js?v=3a5ba38f"></script>
-  <script charset="utf-8" src="js/telas-acesso.js?v=3a5ba38f"></script>
-  <script charset="utf-8" src="js/telas-cliente.js?v=3a5ba38f"></script>
-  <script charset="utf-8" src="js/telas-diarista.js?v=3a5ba38f"></script>
-  <script charset="utf-8" src="js/app.js?v=3a5ba38f"></script>
+  <script charset="utf-8" src="js/dados.js?v=bb679483"></script>
+  <script charset="utf-8" src="js/telas-acesso.js?v=bb679483"></script>
+  <script charset="utf-8" src="js/telas-cliente.js?v=bb679483"></script>
+  <script charset="utf-8" src="js/telas-diarista.js?v=bb679483"></script>
+  <script charset="utf-8" src="js/app.js?v=bb679483"></script>
 </body>
 </html>

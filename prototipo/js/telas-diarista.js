@@ -96,25 +96,63 @@ function progressoDoCadastro(){
   return { pct: pct, falta: falta };
 }
 
-/* A barra que fica sempre visível na home dela.
-   Sem ela, o Portão 1 vira um beco: a diarista entra, vê as oportunidades,
-   não entende por que não consegue aceitar, e some. */
-function barraDoCadastro(){
+/* A FAIXA DO CADASTRO — fixa no alto, fora da rolagem.
+
+   Ela já existia como cartão no meio da tela. Em 22/08/2026 o dono abriu o
+   protótipo no celular, procurou o interruptor "Disponível", não achou, e
+   não achou também como continuar o cadastro. Aconteceu com ele exatamente
+   o que eu tinha escrito que aconteceria sem a barra.
+
+   Duas lições viraram este código:
+
+   1. **Cartão no meio da lista rola para fora da tela.** Chamado para ação
+      que some com o dedo não é chamado para ação. Agora é faixa fixa, no
+      mesmo lugar do cabeçalho das outras telas: ela não rola nunca.
+
+   2. **Cartão branco entre cartões brancos parece conteúdo, não botão.**
+      Agora é roxa cheia, com seta — a mesma linguagem dos botões principais. */
+function faixaDoCadastro(){
   const p = progressoDoCadastro();
   if(p.pct >= 100) return "";
-  const cor = podeAceitarServico() ? "var(--verde)" : "var(--roxo)";
-  return '<button class="cartao" style="width:100%;text-align:left;border:0;font-family:inherit;'
-    + 'cursor:pointer;display:block" onclick="ir(\'diaristaCadastro\')">'
-    +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    +     '<b style="font-size:13.5px">Cadastro ' + p.pct + '%</b>'
-    +     '<span style="font-size:12px;color:var(--roxo);font-weight:700">continuar ›</span>'
+  const emAnalise = (euSouDiarista().situacao === "analise");
+
+  return '<button class="faixa-cadastro" onclick="ir(\'diaristaCadastro\')">'
+    +   '<div class="txt">'
+    +     '<b>' + (emAnalise ? "Cadastro em análise" : "Cadastro " + p.pct + "%") + '</b>'
+    +     (p.falta ? '<span>' + esc(p.falta) + '</span>' : "")
     +   '</div>'
-    +   '<div style="height:7px;background:var(--borda);border-radius:4px;overflow:hidden">'
-    +     '<div style="height:100%;width:' + p.pct + '%;background:' + cor + ';border-radius:4px"></div>'
-    +   '</div>'
-    +   (p.falta ? '<div style="font-size:12px;color:var(--suave);margin-top:7px;line-height:1.45">'
-        + esc(p.falta) + '</div>' : "")
-    + '</button>';
+    +   '<div class="anel">' + p.pct + '%</div>'
+    +   '<div class="seta">›</div>'
+    + '</button>'
+    + '<div class="faixa-trilho"><div style="width:' + p.pct + '%"></div></div>';
+}
+
+/* nome antigo, ainda usado na tela de perfil dela */
+function barraDoCadastro(){ return faixaDoCadastro(); }
+
+
+/* O INTERRUPTOR TRAVADO.
+
+   Antes, quem não estava aprovada simplesmente não via interruptor nenhum —
+   e o dono passou minutos procurando por ele no celular. Se confundiu quem
+   construiu a regra, confunde qualquer diarista.
+
+   **Ausência não explica nada.** Agora o interruptor aparece, apagado, com o
+   motivo escrito e o caminho ao lado. É a mesma escolha do cadeado nas
+   oportunidades: mostrar o que existe e dizer o que falta, em vez de sumir. */
+function interruptorTravado(){
+  const d = euSouDiarista();
+  const emAnalise = (d.situacao === "analise");
+  return '<div class="chave travada">'
+    +   '<div class="txt"><b>🔒 Disponível para trabalhar</b>'
+    +     '<span>' + (emAnalise
+          ? "Liga assim que a gente aprovar seu cadastro. Já estamos conferindo."
+          : "Liga quando seu cadastro for aprovado.") + '</span></div>'
+    +   '<div class="botao"></div>'
+    + '</div>'
+    + (emAnalise ? "" :
+        '<button class="btn btn-principal" style="margin-bottom:14px" '
+        + 'onclick="ir(\'diaristaCadastro\')">Continuar meu cadastro</button>');
 }
 
 
@@ -319,6 +357,9 @@ TELAS.diaristaHome = {
     });
 
     return ''
+    /* A faixa vem ANTES do corpo: assim ela fica fora da rolagem e não some
+       quando a diarista desce a lista de oportunidades. */
+    + (pode ? "" : faixaDoCadastro())
     + '<div class="corpo">'
     +   '<div style="padding:6px 0 14px">'
     +     '<div style="font-size:12.5px;color:var(--suave)">📍 ' + esc(d.regiao || "sua região") + '</div>'
@@ -326,7 +367,7 @@ TELAS.diaristaHome = {
     +   '<h2 class="titulo">Olá, ' + esc((d.nome || "").split(" ")[0] || "tudo bem") + '! 👋<br>'
     +     (pode ? "Veja o que tem para hoje." : "Veja o que está esperando por você.") + '</h2>'
 
-    +   barraDoCadastro()
+    +   (pode ? faixaDoCadastro() : interruptorTravado())
 
     +   (pode
       ? '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" onclick="alternarDisponivel()">'
