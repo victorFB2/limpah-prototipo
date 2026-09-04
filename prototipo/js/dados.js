@@ -535,6 +535,11 @@ const DISPONIBILIDADE = {
      não uma de cada vez. */
   alertaExpiraEmSegundos: 180,
 
+  /* Quanto o protótipo espera antes de fazer o primeiro pedido aparecer.
+     É encenação: no app real quem manda o alerta é o servidor, quando um
+     cliente pede de verdade. */
+  demoraDoPrimeiroAlertaMs: 4000,
+
   /* O som REPETE, não toca uma vez.
 
      O dono comparou com Uber e iFood e apontou o óbvio: um bip único se

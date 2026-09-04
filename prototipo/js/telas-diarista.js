@@ -483,11 +483,12 @@ TELAS.diaristaHome = {
         + '<div class="txt"><b>Disponível para trabalhar</b>'
         + '<span>' + (d.disponivel
             ? (ehIPhone()
-               ? "Voc\u00ea ser\u00e1 avisada aqui na tela quando aparecer pedido."
+               ? "Com o aplicativo aberto, o pedido aparece aqui."
                : "O celular toca quando aparecer pedido para voc\u00ea.")
             : "Ligue para ser avisada de novos pedidos.") + '</span></div>'
         + '<div class="botao"></div></div>'
         + botaoDeTestarOSom()
+        + botaoDeVerOAlerta()
         + avisoDoSomNoIPhone()
         /* Sempre vis\u00edvel, n\u00e3o s\u00f3 com a chave ligada: ela precisa poder
            acertar os dias ANTES de come\u00e7ar a receber alerta. */
@@ -1247,16 +1248,62 @@ function ehIPhone(){
   }catch(e){ return false; }
 }
 
-/* O recado que aparece para quem está no iPhone. */
+/* O recado que aparece para quem está no iPhone.
+
+   A primeira versão deste aviso falava só do SOM. O dono viu que o problema
+   é maior e mais grave: com o aplicativo fora da frente não falha só o som
+   — **o alerta inteiro não chega**, nem o som, nem a tela.
+
+   Esconder a metade grave seria o pior tipo de meia-verdade: ela leria "o
+   som não toca", concluiria que ainda assim seria avisada NA TELA, e
+   perderia serviço esperando um aviso que nunca veio. */
 function avisoDoSomNoIPhone(){
   if(!ehIPhone()) return "";
-  return '<div class="aviso ambar" style="margin:-2px 0 12px">\ud83d\udd07<div>'
-    + '<b>No iPhone, o som automático não toca</b>'
-    + 'O botão de testar acima funciona, mas o alerta que chega sozinho fica '
-    + 'mudo — e com a tela apagada o Safari nem chega a rodar. É limitação '
-    + 'do navegador do iPhone, não do Limpah, e não tem conserto aqui.'
-    + '<br><br><b>No aplicativo de verdade isso funciona</b>, porque aí o '
-    + 'alerta é notificação do celular, não som de página.</div></div>';
+  return '<div class="aviso ambar" style="margin:-2px 0 12px">\ud83d\udcf5<div>'
+    + '<b>No iPhone, o aviso só chega com o aplicativo aberto na tela</b>'
+    + 'Com o Limpah aberto na sua frente, o pedido aparece aqui — mas '
+    + '<b>sem som</b>. Toque em "Testar o som" acima para ouvir como é.'
+    + '<br><br>Com o celular no bolso, a tela apagada, ou você em outro '
+    + 'aplicativo: <b>nada chega</b>. Nem som, nem aviso na tela. O iPhone '
+    + 'congela as páginas que saem da frente, e isso um site não contorna.'
+    + '<br><br><b>No aplicativo de verdade funciona dos dois jeitos</b>, '
+    + 'porque aí o alerta é notificação do celular, não página aberta.'
+    + '</div></div>';
+}
+
+/* --------------------------------------------------------------------------
+   "VER COMO É O ALERTA" — um botão de diagnóstico, e por que ele existe
+
+   O dono perguntou uma coisa que eu NÃO consigo responder daqui: com o
+   Safari aberto e na frente, o alerta aparece no iPhone dele?
+
+   Eu varri o código atrás do que costuma quebrar só no Safari — data lida
+   de texto, sintaxe que ele não entende, som travando o resto, ouvinte de
+   redimensionamento. **Não achei nada.** E o som não bloqueia o visual: o
+   tocarAlerta() inteiro está dentro de try/catch, então mesmo mudo a tela
+   do alerta abre.
+
+   Mas "eu não achei" não é "não existe". Este botão dispara o alerta na
+   hora, sem espera e sem relógio nenhum: um toque no iPhone dele separa,
+   de uma vez, as duas coisas que hoje estão misturadas.
+
+     apareceu  → a tela funciona; o que falta é só segundo plano (CASO 2)
+     não apareceu → é defeito de verdade, e aí eu tenho por onde começar
+   -------------------------------------------------------------------------- */
+function verComoEhOAlerta(){
+  const d = euSouDiarista();
+  if(!d.disponivel || !podeAceitarServico()) return;
+  E.jaAlertadas = [];        /* senão na segunda vez não sobra o que alertar */
+  E.alerta = null;
+  E.esperandoAlertaDesde = null;
+  dispararAlerta();
+}
+
+function botaoDeVerOAlerta(){
+  const d = euSouDiarista();
+  if(!d.disponivel || !podeAceitarServico()) return "";
+  return '<button class="btn btn-texto" style="min-height:44px;margin:-10px 0 4px" '
+    +   'onclick="verComoEhOAlerta()">\ud83d\udd14 Ver como é o alerta (agora)</button>';
 }
 
 function botaoDeTestarOSom(){
@@ -1307,6 +1354,7 @@ function dispararAlerta(){
   if(!o) return;
 
   E.jaAlertadas = (E.jaAlertadas || []).concat([o.id]);
+  E.esperandoAlertaDesde = null;
   E.alerta = { oportunidadeId: o.id, restam: DISPONIBILIDADE.alertaExpiraEmSegundos,
                pergunta: false };
   E.toquesDoAlerta = 0;
@@ -1335,10 +1383,37 @@ function relogioDoAlerta(){
   const d = euSouDiarista();
 
   if(!E.alerta){
-    /* nada na tela: se ela está disponível, um pedido chega em instantes */
-    if(d.disponivel && podeAceitarServico() && proximaParaAlertar()){
-      agendar(dispararAlerta, 4000);
+    /* Nada na tela ainda: se ela está disponível, um pedido chega em
+       instantes.
+
+       ⚠️ QUEM CONTA É O ESTADO, NÃO O RELÓGIO.
+
+       Isto já foi um agendar(dispararAlerta, 4000), e era um defeito: o
+       desenhar() apaga todos os relógios, então QUALQUER toque na tela
+       dentro dos 4 segundos zerava a contagem e ela recomeçava do começo.
+
+       No computador ninguém nota — a pessoa liga a chave e fica parada
+       olhando. No celular ela rola a lista e toca nas coisas, e a contagem
+       nunca fechava. O alerta simplesmente não chegava.
+
+       Guardando a HORA em que a espera começou, o tempo passa mesmo que o
+       relógio seja morto e recriado vinte vezes. É o mesmo padrão que o som
+       repetindo já usava. */
+    if(!(d.disponivel && podeAceitarServico() && proximaParaAlertar())){
+      E.esperandoAlertaDesde = null;
+      return;
     }
+    if(!E.esperandoAlertaDesde){
+      E.esperandoAlertaDesde = Date.now();
+      salvar();
+    }
+    repetir(function(){
+      if(E.alerta || !E.esperandoAlertaDesde) return;
+      if(Date.now() - E.esperandoAlertaDesde >= DISPONIBILIDADE.demoraDoPrimeiroAlertaMs){
+        E.esperandoAlertaDesde = null;
+        dispararAlerta();
+      }
+    }, 400);
     return;
   }
 
