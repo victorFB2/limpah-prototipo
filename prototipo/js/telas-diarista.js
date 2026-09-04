@@ -482,10 +482,13 @@ TELAS.diaristaHome = {
       ? '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" onclick="alternarDisponivel()">'
         + '<div class="txt"><b>Disponível para trabalhar</b>'
         + '<span>' + (d.disponivel
-            ? "O celular toca quando aparecer pedido para voc\u00ea."
+            ? (ehIPhone()
+               ? "Voc\u00ea ser\u00e1 avisada aqui na tela quando aparecer pedido."
+               : "O celular toca quando aparecer pedido para voc\u00ea.")
             : "Ligue para ser avisada de novos pedidos.") + '</span></div>'
         + '<div class="botao"></div></div>'
         + botaoDeTestarOSom()
+        + avisoDoSomNoIPhone()
         /* Sempre vis\u00edvel, n\u00e3o s\u00f3 com a chave ligada: ela precisa poder
            acertar os dias ANTES de come\u00e7ar a receber alerta. */
         + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
@@ -1200,6 +1203,62 @@ function testarOSom(){
 
    E ele também é o desbloqueio: o iPhone só libera som depois de um toque
    dela, e este é um toque. */
+/* --------------------------------------------------------------------------
+   O QUE O iPHONE NÃO FAZ — e por que paramos de tentar (22/08/2026)
+
+   Três tentativas de fazer o som tocar sozinho no Safari do iPhone. Nenhuma
+   funcionou: o dono ouve o som quando toca no botão de testar, e não ouve
+   quando o alerta chega sozinho.
+
+   A investigação dessa terceira vez chegou numa conclusão diferente das
+   outras duas: **o problema não é o código.**
+
+   O que o produto precisa é que o celular chame a atenção dela quando ela
+   NÃO está olhando para o aplicativo — celular no bolso, tela apagada. E
+   isso um site não faz no iPhone, de jeito nenhum: quando o Safari sai da
+   frente, o iOS congela a página. Relógio parado, nada toca. Não existe
+   truque, biblioteca ou permissão que contorne isso, porque não é uma
+   trava do Safari — é como o iOS administra bateria.
+
+   Sobra o caso de a tela estar acesa e o aplicativo aberto. Aí é
+   teoricamente possível (destravar o elemento de som num toque e reusá-lo
+   depois), e é exatamente o que o código abaixo faz. Continua sem tocar
+   para o dono. **E eu não tenho iPhone para investigar** — só sei o que ele
+   me conta.
+
+   Então: para de tentar. O som automático fica valendo para Android e
+   computador, e no iPhone a tela **diz a verdade** em vez de fingir que
+   funciona. Quem depende disso é o aplicativo nativo, na seção 3 do
+   ESPEC-ALERTA.md.
+
+   Esconder essa limitação seria pior: uma diarista de iPhone confiaria num
+   alerta que nunca vem, e perderia serviço achando que não apareceu nenhum.
+   -------------------------------------------------------------------------- */
+
+/* Safari de iPhone ou iPad. O iPad moderno se anuncia como computador, daí
+   a segunda checagem. */
+function ehIPhone(){
+  try{
+    const ua = navigator.userAgent || "";
+    const iOS = /iPad|iPhone|iPod/.test(ua)
+      || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    const safari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    return iOS && safari;
+  }catch(e){ return false; }
+}
+
+/* O recado que aparece para quem está no iPhone. */
+function avisoDoSomNoIPhone(){
+  if(!ehIPhone()) return "";
+  return '<div class="aviso ambar" style="margin:-2px 0 12px">\ud83d\udd07<div>'
+    + '<b>No iPhone, o som automático não toca</b>'
+    + 'O botão de testar acima funciona, mas o alerta que chega sozinho fica '
+    + 'mudo — e com a tela apagada o Safari nem chega a rodar. É limitação '
+    + 'do navegador do iPhone, não do Limpah, e não tem conserto aqui.'
+    + '<br><br><b>No aplicativo de verdade isso funciona</b>, porque aí o '
+    + 'alerta é notificação do celular, não som de página.</div></div>';
+}
+
 function botaoDeTestarOSom(){
   const bloqueado = !!E.somBloqueado;
   return '<button class="btn btn-texto" style="min-height:44px;margin:-6px 0 4px" '
