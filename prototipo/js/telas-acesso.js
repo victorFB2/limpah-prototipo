@@ -203,6 +203,18 @@ function cadastroClientePasso1(){
   ir("cadastroClienteEndereco");
 }
 
+/* O que o cliente fica sabendo sobre quem vê o endereço dele (A13,
+   decisão do dono de 12/10/2026). Mora num lugar só porque aparece em duas
+   telas — no cadastro e em "Sua casa" — e as duas diziam "depois que ela
+   aceita", o que deixou de ser verdade: a rua e o número só aparecem a
+   partir das 18h da véspera. A hora vem do dados.js. */
+function avisoDePrivacidadeDoEndereco(){
+  return '<div class="aviso roxo">🔒<div><b>Sua privacidade</b>'
+    + 'A profissional vê só o bairro e a distância. A rua e o número aparecem '
+    + 'só para quem aceitou o serviço, a partir das '
+    + HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera.</div></div>';
+}
+
 TELAS.cadastroClienteEndereco = {
   html: function(){
     const en = (E.cliente && E.cliente.endereco) || CLIENTE_EXEMPLO.endereco;
@@ -216,7 +228,7 @@ TELAS.cadastroClienteEndereco = {
     +   '<div class="campo"><label>Complemento</label><input id="ce-comp" type="text" value="' + esc(en.complemento) + '"></div>'
     +   '<div class="campo"><label>Bairro</label><input id="ce-bairro" type="text" value="' + esc(en.bairro) + '"></div>'
     +   '<div class="campo"><label>Cidade e estado</label><input id="ce-cidade" type="text" value="' + esc(en.cidade + " - " + en.estado) + '"></div>'
-    +   '<div class="aviso roxo">🔒<div><b>Sua privacidade</b>O endereço completo só é mostrado à profissional depois que ela aceita o serviço.</div></div>'
+    +   avisoDePrivacidadeDoEndereco()
     + '</div>'
     + '<div class="rodape"><button class="btn btn-principal" onclick="cadastroClientePasso2()">Continuar</button></div>';
   }

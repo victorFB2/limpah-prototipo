@@ -791,6 +791,51 @@ function cabeNaAgenda(candidato, agenda){
   return { cabe:true, regra:"", motivo:"" };
 }
 
+/* QUANDO ELA VÊ A RUA E O NÚMERO — decisão do dono, 12/10/2026 (A13, que
+   fecha a B2 e a Decisão D do TELAS.md)
+
+   Antes do aceite: só bairro e distância (R18). Depois do aceite, a rua e o
+   número aparecem na VÉSPERA do serviço, a partir das 18h. É segurança do
+   cliente: quem aceita e desiste não leva o endereço da casa — é como os
+   apps de entrega fazem. O trajeto ela já estima pelo bairro e pela
+   distância.
+
+   "Aceitou tarde" não é um caso à parte: quem aceita depois das 18h da
+   véspera, ou no próprio dia, já está do lado de lá da linha e vê no aceite.
+   Uma comparação só cobre os três.
+
+   Horário de Brasília. Na maquete o relógio é o do celular dela — o mesmo
+   que a agenda usa para as janelas. No app de verdade (pasta app/) o
+   servidor roda em UTC: lá a conta tem que ser feita em America/Sao_Paulo,
+   e quem decide é o SERVIDOR, que nem envia a rua antes da hora. Esconder
+   só na tela vale aqui, onde nada é real.
+
+   Lá, "a rua" é tudo o que aponta a casa: logradouro, número, complemento,
+   CEP, latitude e longitude, e qualquer link de mapa. Nenhum deles sai do
+   servidor antes da hora; a distância é calculada lá e vai só o número
+   arredondado (quadro na A13). */
+const HORA_DO_ENDERECO_NA_VESPERA = 18;
+
+/* O instante em que a rua aparece: a véspera, às 18h. O dia − 1 vai para o
+   próprio Date, que acerta a virada do mês e do ano sozinho. */
+function momentoDoEndereco(servico){
+  const p = String((servico && servico.data) || "").split("-");
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]) - 1,
+                  HORA_DO_ENDERECO_NA_VESPERA, 0, 0);
+}
+
+/* A rua e o número deste serviço ACEITO já podem aparecer para ela?
+
+   TODA tela pergunta aqui; nenhuma faz a conta sozinha (o mesmo espírito da
+   R24). `agora` vem do relógio da agenda (relogioDaAgenda), para o teste 24
+   poder adiantar a hora. Data que não dá para ler não libera: na dúvida,
+   protege a casa. */
+function enderecoLiberado(servico, agora){
+  const quando = momentoDoEndereco(servico);
+  if(isNaN(quando.getTime())) return false;
+  return (agora || new Date()).getTime() >= quando.getTime();
+}
+
 const PERIODOS = [
   { id:"manha", nome:"Manhã",  faixa:"8h às 12h",  inicio:8  },
   { id:"tarde", nome:"Tarde",  faixa:"12h às 16h", inicio:12 },

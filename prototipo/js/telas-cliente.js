@@ -291,8 +291,7 @@ TELAS.cadastrarCasa = {
     +   '<div class="campo"><label>Cidade e estado</label>'
     +     '<input id="casa-cidade" type="text" value="' + esc(c.cidade + " - " + c.estado) + '"></div>'
 
-    +   '<div class="aviso roxo">🔒<div><b>Sua privacidade</b>'
-    +     'O endereço completo só é mostrado à profissional depois que ela aceita o serviço.</div></div>'
+    +   avisoDePrivacidadeDoEndereco()
     +   '<div id="casa-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
     + '</div>'
     + '<div class="rodape">'

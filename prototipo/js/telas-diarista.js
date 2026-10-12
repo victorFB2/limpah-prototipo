@@ -213,8 +213,12 @@ function situacaoDaDiarista(){
       oportunidadeFrase: "Você não precisa fazer mais nada. Assim que aprovarmos, "
                        + "este botão libera sozinho.",
       trabalhoTitulo: "Sua agenda começa assim que aprovarmos",
+      /* a rua e o número só a partir das 18h da véspera (A13) — prometer
+         "o endereço" aqui seria prometer no aceite */
       trabalhoFrase: "Está tudo enviado. Depois da aprovação, cada serviço que você "
-                   + "aceitar aparece aqui, com o dia, o endereço e quanto você recebe.",
+                   + "aceitar aparece aqui, com o dia, o bairro e quanto você recebe. "
+                   + "A rua e o número chegam na véspera, a partir das "
+                   + HORA_DO_ENDERECO_NA_VESPERA + "h.",
       /* nos ganhos e no extrato o endereço nunca aparece — a frase da agenda
          prometeria algo que essas telas não mostram */
       ganhosTitulo: "Seus ganhos começam assim que aprovarmos",
@@ -242,7 +246,9 @@ function situacaoDaDiarista(){
                      + "este botão libera.",
     trabalhoTitulo: "Falta pouco para sua agenda começar",
     trabalhoFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
-                 + "aceitar aparece aqui, com o dia, o endereço e quanto você recebe.",
+                 + "aceitar aparece aqui, com o dia, o bairro e quanto você recebe. "
+                 + "A rua e o número chegam na véspera, a partir das "
+                 + HORA_DO_ENDERECO_NA_VESPERA + "h.",
     ganhosTitulo: "Falta pouco para você começar a ganhar",
     ganhosFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
                + "fizer aparece aqui, com quanto você recebe e quando cai no seu Pix.",
@@ -419,8 +425,8 @@ function terminarPortaoUm(){
    escrito à mão.
 
    `rua` é o endereço completo, FICTÍCIO. Ele mora aqui e só aparece na
-   agenda, depois do aceite (R18) — nenhuma tela anterior ao aceite o mostra,
-   e o teste 21 confere isso. */
+   agenda, depois do aceite (R18) E a partir das 18h da véspera (A13) — quem
+   decide é enderecoLiberado(), no dados.js. Os testes 21 e 24 conferem. */
 const OPORTUNIDADES = [
   { emDias:1, periodo:"manha", bairro:"Vila Madalena", km:2.1, rua:"Rua dos Ipês, 48",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1}, adicionais:[] } },
@@ -603,8 +609,11 @@ TELAS.diaristaHome = {
         + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">'
         + 'Escolher mais bairros</button>')
     +   escondidasPorConflito()
+    /* A13: não "quando você aceita". A frase vale para qualquer pedido —
+       quem aceita depois das 18h da véspera já vê na hora. */
     +   '<div class="rodape-seguro">Estes são pedidos reais da sua região.<br>'
-    +     'O endereço exato aparece quando você aceita.</div>'
+    +     'Depois do aceite, a rua e o número aparecem a partir das '
+    +     HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera.</div>'
     +   avisoDoPushParaOTime()
     + '</div>'
     + abasDaDiarista("inicio");
@@ -672,7 +681,9 @@ TELAS.diaristaOportunidade = {
       ? '<div class="aviso roxo">☕<div><b>Janela de ' + o.horas + ' horas</b>'
         + 'Você tem direito a intervalo de descanso. A hora é você quem escolhe.</div></div>'
       : "")
-    +   '<div class="rodape-seguro">O endereço completo aparece quando você aceita.</div>'
+    /* A13: o trajeto pesa na decisão de aceitar — por isso ela fica sabendo
+       AQUI, antes de aceitar, o dia em que a rua aparece */
+    +   '<div class="rodape-seguro">' + esc(quandoARuaApareceSeAceitar(o)) + '</div>'
     + '</div>'
     + '<div class="rodape">'
     +   (pode
@@ -693,13 +704,37 @@ TELAS.diaristaOportunidade = {
   }
 };
 
+/* O serviço que ela acabou de aceitar, para a tela do aceite dizer quando a
+   rua aparece NELE. Sem o registro (um dado antigo, de antes de 12/10/2026),
+   fica o último que entrou na agenda. */
+function servicoQueAcabouDeAceitar(){
+  const agenda = euSouDiarista().agenda || [];
+  const a = E.aceitoAgora;
+  const achado = a ? agenda.filter(function(s){
+    return s.oportunidadeId === a.oportunidadeId && s.data === a.data;
+  })[0] : null;
+  return achado || agenda[agenda.length - 1] || null;
+}
+
 TELAS.diaristaAceitou = {
   html: function(){
+    /* A13: "o endereço completo já está na sua agenda" só é verdade a partir
+       das 18h da véspera. Antes disso a tela diz o dia em que a rua chega. */
+    const s = servicoQueAcabouDeAceitar();
+    const jaTemARua = !!s && enderecoLiberado(s, relogioDaAgenda());
     return ''
     + '<div class="centro">'
     +   '<div class="circulo-ok">✓</div>'
     +   '<h2 class="titulo">Pedido aceito! ✅</h2>'
-    +   '<p class="apoio">Combinamos com o cliente. O endereço completo já está na sua agenda.</p>'
+    +   (jaTemARua
+      ? '<p class="apoio">Combinamos com o cliente. O endereço completo já está na sua agenda.</p>'
+      : '<p class="apoio">Combinamos com o cliente. O serviço já está na sua agenda, '
+        + 'com o bairro e a distância.</p>'
+        + '<div class="aviso roxo" style="text-align:left;margin:4px 0 0">🔒<div>'
+        +   '<b>' + esc(s ? fraseDaRuaNaVespera(s) : "A rua e o número aparecem a partir das "
+                       + HORA_DO_ENDERECO_NA_VESPERA + "h da véspera.") + '</b>'
+        +   'É para proteger a casa do cliente. Até lá, o bairro e a distância já '
+        +   'ajudam você a planejar o caminho.</div></div>')
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">Voltar ao início</button>'
@@ -1185,12 +1220,15 @@ function aceitarOportunidade(){
   d.agenda = (d.agenda || []).concat([{
     oportunidadeId: o.id, data: o.data, inicio: o.inicio, fim: o.fim,
     bairro: o.bairro, resumo: o.resumo, receber: o.receber,
-    /* o que a agenda e o extrato precisam (R26): o endereço completo, que
-       só passa a ser dela agora, e o pedido, para o extrato refazer a conta
-       pelas regras em vez de confiar num número guardado */
+    /* o que a agenda e o extrato precisam (R26): o endereço completo — que
+       fica guardado, mas só APARECE a partir das 18h da véspera (A13,
+       enderecoLiberado) — e o pedido, para o extrato refazer a conta pelas
+       regras em vez de confiar num número guardado */
     periodo: o.periodo, km: o.km, endereco: o.endereco,
     pedido: JSON.parse(JSON.stringify(o.pedido || null)),
   }]);
+  /* para a tela do aceite dizer quando a rua aparece NESTE serviço */
+  E.aceitoAgora = { oportunidadeId: o.id, data: o.data };
   E.alerta = null;
   d.ignoradosSeguidos = 0;
   salvar();
@@ -1802,6 +1840,11 @@ TELAS.diaristaAlerta = {
     +       '<div class="linha"><span class="rot">Onde</span>'
     +         '<span class="val">' + esc(o.bairro) + ' · '
     +           String(o.km).replace(".", ",") + ' km</span></div>'
+    /* A13: "Aceitar agora" é o caminho principal do aceite — ela fica
+       sabendo AQUI, como na tela da oportunidade, o dia em que a rua chega.
+       O trajeto pesa na decisão. A mesma frase, da mesma função. Fora da
+       .linha de propósito: a .linha é flex e poria a frase ao lado. */
+    +       '<div class="nota">🔒 ' + esc(quandoARuaApareceSeAceitar(o)) + '</div>'
     +     '</div>'
     +   '</div>'
 
@@ -2065,6 +2108,44 @@ function servicoAcontecendoAgora(s){
    que o teste roda. */
 function relogioDaAgenda(){ return new Date(); }
 
+/* QUANDO A RUA APARECE, com a data de verdade (A13).
+
+   "Na véspera" sozinho obriga ela a fazer a conta; a data pronta não:
+   "na véspera, sex 16/10," — ou "hoje, seg 12/10," e "amanhã, ter 13/10,"
+   quando é o caso. Quem decide SE já apareceu é enderecoLiberado(), no
+   dados.js; estas frases só dizem QUANDO. */
+function quandoARuaAparece(s){
+  const m = momentoDoEndereco(s);
+  /* Data ilegível (dado estragado): a frase sai sem o dia, em vez de quebrar
+     a tela. Sem isto, DIAS_SEMANA[NaN] derrubava a Agenda, os Ganhos, o
+     Extrato e o cartão da renda na home — todos passam por aqui. A rua
+     continua escondida: enderecoLiberado() não libera data que não lê. */
+  if(isNaN(m.getTime())) return "na véspera,";
+  const agora = relogioDaAgenda();
+  const iso = isoDoDia(m);
+  const dia = DIAS_SEMANA[m.getDay()].toLowerCase() + " " + diaCurto(iso);
+  if(iso === isoDoDia(agora)) return "hoje, " + dia + ",";
+  const amanha = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1);
+  if(iso === isoDoDia(amanha)) return "amanhã, " + dia + ",";
+  return "na véspera, " + dia + ",";
+}
+
+/* "A rua e o número aparecem na véspera, sex 16/10, a partir das 18h." */
+function fraseDaRuaNaVespera(s){
+  return "A rua e o número aparecem " + quandoARuaAparece(s) + " a partir das "
+       + HORA_DO_ENDERECO_NA_VESPERA + "h.";
+}
+
+/* Na tela da oportunidade, ANTES do aceite: o que vai acontecer se ela
+   aceitar. Pedido para hoje, ou para amanhã depois das 18h, já mostra a rua
+   no aceite — a mesma regra, sem caso à parte. */
+function quandoARuaApareceSeAceitar(o){
+  if(enderecoLiberado(o, relogioDaAgenda()))
+    return "A rua e o número aparecem assim que você aceitar.";
+  return "Se você aceitar, a rua e o número aparecem " + quandoARuaAparece(o)
+       + " a partir das " + HORA_DO_ENDERECO_NA_VESPERA + "h.";
+}
+
 
 /* --- um serviço, num formato só ------------------------------------------ */
 
@@ -2095,6 +2176,11 @@ function detalhesDoServico(s){
   }
   const extrato = pedido ? extratoDoServico(pedido, km) : null;
 
+  /* A RUA SÓ A PARTIR DAS 18H DA VÉSPERA (A13). O corte é aqui, e não no
+     cartão: toda tela que recebe um serviço por esta função já o recebe sem
+     a rua antes da hora — nenhuma consegue mostrar por engano. */
+  const liberado = enderecoLiberado(s, relogioDaAgenda());
+
   /* O VALOR É O COMBINADO NO ACEITE (s.receber) — é o contrato. A conta pela
      tabela de hoje serve só para quebrar o valor em linhas. Antes o valor
      era sempre recalculado: se a tabela, o 65% ou o deslocamento mudassem,
@@ -2110,7 +2196,9 @@ function detalhesDoServico(s){
     janela: "das " + s.inicio + "h às " + s.fim + "h",
     horasDaJanela: s.fim - s.inicio,
     bairro: s.bairro || "",
-    endereco: endereco || "",
+    endereco: liberado ? (endereco || "") : "",
+    /* a frase com o dia em que a rua chega — só enquanto ela não chegou */
+    ruaDepois: (!liberado && endereco) ? fraseDaRuaNaVespera(s) : "",
     km: km,
     resumo: pedido ? resumoDoPedido(pedido) : (s.resumo || ""),
     extrato: extrato,
@@ -2387,10 +2475,13 @@ function cartaoDaAgenda(s){
     +   '</div>'
     +   '<div class="valor"><small>você recebe</small><b>' + moeda(s.valor) + '</b></div>'
     + '</div>'
-    /* o endereço completo: depois do aceite, como a tela do aceite promete */
+    /* a rua e o número a partir das 18h da véspera (A13) — s.endereco já
+       chega vazio antes disso (detalhesDoServico). Até lá, bairro e
+       distância, e o dia em que a rua chega. */
     + '<div class="servico-onde">📍 '
     +   (s.endereco ? '<b>' + esc(s.endereco) + '</b> · ' : "") + esc(s.bairro)
     +   (s.km != null ? ' · ' + kmEscrito(s.km) : "") + '</div>'
+    + (s.ruaDepois ? '<div class="servico-rua">🔒 ' + esc(s.ruaDepois) + '</div>' : "")
     /* R9: a pausa é direito dela, e a hora é ela quem escolhe */
     + (s.horasDaJanela > 6
       ? '<div class="servico-pausa">☕ Janela longa: você tem direito a intervalo de descanso. '
@@ -2434,13 +2525,15 @@ TELAS.diaristaAgenda = {
       const dias = agendaPorDia();
       miolo = dias.length
         ? dias.map(diaDaAgenda).join("")
-          + '<div class="rodape-seguro">O endereço completo aparece porque você aceitou o '
-          + 'serviço. Ele é só para você chegar lá.</div>'
+          + '<div class="rodape-seguro">Para proteger a casa de cada cliente, a rua e o número '
+          + 'aparecem a partir das ' + HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera. '
+          + 'Eles são só para você chegar lá.</div>'
         : '<div class="centro" style="flex:none;padding:18px 6px 6px;gap:10px">'
           + '<div class="emojao" style="font-size:52px">📅</div>'
           + '<b style="font-size:17px">Sua agenda está livre</b>'
           + '<p class="apoio" style="margin:0">Quando você aceitar um serviço, ele aparece aqui — '
-          + 'com o dia, o horário, o endereço completo e quanto você recebe.</p></div>'
+          + 'com o dia, o horário, o bairro e quanto você recebe. A rua e o número chegam '
+          + 'na véspera, a partir das ' + HORA_DO_ENDERECO_NA_VESPERA + 'h.</p></div>'
           + '<button class="btn btn-principal" style="margin-top:14px" '
           +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades</button>';
 
@@ -2457,8 +2550,39 @@ TELAS.diaristaAgenda = {
     +   miolo
     + '</div>'
     + abasDaDiarista("agenda");
-  }
+  },
+
+  /* Com a agenda aberta na véspera, às 18h a rua aparece sozinha, sem ela
+     precisar sair e voltar. Pelo agendar(), como todo relógio do app:
+     trocar de tela desliga. */
+  aoEntrar: function(){ redesenharQuandoARuaChegar(); }
 };
+
+/* Teto de 6 horas por espera: um relógio de vários dias, no celular que
+   dorme, atrasa à toa. Acordar antes e reagendar não custa nada. */
+const ESPERA_MAXIMA_DO_RELOGIO_DA_RUA_MS = 6 * 3600 * 1000;
+
+function redesenharQuandoARuaChegar(){
+  const agora = relogioDaAgenda().getTime();
+  let proximo = Infinity;
+  (euSouDiarista().agenda || []).forEach(function(s){
+    if(servicoJaTerminou(s)) return;
+    /* A mesma pergunta que o cartão faz: "ainda falta a rua?". Olhar só
+       s.endereco deixava de fora o serviço aceito antes de 12/10/2026, que
+       não guardou a rua — detalhesDoServico a acha pela oportunidade de
+       origem, e o cartão dele também espera as 18h. */
+    if(!detalhesDoServico(s).ruaDepois) return;
+    const quando = momentoDoEndereco(s).getTime();
+    /* data ilegível: nada a esperar. Sem esta trava, Math.min com NaN dava
+       uma espera de NaN — que o navegador lê como zero, e a agenda se
+       redesenharia sem parar */
+    if(isNaN(quando)) return;
+    proximo = Math.min(proximo, quando);
+  });
+  if(proximo === Infinity) return;
+  /* +1s: acordar um tiquinho depois das 18h, nunca um tiquinho antes */
+  agendar(desenhar, Math.min(ESPERA_MAXIMA_DO_RELOGIO_DA_RUA_MS, proximo - agora + 1000));
+}
 
 
 /* --------------------------------------------------------------------------
