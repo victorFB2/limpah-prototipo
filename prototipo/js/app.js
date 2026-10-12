@@ -403,6 +403,17 @@ const DESENHOS = {
   pessoa: '<circle cx="12" cy="8" r="4"/>'
         + '<path d="M4 21c0-4.4 3.6-7.4 8-7.4s8 3 8 7.4H4Z"/>',
 
+  /* --- abas da diarista: agenda e ganhos (R26, 12/10/2026) --- */
+  calendario: '<path d="M4 5h16a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/>'
+            + '<path d="M7.5 2.5v4M16.5 2.5v4" stroke="currentColor" stroke-width="2.2" '
+            + 'stroke-linecap="round" fill="none"/>'
+            + '<path d="M3 10h18" stroke="#fff" stroke-width="1.6" fill="none"/>'
+            + '<path d="M6.5 13h2.6v2.4H6.5V13Zm4.2 0h2.6v2.4h-2.6V13Zm4.2 0h2.6v2.4h-2.6V13ZM6.5 17h2.6v2.4H6.5V17Zm4.2 0h2.6v2.4h-2.6V17Z" fill="#fff"/>',
+
+  carteira: '<path d="M5 4h12a1 1 0 0 1 1 1v2H5.5a1 1 0 0 0 0 2H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>'
+          + '<path d="M15 12.5h6v4h-6a2 2 0 0 1 0-4Z" fill="#fff" opacity=".9"/>'
+          + '<circle cx="15.6" cy="14.5" r="1.1"/>',
+
   /* --- escolha de perfil --- */
   casaCoracao: '<path d="M12 2.6 2.6 11h2.8v9.4h13.2V11h2.8L12 2.6Z"/>'
              + '<path d="M12 18.2c-2.8-2-4-3.2-4-4.7a2 2 0 0 1 4-.7 2 2 0 0 1 4 .7c0 1.5-1.2 2.7-4 4.7Z" fill="#fff"/>',

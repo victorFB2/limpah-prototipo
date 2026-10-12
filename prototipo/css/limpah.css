@@ -396,6 +396,56 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .faixa-trilho{flex:none;height:4px;background:var(--roxo-noite)}
 .faixa-trilho div{height:100%;background:#fff;opacity:.9;transition:width .25s}
 
+/* ---------- agenda e ganhos dela (R26, 12/10/2026) ---------- */
+
+/* cabeça de cada dia na agenda: a data, e a soma das janelas contra o teto
+   do dia (R8 vale para a SOMA do dia, não para cada serviço) */
+.dia-agenda{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:18px 0 6px}
+.dia-agenda b{font-size:14px;font-weight:800;min-width:0}
+.dia-agenda span{flex:none;font-size:12px;font-weight:700;color:var(--suave)}
+.medidor{height:6px;border-radius:3px;background:var(--roxo-borda);overflow:hidden;margin-bottom:10px}
+.medidor i{display:block;height:100%;background:var(--roxo);border-radius:3px}
+.medidor.cheio i{background:var(--verde)}
+.medidor.passou i{background:var(--vermelho)}
+.nota-dia{font-size:12px;color:var(--suave);margin:-4px 0 8px;line-height:1.45}
+.nota-dia.passou{color:var(--vermelho);font-weight:600}
+
+.servico-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.servico-topo .txt{flex:1;min-width:0}
+.servico-topo .txt b{display:block;font-size:15px}
+.servico-topo .txt span{display:block;font-size:12.5px;color:var(--suave);margin-top:3px;line-height:1.45}
+.servico-topo .valor{flex:none;text-align:right}
+.servico-topo .valor small{display:block;font-size:11px;color:var(--suave)}
+.servico-topo .valor b{display:block;font-size:17px;font-weight:800;color:var(--verde);white-space:nowrap}
+.servico-onde{
+  margin-top:11px;padding-top:10px;border-top:1px solid var(--borda);
+  font-size:13px;line-height:1.5;overflow-wrap:anywhere;
+}
+.servico-pausa{margin-top:8px;font-size:12px;color:var(--suave);line-height:1.5}
+
+/* o recorte dos ganhos: dois botões lado a lado, 44px de altura (R21) */
+.recorte{display:flex;gap:8px;margin:0 0 12px}
+.recorte button{
+  flex:1;min-height:44px;padding:6px;border-radius:12px;cursor:pointer;
+  border:1.5px solid var(--borda);background:var(--branco);color:var(--suave);
+  font-family:inherit;font-size:13px;font-weight:700;
+}
+.recorte button.marcada{border-color:var(--roxo);background:var(--roxo-claro);color:var(--roxo)}
+
+.valor-grande{font-size:30px;font-weight:800;color:var(--verde);line-height:1.15;margin:4px 0 8px}
+
+/* o cartão discreto da renda do conjunto, na home dela */
+.item.renda-conjunto .icone{
+  width:42px;height:42px;flex:none;border-radius:12px;background:var(--roxo-claro);
+  display:flex;align-items:center;justify-content:center;color:var(--roxo);
+}
+.item.renda-conjunto .seta{color:var(--roxo);font-size:16px;flex:none}
+
+.extrato-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.extrato-cab b{font-size:14.5px}
+.extrato-sub{font-size:12.5px;color:var(--suave);margin:5px 0 4px;line-height:1.45}
+.cartao.extrato .linha .val{white-space:nowrap}
+
 /* o interruptor apagado: aparece, mas não liga. Ausência não explica nada. */
 .chave.travada{cursor:default;opacity:.65;background:var(--fundo)}
 .chave.travada .botao{background:#D7D2E4}

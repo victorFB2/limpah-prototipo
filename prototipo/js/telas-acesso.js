@@ -333,15 +333,19 @@ TELAS.cadastroDiarista = {
   }
 };
 
-/* Agenda e Ganhos ainda não existem, mas a aba não pode dar em nada:
-   ela mostra o que vem e devolve a pessoa para a home (regra: sem becos). */
+/* O que ainda não existe do lado dela não pode dar em nada: esta tela diz
+   que está sendo construído e devolve a pessoa para a home (regra: sem becos).
+
+   Até 12/10/2026 ela respondia pelas abas Agenda e Ganhos; essas telas
+   existem agora (R26). Hoje quem cai aqui é o "Falar com o suporte" do
+   perfil dela — então o texto não pode mais prometer agenda e ganhos. */
 TELAS.diaristaEmBreve = {
   html: function(){
     return ''
     + cabecalho("Em construção")
     + '<div class="corpo">'
     +   '<div class="aviso roxo">🚧<div><b>Esta parte ainda está sendo construída</b>'
-    +     'Sua agenda e seus ganhos entram no próximo passo do protótipo.</div></div>'
+    +     'Ela entra num dos próximos passos do protótipo.</div></div>'
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-contorno" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'

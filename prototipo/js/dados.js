@@ -449,6 +449,105 @@ function impactoDoAdicional(pedido, idDoAdicional){
 
 
 /* --------------------------------------------------------------------------
+   6A. O QUE ELA RECEBE, LINHA POR LINHA (decisão R26, 12/10/2026)
+
+   Uma conta só, usada pelo cartão da oportunidade, pela agenda, pelos ganhos
+   e pelo extrato. Se cada tela somasse do seu jeito, um dia o cartão diria
+   R$ 120 e o extrato R$ 110 — e ela ia achar que está sendo roubada.
+
+   As três parcelas, cada uma com a sua regra:
+     - a diária, pela tabela R15 (4h R$ 110 · 6h R$ 150 · 8h R$ 200);
+     - a parte dela em cada adicional (REPASSE_DO_ADICIONAL, decisão A2);
+     - o deslocamento, entre 5 e 7 km, repassado INTEIRO a ela (R16).
+
+   E nenhuma parcela negativa: aqui não existe mensalidade nem desconto pelo
+   uso do app (antipadrões, Bloco 7 do TELAS.md).
+   -------------------------------------------------------------------------- */
+function taxaDeDeslocamento(km){
+  km = Number(km) || 0;
+  return (km > DESLOCAMENTO.gratisAteKm && km <= DESLOCAMENTO.raioMaximoKm)
+    ? DESLOCAMENTO.valor : 0;
+}
+
+function extratoDoServico(pedido, km){
+  const conta = calcularPedido(pedido);
+  if(!conta) return null;
+
+  const centavos = function(v){ return Math.round(v * 100) / 100; };
+
+  const adicionais = conta.adicionais.map(function(a){
+    return {
+      id: a.id,
+      nome: a.nome,
+      dela: centavos(a.preco * REPASSE_DO_ADICIONAL / conta.quantidade),
+    };
+  });
+
+  /* O TOTAL sai do MESMO arredondamento do motor do cliente
+     (repasseUnitario), nunca da soma das linhas arredondadas uma a uma.
+     Com duas profissionais, cada adicional é dividido por dois, e
+     arredondar linha por linha dava 1 centavo a mais que o motor em 32
+     combinações (geladeira + janelas: R$ 129,51 aqui, R$ 129,50 lá). Um
+     lado prometeria o que o outro não paga.
+
+     Então: o total é o do motor, e o centavo que sobrar ou faltar vai para
+     a ÚLTIMA linha de adicional — assim as linhas da tela continuam fechando
+     a soma. Com uma profissional não sobra centavo nenhum. */
+  const somaDoMotor = centavos(conta.repasseUnitario - conta.faixa.profissionalRecebe);
+  let somaDasLinhas = 0;
+  adicionais.forEach(function(a){ somaDasLinhas += a.dela; });
+  const sobra = centavos(somaDoMotor - somaDasLinhas);
+  if(adicionais.length && sobra !== 0){
+    const ultima = adicionais[adicionais.length - 1];
+    ultima.dela = centavos(ultima.dela + sobra);
+  }
+
+  const deslocamento = taxaDeDeslocamento(km);
+  return {
+    horas: conta.horas,                         // o tamanho da janela, para achar a faixa
+    diaria: conta.faixa.profissionalRecebe,     // por pessoa, da tabela R15
+    adicionais: adicionais,
+    deslocamento: deslocamento,
+    total: centavos(conta.repasseUnitario + deslocamento),
+  };
+}
+
+function quantoElaRecebe(pedido, km){
+  const x = extratoDoServico(pedido, km);
+  return x ? x.total : 0;
+}
+
+/* QUANDO O DINHEIRO CAI PARA ELA — escolha PROVISÓRIA (A7, 12/10/2026)
+
+   O dinheiro fica retido até o serviço terminar (R12) e cai no Pix dela
+   (Portão 3, R18). O prazo depois disso ninguém tinha decidido: escolhi
+   ATÉ 1 DIA ÚTIL depois de concluído. Sábado e domingo não contam; feriado
+   ainda não é tratado — no app real isso vem do calendário do banco. */
+const REPASSE_PARA_ELA = {
+  diasUteisDepoisDeConcluir: 1,
+};
+
+/* "2026-10-09" (uma sexta) -> "2026-10-12" (a segunda seguinte) */
+function dataDoRepasse(isoConcluido){
+  const p = String(isoConcluido || "").split("-");
+  const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  let faltam = REPASSE_PARA_ELA.diasUteisDepoisDeConcluir;
+  while(faltam > 0){
+    d.setDate(d.getDate() + 1);
+    if(d.getDay() !== 0 && d.getDay() !== 6) faltam--;
+  }
+  return isoDoDia(d);
+}
+
+/* A data no fuso de quem está usando — toISOString() devolveria a data de
+   Greenwich, que à noite no Brasil já é o dia seguinte. */
+function isoDoDia(d){
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0")
+       + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+
+/* --------------------------------------------------------------------------
    6B. AS CASAS DO CLIENTE (decisão R10)
 
    A casa é cadastrada uma vez e reaproveitada. Ela guarda o TAMANHO e o
@@ -597,7 +696,38 @@ const AGENDA = {
   /* O teto legal (LC 150/2015) já vale por serviço. Aqui ele vale pelo DIA:
      duas janelas de 4h somam 8h e cabem; 4h + 6h não cabem. */
   tetoDeHorasPorDia: 8,
+
+  /* A MESMA profissional na MESMA casa: no máximo 2 dias por semana (R8 e
+     regra de ouro 11). Três dias configura vínculo de emprego, com a conta
+     caindo no cliente — é lei, não regra de produto.
+
+     "Semana" = QUALQUER 7 dias seguidos, e não a semana do calendário:
+     sexta, sábado e a segunda seguinte caem em semanas diferentes do
+     calendário, mas são 3 dias na mesma casa em 4 dias. A janela que anda é
+     a leitura mais protetora — escolha PROVISÓRIA (A15).
+
+     Valia só para a recorrência (Bloco 6). Desde 12/10/2026 vale também para
+     a diária avulsa: as oportunidades fictícias mudam de data todo dia com o
+     mesmo endereço, e ela conseguia aceitar a mesma casa 3 dias seguidos. */
+  diasNaMesmaCasaPorSemana: 2,
+  diasDaSemana: 7,
 };
+
+/* Quantos dias de uma data ISO até a outra (b − a). Pelo relógio de
+   Greenwich de propósito: com horário de verão, um dia de 23 horas viraria
+   "zero dias" na conta local. */
+function diasEntre(isoA, isoB){
+  const a = String(isoA || "").split("-"), b = String(isoB || "").split("-");
+  return Math.round((Date.UTC(+b[0], +b[1] - 1, +b[2]) - Date.UTC(+a[0], +a[1] - 1, +a[2]))
+                    / 86400000);
+}
+
+/* A mesma casa? No protótipo a casa é o texto do endereço ("Rua dos Ipês,
+   48"); no app real será o número da casa no cadastro do cliente. */
+function mesmaCasa(a, b){
+  const limpa = function(x){ return String(x || "").trim().toLowerCase().replace(/\s+/g, " "); };
+  return limpa(a) !== "" && limpa(a) === limpa(b);
+}
 
 /* A janela ocupada por um serviço é a contratada MAIS a folga.
    Devolve em minutos desde a meia-noite, que é mais fácil de comparar. */
@@ -621,7 +751,7 @@ function cabeNaAgenda(candidato, agenda){
   for(let i = 0; i < doDia.length; i++){
     const o = janelaOcupada(doDia[i]);
     if(meuDe < o.ate && o.de < meuAte){
-      return { cabe:false, motivo:"você já tem serviço das " + doDia[i].inicio
+      return { cabe:false, regra:"horario", motivo:"você já tem serviço das " + doDia[i].inicio
                               + "h às " + doDia[i].fim + "h nesse dia" };
     }
   }
@@ -630,11 +760,35 @@ function cabeNaAgenda(candidato, agenda){
   let horas = candidato.fim - candidato.inicio;
   doDia.forEach(function(s){ horas += (s.fim - s.inicio); });
   if(horas > AGENDA.tetoDeHorasPorDia){
-    return { cabe:false, motivo:"passaria de " + AGENDA.tetoDeHorasPorDia
+    return { cabe:false, regra:"teto", motivo:"passaria de " + AGENDA.tetoDeHorasPorDia
                               + " horas de trabalho nesse dia" };
   }
 
-  return { cabe:true, motivo:"" };
+  /* 3. seria o 3º dia na MESMA casa em 7 dias? (R8, regra de ouro 11, A15)
+
+     Conta DIAS, não serviços: duas visitas no mesmo dia são um dia só. E
+     conta também o que já passou — a semana de trabalho não zera porque o
+     serviço terminou. Confere cada janela de 7 dias que contém a data nova:
+     em nenhuma delas pode haver mais de 2 dias na casa. */
+  if(candidato.endereco){
+    const dias = [candidato.data];
+    agenda.forEach(function(s){
+      if(mesmaCasa(s.endereco, candidato.endereco) && dias.indexOf(s.data) < 0) dias.push(s.data);
+    });
+    const semana = AGENDA.diasDaSemana, maximo = AGENDA.diasNaMesmaCasaPorSemana;
+    for(let comeca = -(semana - 1); comeca <= 0; comeca++){
+      const naJanela = dias.filter(function(x){
+        const n = diasEntre(candidato.data, x);
+        return n >= comeca && n <= comeca + semana - 1;
+      }).length;
+      if(naJanela > maximo){
+        return { cabe:false, regra:"casa", motivo:"seria o " + (maximo + 1) + "º dia na mesma casa em "
+                                 + semana + " dias, e o máximo é " + maximo };
+      }
+    }
+  }
+
+  return { cabe:true, regra:"", motivo:"" };
 }
 
 const PERIODOS = [

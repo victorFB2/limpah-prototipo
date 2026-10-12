@@ -49,6 +49,13 @@ function diaristaNova(){
 
     /* Alertas ignorados SEGUIDOS. Zera em qualquer sinal de vida. */
     ignoradosSeguidos: 0,
+
+    /* O dia em que ela cadastrou a chave Pix ("2026-10-12"). Antes disso
+       nenhum dinheiro pode ter caído no Pix dela: sem esta data, o que
+       esperava a chave aparecia como "caiu no Pix 21/09" assim que ela
+       cadastrava — num dia em que ela nem tinha chave. Vazio em quem já
+       tinha Pix antes de a data existir: para essas, vale o prazo de sempre. */
+    pixDesde: "",
     /* o que já foi entregue */
     feito: {
       dados: false, regiao: false,
@@ -118,10 +125,37 @@ function situacaoDaDiarista(){
   const portao2 = ["documentos", "selfie", "antecedentes", "termos"];
   const portao2Pronto = portao2.every(function(x){ return d.feito[x]; });
 
+  /* O PIX, nos três estados (R26). Antes só a aprovada sabia se tinha chave:
+     o extrato de quem estava em análise prometia "cai em até 1 dia útil" a
+     quem nunca cadastrou chave nenhuma. As frases do Pix que os ganhos e o
+     extrato usam moram aqui, não soltas nas telas. */
+  const temPix = !!d.feito.recebimento;
+  const pix = {
+    pixFalta: !temPix,
+    /* desde quando a chave existe — antes disso nada pode ter caído */
+    pixDesde: temPix ? (d.pixDesde || "") : "",
+    pixSelo: "Esperando sua chave Pix",
+    pixEsperando: "esperando sua chave Pix",          // "R$ 711,75 esperando sua chave Pix"
+    pixQuando: temPix ? prazoDoPix() : "depois que você cadastrar a chave",
+    /* o passo 3 de "Como o dinheiro chega até você" */
+    pixPassoTitulo: temPix ? "Cai no seu Pix " + prazoDoPix()
+                           : "Cai no seu Pix depois que você cadastrar a chave",
+    pixPassoFrase:  temPix ? "Contado a partir do dia em que o serviço terminou. "
+                             + "Sábado e domingo não contam."
+                           : "Até lá o dinheiro fica guardado com a gente, e não se perde.",
+  };
+  /* Antes da aprovação a chave ainda não é pedida (Portão 3) — a frase diz
+     quando ela entra, em vez de prometer prazo a quem não tem chave. */
+  const pixAntesDeAprovar = temPix ? {} : {
+    pixPassoTitulo: "Cai no seu Pix",
+    pixPassoFrase:  "A chave Pix a gente pede depois da aprovação. Com ela cadastrada, "
+                  + "cada serviço cai " + prazoDoPix() + " depois de terminar.",
+  };
+
   /* APROVADA — pode trabalhar */
   if(d.situacao === "aprovada"){
-    const faltaReceber = !d.feito.recebimento;
-    return {
+    const faltaReceber = !temPix;
+    return Object.assign({
       chave: "aprovada",
       podeAceitar: true,
       /* na faixa do topo */
@@ -137,13 +171,30 @@ function situacaoDaDiarista(){
       /* na tela de uma oportunidade */
       oportunidadeTitulo: "",
       oportunidadeFrase: "",
+      /* na agenda e nos ganhos (R26): aprovada já trabalha, nada a explicar */
+      trabalhoTitulo: "",
+      trabalhoFrase: "",
+      ganhosTitulo: "",
+      ganhosFrase: "",
+      trabalhoBotao: "",
+      trabalhoDestino: "",
+      /* no extrato e nos ganhos: sem Pix, o dinheiro não tem para onde ir.
+         "Segue" e não "cai": depois do cadastro ele ainda leva o prazo do
+         Pix para cair (A7) — e a tela mostra o dia. */
+      pixTitulo: faltaReceber ? "Falta sua chave Pix" : "",
+      pixFrase:  faltaReceber
+        ? "Seu dinheiro fica guardado com a gente e não se perde. Ele segue "
+          + "para o seu Pix assim que você cadastrar a chave."
+        : "",
+      pixBotao: "Cadastrar minha chave Pix",
+      pixDestino: "diaristaRecebimento",
       pct: p.pct,
-    };
+    }, pix);
   }
 
   /* EM ANÁLISE — mandou tudo, espera a gente */
   if(d.situacao === "analise" || portao2Pronto){
-    return {
+    return Object.assign({
       chave: "analise",
       podeAceitar: false,
       faixaTitulo: "Cadastro completo",
@@ -161,12 +212,22 @@ function situacaoDaDiarista(){
       oportunidadeTitulo: "Seu cadastro está em análise",
       oportunidadeFrase: "Você não precisa fazer mais nada. Assim que aprovarmos, "
                        + "este botão libera sozinho.",
+      trabalhoTitulo: "Sua agenda começa assim que aprovarmos",
+      trabalhoFrase: "Está tudo enviado. Depois da aprovação, cada serviço que você "
+                   + "aceitar aparece aqui, com o dia, o endereço e quanto você recebe.",
+      /* nos ganhos e no extrato o endereço nunca aparece — a frase da agenda
+         prometeria algo que essas telas não mostram */
+      ganhosTitulo: "Seus ganhos começam assim que aprovarmos",
+      ganhosFrase: "Está tudo enviado. Depois da aprovação, cada serviço que você "
+                 + "fizer aparece aqui, com quanto você recebe e quando cai no seu Pix.",
+      trabalhoBotao: "Ver como está meu cadastro",
+      trabalhoDestino: "diaristaAnalise",
       pct: p.pct,
-    };
+    }, pix, pixAntesDeAprovar);
   }
 
   /* INCOMPLETO — ainda falta documento */
-  return {
+  return Object.assign({
     chave: "incompleto",
     podeAceitar: false,
     faixaTitulo: "Cadastro " + p.pct + "%",
@@ -179,8 +240,16 @@ function situacaoDaDiarista(){
     oportunidadeTitulo: "Falta pouco para você aceitar",
     oportunidadeFrase: "Envie seus documentos e, assim que a gente aprovar, "
                      + "este botão libera.",
+    trabalhoTitulo: "Falta pouco para sua agenda começar",
+    trabalhoFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
+                 + "aceitar aparece aqui, com o dia, o endereço e quanto você recebe.",
+    ganhosTitulo: "Falta pouco para você começar a ganhar",
+    ganhosFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
+               + "fizer aparece aqui, com quanto você recebe e quando cai no seu Pix.",
+    trabalhoBotao: "Continuar meu cadastro",
+    trabalhoDestino: "diaristaCadastro",
     pct: p.pct,
-  };
+  }, pix, pixAntesDeAprovar);
 }
 
 /* O atalho do protótipo, que precisa estar visível onde ela está esperando.
@@ -347,22 +416,31 @@ function terminarPortaoUm(){
    real que vai receber, não uma promessa de "ótimas oportunidades".
 
    Se a tabela de preços mudar, esta tela muda junto — nenhum valor aqui é
-   escrito à mão. */
+   escrito à mão.
+
+   `rua` é o endereço completo, FICTÍCIO. Ele mora aqui e só aparece na
+   agenda, depois do aceite (R18) — nenhuma tela anterior ao aceite o mostra,
+   e o teste 21 confere isso. */
 const OPORTUNIDADES = [
-  { emDias:1, periodo:"manha", bairro:"Vila Madalena", km:2.1,
+  { emDias:1, periodo:"manha", bairro:"Vila Madalena", km:2.1, rua:"Rua dos Ipês, 48",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1}, adicionais:[] } },
-  { emDias:1, periodo:"tarde", bairro:"Pinheiros", km:3.4,
+  { emDias:1, periodo:"tarde", bairro:"Pinheiros", km:3.4, rua:"Rua das Acácias, 215",
     pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:4, banheiros:2}, adicionais:["passar"] } },
-  { emDias:2, periodo:"manha", bairro:"Perdizes", km:4.8,
+  { emDias:2, periodo:"manha", bairro:"Perdizes", km:4.8, rua:"Rua Jacarandá, 90",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:5, banheiros:2}, adicionais:[] } },
-  { emDias:2, periodo:"tarde", bairro:"Butantã", km:5.9,
+  { emDias:2, periodo:"tarde", bairro:"Butantã", km:5.9, rua:"Rua das Orquídeas, 37",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
-  { emDias:3, periodo:"manha", bairro:"Lapa", km:4.2,
+  { emDias:3, periodo:"manha", bairro:"Lapa", km:4.2, rua:"Rua dos Girassóis, 152",
     pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:2}, adicionais:[] } },
-  { emDias:3, periodo:"tarde", bairro:"Pompeia", km:6.3,
+  { emDias:3, periodo:"tarde", bairro:"Pompeia", km:6.3, rua:"Rua das Hortênsias, 64",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
-  { emDias:4, periodo:"tarde", bairro:"Perdizes", km:4.6,
+  { emDias:4, periodo:"tarde", bairro:"Perdizes", km:4.6, rua:"Rua Manacá, 301",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:2}, adicionais:["geladeira"] } },
+  /* Acrescentada em 12/10/2026 (R26): é a única que cabe no MESMO dia de
+     outra (amanhã de manhã + amanhã à noite = 8h). Sem ela, a demonstração
+     nunca mostraria a agenda chegando ao teto do dia. */
+  { emDias:1, periodo:"noite", bairro:"Pinheiros", km:2.8, rua:"Rua dos Cedros, 19",
+    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
 ];
 
 const NOME_DA_LIMPEZA = { padrao:"Limpeza padrão", completa:"Limpeza completa" };
@@ -397,7 +475,13 @@ function todasAsOportunidades(){
         km: c.km,
         janela: janela ? janela.texto : conta.horas + "h",
         horas: conta.horas,
-        receber: conta.repasseUnitario,
+        /* com o deslocamento, que é todo dela (R16) — a mesma conta da
+           agenda e do extrato, para o valor nunca divergir */
+        receber: quantoElaRecebe(c.pedido, c.km),
+        deslocamento: taxaDeDeslocamento(c.km),
+        /* guardados para o aceite; NENHUMA tela anterior ao aceite usa */
+        endereco: c.rua || "",
+        pedido: c.pedido,
         resumo: tipo + " · " + c.pedido.respostas.comodos + " cômodos, "
               + c.pedido.respostas.banheiros
               + (c.pedido.respostas.banheiros === 1 ? " banheiro" : " banheiros"),
@@ -406,7 +490,17 @@ function todasAsOportunidades(){
       const veredito = cabeNaAgenda(o, d.agenda);
       o.cabe = veredito.cabe;
       o.porQueNaoCabe = veredito.motivo;
-      o.jaAceito = (d.agenda || []).some(function(s){ return s.oportunidadeId === o.id; });
+      o.regraQueBarrou = veredito.regra || "";
+      /* Pelo id E pela data: as oportunidades fictícias mudam de data todo
+         dia, e um aceite antigo (de agosto, com o mesmo id) escondia para
+         sempre a oportunidade de amanhã — a agenda dizia "livre" e a home
+         não oferecia nada naquele lugar. */
+      o.jaAceito = (d.agenda || []).some(function(s){
+        return s.oportunidadeId === o.id && s.data === o.data;
+      });
+      /* Efeito colateral do "id E data": a mesma casa fictícia volta a ser
+         oferecida no dia seguinte. Quem segura o 3º dia na mesma casa em 7
+         dias é o cabeNaAgenda, logo acima (R8, A15) — o teste 21 confere. */
       return o;
     });
 }
@@ -500,6 +594,7 @@ TELAS.diaristaHome = {
       : "")
 
     +   agendaDela()
+    +   cartaoDaRendaDoConjunto()
     +   '<div class="rotulo">Oportunidades na sua região</div>'
     +   (lista.length ? cards
       : '<div class="aviso roxo">🔍<div><b>Nada nos seus bairros agora</b>'
@@ -566,6 +661,12 @@ TELAS.diaristaOportunidade = {
     +     '<div class="linha"><span class="rot">Região</span><span class="val">' + esc(o.bairro) + '</span></div>'
     +     '<div class="linha"><span class="rot">Distância</span><span class="val">'
     +       String(o.km).replace(".", ",") + ' km</span></div>'
+    /* R16: o deslocamento já está no valor de cima, e é todo dela. Sem esta
+       linha, R$ 120 num serviço de 4h parece erro da tabela. */
+    +     (o.deslocamento
+        ? '<div class="linha"><span class="rot">Inclui deslocamento</span><span class="val">'
+          + moeda(o.deslocamento) + ' · todo seu</span></div>'
+        : "")
     +   '</div>'
     +   (o.horas > 6
       ? '<div class="aviso roxo">☕<div><b>Janela de ' + o.horas + ' horas</b>'
@@ -602,6 +703,9 @@ TELAS.diaristaAceitou = {
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">Voltar ao início</button>'
+    /* a frase de cima aponta para a agenda — então tem que dar para ir lá */
+    +   '<button class="btn btn-texto" style="min-height:44px" '
+    +     'onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver na minha agenda ›</button>'
     + '</div>';
   }
 };
@@ -676,6 +780,7 @@ function proximaEtapaDoPortaoDois(){
 
 function marcarEtapa(nome, destino){
   const d = euSouDiarista();
+  if(nome === "recebimento") anotarChavePix(d);   // guarda também o dia da chave
   d.feito[nome] = true;
   salvar();
 
@@ -877,16 +982,52 @@ TELAS.diaristaRecebimento = {
     +   '<h2 class="titulo">Onde você quer receber? 💰</h2>'
     +   '<p class="apoio">Pedimos isto só agora, porque agora existe dinheiro para você receber.</p>'
     +   '<div class="campo"><label>Chave Pix</label>'
-    +     '<input type="text" placeholder="CPF, telefone ou e-mail"></div>'
+    +     '<input type="text" id="dia-pix" placeholder="CPF, telefone ou e-mail"></div>'
+    +   '<div id="dia-pix-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
     +   '<div class="aviso verde">' + icone("escudo", 18) + '<div><b>Pagamento garantido</b>'
     +     'O valor do serviço fica retido antes de você começar. Se o cliente sumir, '
     +     'você recebe do mesmo jeito.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="marcarEtapa(\'recebimento\')">Salvar</button>'
+    +   '<button class="btn btn-principal" onclick="salvarChavePix()">Salvar</button>'
     + '</div>';
   }
 };
+
+/* Quem chega aqui pelos ganhos ou pelo extrato ("Cadastrar minha chave Pix")
+   volta para lá depois de salvar — é lá que ela vê o dinheiro mudar de
+   "esperando sua chave" para "a caminho". Antes caía no mapa do cadastro, e
+   o voltar passava de novo por esta tela. Vindo de qualquer outro lugar,
+   segue como sempre (marcarEtapa).
+
+   Campo vazio não salva: é este botão que tira o aviso da chave dos ganhos
+   e manda o dinheiro para o Pix — "cadastrar" sem chave nenhuma seria
+   prometer um dinheiro que não tem para onde ir. */
+function salvarChavePix(){
+  const campo = document.getElementById("dia-pix");
+  if(!campo || !campo.value.trim()){
+    const erro = document.getElementById("dia-pix-erro");
+    if(erro) erro.textContent = "Falta a chave Pix. Pode ser seu CPF, telefone ou e-mail.";
+    if(campo) campo.focus();
+    return;
+  }
+  const anterior = E.historico[E.historico.length - 1];
+  if(anterior === "diaristaGanhos" || anterior === "diaristaExtrato"){
+    const d = euSouDiarista();
+    anotarChavePix(d);
+    d.feito.recebimento = true;
+    salvar();
+    voltar();
+    return;
+  }
+  marcarEtapa("recebimento");
+}
+
+/* Guarda o DIA em que a chave passou a existir — só na primeira vez. Trocar
+   a chave depois não pode "descair" o dinheiro que já caiu. */
+function anotarChavePix(d){
+  if(!d.feito.recebimento) d.pixDesde = hojeIso();
+}
 
 TELAS.diaristaExperiencia = {
   html: function(){
@@ -921,8 +1062,17 @@ TELAS.diaristaExperiencia = {
    sem ver a própria agenda, "esse horário não cabe" vira mistério. */
 function agendaDela(){
   const d = euSouDiarista();
-  const marcados = (d.agenda || []).slice().sort(function(a, b){
-    return (a.data + a.inicio) < (b.data + b.inicio) ? -1 : 1;
+  /* Comparava data + hora como TEXTO: "2026-10-13" + 16 vinha antes de
+     "2026-10-13" + 8, porque "1" < "8". Só aparecia com dois serviços no
+     mesmo dia — o que a demonstração passou a ter em 12/10/2026.
+
+     E o que já terminou sai daqui, como sai da agenda (A8): senão a mesma
+     tela dizia "Você já tem: hoje, 12h às 16h" depois das 16h, logo acima
+     do cartão da renda do conjunto, que já não contava esse serviço. */
+  const marcados = (d.agenda || []).filter(function(s){ return !servicoJaTerminou(s); })
+    .sort(function(a, b){
+    if(a.data !== b.data) return a.data < b.data ? -1 : 1;
+    return a.inicio - b.inicio;
   });
   if(!marcados.length) return "";
 
@@ -948,14 +1098,26 @@ function escondidasPorConflito(){
     itens += '<div style="font-size:12.5px;color:var(--suave);padding:7px 0;line-height:1.5">'
       + '· ' + esc(o.quando) + ', ' + esc(o.bairro) + ' — ' + esc(o.porQueNaoCabe) + '</div>';
   });
+  /* A explicação de baixo acompanha o motivo: a da folga não explica o
+     limite da mesma casa (A15), e vice-versa. */
+  const porCasa = fora.some(function(o){ return o.regraQueBarrou === "casa"; });
+  const porAgenda = fora.some(function(o){ return o.regraQueBarrou !== "casa"; });
+  const nota = function(t){
+    return '<div style="font-size:11.5px;color:var(--suave);margin-top:5px;line-height:1.5">' + t + '</div>';
+  };
   return '<div class="cartao" style="background:transparent;box-shadow:none;'
     + 'border:1px dashed var(--borda);padding:13px 15px">'
     + '<b style="font-size:13px">' + fora.length
     + (fora.length === 1 ? ' pedido não aparece' : ' pedidos não aparecem')
     + ' na sua lista</b>' + itens
-    + '<div style="font-size:11.5px;color:var(--suave);margin-top:5px;line-height:1.5">'
-    + 'A gente separa ' + AGENDA.folgaEntreServicosMinutos + ' minutos entre um serviço e '
-    + 'outro, para você ter tempo de chegar sem correria.</div></div>';
+    + (porAgenda
+      ? nota('A gente separa ' + AGENDA.folgaEntreServicosMinutos + ' minutos entre um serviço e '
+             + 'outro, para você ter tempo de chegar sem correria.') : "")
+    + (porCasa
+      ? nota('Na mesma casa, no máximo ' + AGENDA.diasNaMesmaCasaPorSemana + ' dias por semana: '
+             + 'com ' + (AGENDA.diasNaMesmaCasaPorSemana + 1) + ', a lei trata como emprego, '
+             + 'e não como diária.') : "")
+    + '</div>';
 }
 
 /* ⚠️ O aviso mais importante desta tela — e ele é para o TIME DE
@@ -1023,6 +1185,11 @@ function aceitarOportunidade(){
   d.agenda = (d.agenda || []).concat([{
     oportunidadeId: o.id, data: o.data, inicio: o.inicio, fim: o.fim,
     bairro: o.bairro, resumo: o.resumo, receber: o.receber,
+    /* o que a agenda e o extrato precisam (R26): o endereço completo, que
+       só passa a ser dela agora, e o pedido, para o extrato refazer a conta
+       pelas regras em vez de confiar num número guardado */
+    periodo: o.periodo, km: o.km, endereco: o.endereco,
+    pedido: JSON.parse(JSON.stringify(o.pedido || null)),
   }]);
   E.alerta = null;
   d.ignoradosSeguidos = 0;
@@ -1811,15 +1978,686 @@ TELAS.diaristaPerfil = {
 };
 
 
+/* ==========================================================================
+   AGENDA E GANHOS DELA — etapa 4 (decisão R26, 12/10/2026)
+
+   Três telas: Minha agenda, Meus ganhos e o Extrato.
+
+   Duas regras atravessam as três:
+   - NENHUM valor é escrito à mão: tudo sai de extratoDoServico() (dados.js),
+     a mesma conta que monta o cartão da oportunidade;
+   - o que elas dizem sobre o ESTADO dela (ainda não aprovada, sem Pix) vem
+     de situacaoDaDiarista() — nenhuma tela decide sozinha (R24).
+   ========================================================================== */
+
+/* Os recortes do "Recebido" — escolha PROVISÓRIA (A9).
+   Janelas que andam com o dia, e não semana e mês do calendário: numa
+   segunda-feira "esta semana" estaria sempre vazia, e no dia 1º "este mês"
+   também. Ela abriria a tela de ganhos e veria zero. */
+const RECORTES_DOS_GANHOS = [
+  { id:"7",  nome:"Últimos 7 dias",  dias:7  },
+  { id:"30", nome:"Últimos 30 dias", dias:30 },
+];
+const RECORTE_PADRAO = "30";
+
+/* A renda do conjunto só aparece na HOME a partir de 2 diárias agendadas:
+   a ideia do dono fala em "várias" (TELAS.md, IDEIA GUARDADA). Em Meus
+   ganhos ela aparece sempre. Escolha PROVISÓRIA (A10). */
+const MINIMO_DE_DIARIAS_PARA_A_HOME = 2;
+
+/* SERVIÇOS JÁ FEITOS, DE EXEMPLO — escolha PROVISÓRIA (A11).
+
+   Sem eles, "Recebido" e o extrato abririam vazios e não daria para ver como
+   ficam. São fictícios do mesmo jeito que as OPORTUNIDADES: datas contadas a
+   partir de hoje e valores calculados pela tabela de verdade. Só aparecem
+   para quem já foi aprovada (antes disso ela não trabalhou), e as telas
+   dizem que são de exemplo. */
+const SERVICOS_FEITOS_DE_EXEMPLO = [
+  { haDias:2,  periodo:"manha", bairro:"Pinheiros",     km:3.1, rua:"Rua das Paineiras, 77",
+    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1}, adicionais:["geladeira"] } },
+  { haDias:5,  periodo:"tarde", bairro:"Vila Madalena", km:2.4, rua:"Rua dos Ipês, 112",
+    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
+  { haDias:9,  periodo:"manha", bairro:"Perdizes",      km:5.6, rua:"Rua Cambará, 45",
+    pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:1}, adicionais:["passar"] } },
+  { haDias:16, periodo:"manha", bairro:"Lapa",          km:4.0, rua:"Rua dos Girassóis, 18",
+    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
+  { haDias:23, periodo:"tarde", bairro:"Pompeia",       km:6.1, rua:"Rua das Hortênsias, 230",
+    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:["armarios"] } },
+];
+
+
+/* --- datas e horas ------------------------------------------------------- */
+
+function hojeIso(){ return isoDoDia(new Date()); }
+
+function isoDeHaDias(n){
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  return isoDoDia(d);
+}
+
+/* "2026-10-06" -> "06/10" */
+function diaCurto(iso){
+  const p = String(iso || "").split("-");
+  return p.length === 3 ? p[2] + "/" + p[1] : "";
+}
+
+function momentoDoServico(s, hora){
+  const p = String(s.data || "").split("-");
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), Number(hora) || 0, 0, 0);
+}
+
+/* Serviço que já passou SAI da agenda e vai para os ganhos — escolha
+   PROVISÓRIA (A8). No app real quem diz "terminou" é a tela de concluir o
+   serviço (Bloco 5), que ainda não existe; no protótipo, acabou a janela,
+   acabou o serviço. */
+function servicoJaTerminou(s){ return momentoDoServico(s, s.fim) <= relogioDaAgenda(); }
+
+function servicoAcontecendoAgora(s){
+  const agora = relogioDaAgenda();
+  return momentoDoServico(s, s.inicio) <= agora && agora < momentoDoServico(s, s.fim);
+}
+
+/* A hora de agora, para a agenda, num lugar só. Existe para o teste 21
+   poder adiantar o relógio ("são 17h de amanhã") e conferir um dia em que
+   um serviço já terminou e outro está acontecendo — sem depender da hora em
+   que o teste roda. */
+function relogioDaAgenda(){ return new Date(); }
+
+
+/* --- um serviço, num formato só ------------------------------------------ */
+
+function resumoDoPedido(pedido){
+  const r = (pedido && pedido.respostas) || {};
+  const cat = CATALOGO.filter(function(c){ return c.id === (pedido || {}).categoria; })[0];
+  const tipo = NOME_DA_LIMPEZA[r.tipo] || (cat ? cat.nome : "Serviço");
+  if(r.comodos == null) return tipo;
+  return tipo + " · " + r.comodos + " cômodos, " + r.banheiros
+       + (r.banheiros === 1 ? " banheiro" : " banheiros");
+}
+
+/* Junta o que as telas precisam saber de um serviço — venha ele da agenda
+   (aceito por ela) ou dos exemplos (já feito).
+
+   Serviço aceito antes de 12/10/2026 não guardava o pedido nem o endereço.
+   Para esse, procura a oportunidade de onde ele veio; se não achar, mostra o
+   valor combinado no aceite, sem inventar linha nenhuma. */
+function detalhesDoServico(s){
+  let pedido = s.pedido, km = s.km, endereco = s.endereco;
+  if(!pedido){
+    const origem = OPORTUNIDADES[s.oportunidadeId];
+    if(origem && origem.bairro === s.bairro){
+      pedido = origem.pedido;
+      if(km == null) km = origem.km;
+      if(!endereco) endereco = origem.rua;
+    }
+  }
+  const extrato = pedido ? extratoDoServico(pedido, km) : null;
+
+  /* O VALOR É O COMBINADO NO ACEITE (s.receber) — é o contrato. A conta pela
+     tabela de hoje serve só para quebrar o valor em linhas. Antes o valor
+     era sempre recalculado: se a tabela, o 65% ou o deslocamento mudassem,
+     todo serviço já aceito mudava de valor sem aviso (o Butantã aceito em
+     agosto por R$ 110 aparecia como R$ 120). Os exemplos não têm combinado:
+     para eles vale a tabela. */
+  const combinado = Number(s.receber);
+  const temCombinado = s.receber != null && isFinite(combinado) && combinado > 0;
+  const valor = temCombinado ? combinado : (extrato ? extrato.total : 0);
+  return {
+    data: s.data, inicio: s.inicio, fim: s.fim,
+    /* a JANELA, nunca "N horas" (R9) */
+    janela: "das " + s.inicio + "h às " + s.fim + "h",
+    horasDaJanela: s.fim - s.inicio,
+    bairro: s.bairro || "",
+    endereco: endereco || "",
+    km: km,
+    resumo: pedido ? resumoDoPedido(pedido) : (s.resumo || ""),
+    extrato: extrato,
+    /* as linhas da tabela só aparecem no extrato se fecham o combinado */
+    linhasFecham: !!extrato && Math.abs(extrato.total - valor) < 0.005,
+    valor: valor,
+    exemplo: !!s.exemplo,
+  };
+}
+
+function somarValores(lista){
+  let t = 0;
+  lista.forEach(function(s){ t += s.valor; });
+  return Math.round(t * 100) / 100;
+}
+
+
+/* --- o que ela tem pela frente, e o que já fez ---------------------------- */
+
+/* O que ela aceitou e ainda não fez, do mais próximo ao mais distante. */
+function servicosAgendados(){
+  const d = euSouDiarista();
+  return (d.agenda || [])
+    .filter(function(s){ return !servicoJaTerminou(s); })
+    .map(detalhesDoServico)
+    .sort(function(a, b){
+      if(a.data !== b.data) return a.data < b.data ? -1 : 1;
+      return a.inicio - b.inicio;
+    });
+}
+
+/* Por dia, com a soma das janelas contra o teto do DIA (R8 + R22): duas
+   janelas de 4h fecham o dia; 4h + 6h nem chegam a ser oferecidas.
+
+   Os CARTÕES são só do que ainda não terminou (A8). Mas a SOMA conta TODOS
+   os serviços daquele dia, inclusive o que já acabou — exatamente como o
+   cabeNaAgenda conta na hora de aceitar. Antes a soma pulava o que tinha
+   terminado: às 17h, com 8h–12h feito e 16h–20h acontecendo, a tela dizia
+   "4h de 8h no dia" num dia que já tinha batido o teto da lei, enquanto o
+   aceite recusava mais serviço "porque passaria de 8 horas". */
+function agendaPorDia(){
+  const d = euSouDiarista();
+  const dias = [];
+  servicosAgendados().forEach(function(s){
+    let dia = dias.filter(function(x){ return x.data === s.data; })[0];
+    if(!dia){ dia = { data: s.data, horas: 0, servicos: [], jaFeitos: [] }; dias.push(dia); }
+    dia.servicos.push(s);
+  });
+  dias.forEach(function(dia){
+    (d.agenda || []).forEach(function(s){
+      if(s.data !== dia.data) return;
+      dia.horas += (s.fim - s.inicio);
+      if(servicoJaTerminou(s)) dia.jaFeitos.push(s);
+    });
+  });
+  return dias;
+}
+
+/* O que ela já fez: os exemplos e os da agenda cuja janela terminou, do mais
+   recente ao mais antigo. Só para quem já foi aprovada. */
+function servicosFeitos(){
+  /* a tabela de estados decide (R24), não o sim/não antigo */
+  if(!situacaoDaDiarista().podeAceitar) return [];
+  const d = euSouDiarista();
+  const exemplos = SERVICOS_FEITOS_DE_EXEMPLO.map(function(c){
+    const conta = calcularPedido(c.pedido);
+    const janela = janelaDoServico(c.periodo, conta.horas);
+    return { data: isoDeHaDias(c.haDias), inicio: janela.inicio, fim: janela.fim,
+             bairro: c.bairro, km: c.km, endereco: c.rua, pedido: c.pedido, exemplo: true };
+  });
+  const daAgenda = (d.agenda || []).filter(servicoJaTerminou);
+  return exemplos.concat(daAgenda).map(detalhesDoServico)
+    .sort(function(a, b){
+      if(a.data !== b.data) return a.data < b.data ? 1 : -1;
+      return b.inicio - a.inicio;
+    });
+}
+
+function recorteAtual(){
+  return RECORTES_DOS_GANHOS.filter(function(r){ return r.id === E.recorteGanhos; })[0]
+      || RECORTES_DOS_GANHOS.filter(function(r){ return r.id === RECORTE_PADRAO; })[0];
+}
+
+/* O recorte (A9) vale para o que JÁ CAIU e para a contagem de serviços.
+
+   Esta é a CONTAGEM de serviços feitos: vai pela data do serviço. */
+function feitosNoRecorte(){
+  const desde = isoDeHaDias(recorteAtual().dias);
+  return servicosFeitos().filter(function(s){ return s.data > desde; });
+}
+
+/* E este é o que JÁ CAIU no recorte: vai pela data em que o dinheiro CAIU,
+   não pela do serviço. Numa quarta, o serviço da quarta anterior caiu na
+   quinta — dentro dos últimos 7 dias — e ficava de fora porque o serviço
+   foi há 7 dias. */
+function caiuNoRecorte(){
+  const desde = isoDeHaDias(recorteAtual().dias);
+  return servicosFeitos().filter(function(s){
+    const p = situacaoDoPagamento(s);
+    return p.chave === "pago" && p.cai > desde;
+  });
+}
+
+/* O que terminou e ainda NÃO caiu no Pix dela — SEM recorte de data.
+
+   Antes isto passava pelo filtro de 7/30 dias: um serviço de 40 dias atrás,
+   esperando a chave Pix, sumia dos ganhos e do extrato, e trocar de "30"
+   para "7 dias" fazia desaparecer R$ 475,50 que continuavam sendo dela.
+   Dinheiro devido não some porque ela mexeu num filtro. */
+function feitosAindaNaoPagos(chave){
+  return servicosFeitos().filter(function(s){
+    const c = situacaoDoPagamento(s).chave;
+    return chave ? c === chave : c !== "pago";
+  });
+}
+
+function escolherRecorte(id){
+  E.recorteGanhos = id;
+  salvar();
+  desenhar();
+}
+
+/* Onde está o dinheiro de um serviço já feito. O Pix vem da tabela única de
+   estados (R24) — esta função não decide se ela tem Pix.
+
+   O dia em que cai é o MAIS TARDE entre o prazo contado do serviço e o
+   prazo contado do dia em que ela cadastrou a chave (pixDesde). Antes só
+   contava o serviço: o dinheiro que esperava a chave virava "Caiu no Pix
+   21/09" no instante do cadastro — num dia em que ela nem tinha chave (A11:
+   chamar de recebido o que ainda não caiu seria mentira). Agora ele passa
+   por "a caminho" e só depois cai. */
+function situacaoDoPagamento(s){
+  const e = situacaoDaDiarista();
+  if(e.pixFalta) return { chave:"semPix", selo:"ambar", texto:e.pixSelo, cai:"" };
+  let cai = dataDoRepasse(s.data);
+  if(e.pixDesde){
+    const desdeAChave = dataDoRepasse(e.pixDesde);
+    if(desdeAChave > cai) cai = desdeAChave;
+  }
+  const hoje = hojeIso();
+  if(cai < hoje)   return { chave:"pago",     selo:"verde", texto:"Caiu no Pix " + diaCurto(cai), cai:cai };
+  if(cai === hoje) return { chave:"aCaminho", selo:"",      texto:"Cai no Pix hoje", cai:cai };
+  return              { chave:"aCaminho", selo:"",      texto:"Cai no Pix até " + diaCurto(cai), cai:cai };
+}
+
+/* "em até 1 dia útil" — escrito a partir da regra, não à mão */
+function prazoDoPix(){
+  const n = REPASSE_PARA_ELA.diasUteisDepoisDeConcluir;
+  return "em até " + n + (n === 1 ? " dia útil" : " dias úteis");
+}
+
+
+/* --- a renda do conjunto (IDEIA GUARDADA do dono, TELAS.md Bloco 6) -------
+
+   "Se fizer as 5 diárias: R$ ___". É a porta de entrada da recorrência: ver
+   o conjunto é o que faz a diária avulsa virar "minha agenda da semana" na
+   cabeça dela. A soma é exatamente o que ela recebe pelos aceitos — o
+   teste 22 confere. */
+function rendaDoConjunto(){
+  const lista = servicosAgendados();
+  return { quantidade: lista.length, total: somarValores(lista) };
+}
+
+function rotuloDaRendaDoConjunto(r){
+  return r.quantidade === 1
+    ? "Se fizer a diária agendada"
+    : "Se fizer as " + r.quantidade + " diárias agendadas";
+}
+
+/* O cartão discreto da home (tela 42). Só isto foi acrescentado lá. */
+function cartaoDaRendaDoConjunto(){
+  if(!situacaoDaDiarista().podeAceitar) return "";
+  const r = rendaDoConjunto();
+  if(r.quantidade < MINIMO_DE_DIARIAS_PARA_A_HOME) return "";
+  return '<button class="item renda-conjunto" onclick="ir(\'diaristaGanhos\')">'
+    +   '<div class="icone">' + icone("carteira", 20) + '</div>'
+    +   '<div class="txt"><b>' + esc(rotuloDaRendaDoConjunto(r)) + ': '
+    /* <i> e não <span>: o .item já transforma todo span de dentro em linha
+       de legenda, e o valor iria parar embaixo, cinza e pequeno */
+    +     '<i style="font-style:normal;white-space:nowrap">' + moeda(r.total) + '</i></b>'
+    +     '<span>Ver meus ganhos</span></div>'
+    +   '<div class="seta">›</div>'
+    + '</button>';
+}
+
+
+/* --- pedaços que as três telas repetem ----------------------------------- */
+
+/* Antes da aprovação não há agenda nem ganhos. A frase e o caminho vêm da
+   tabela de estados (R24): quem está em análise não pode ler "complete seu
+   cadastro" — foi exatamente a contradição que o dono achou a 100%. */
+function blocoAntesDeTrabalhar(e, nosGanhos){
+  /* a agenda fala de dia e endereço; ganhos e extrato, só de dinheiro */
+  const titulo = nosGanhos ? e.ganhosTitulo : e.trabalhoTitulo;
+  const frase  = nosGanhos ? e.ganhosFrase  : e.trabalhoFrase;
+  return '<div class="aviso roxo">' + icone("escudo", 18)
+    +   '<div><b>' + esc(titulo) + '</b>' + esc(frase) + '</div></div>'
+    + '<button class="btn ' + (e.chave === "analise" ? "btn-contorno" : "btn-principal") + '" '
+    +   'onclick="ir(\'' + e.trabalhoDestino + '\')">' + esc(e.trabalhoBotao) + '</button>';
+}
+
+/* Sem Pix: o aviso e o caminho para a chave. Lê só a tabela de estados
+   (pixFalta, R24) — e por isso aparece mesmo sem nenhum serviço feito, que
+   é o caso normal de quem acabou de ser aprovada. Quando já existe dinheiro
+   parado, o título diz quanto (somado SEM recorte de data). */
+function avisoDoPix(e, esperando){
+  if(!e.pixFalta) return "";
+  const titulo = esperando > 0 ? moeda(esperando) + " " + e.pixEsperando : e.pixTitulo;
+  return '<div class="aviso ambar">🔑<div><b>' + esc(titulo) + '</b>' + esc(e.pixFrase) + '</div></div>'
+    + '<button class="btn btn-principal" onclick="ir(\'' + e.pixDestino + '\')">'
+    +   esc(e.pixBotao) + '</button>';
+}
+
+/* O que terminou e está a caminho do Pix — sem recorte, pelo mesmo motivo.
+
+   Diz o DIA, e não "1 dia útil depois de concluído": o dinheiro que
+   esperava a chave conta o prazo a partir do cadastro dela, e a frase
+   antiga ficaria errada justamente para ele. */
+function avisoACaminho(lista){
+  if(!lista.length) return "";
+  let ultimo = "";
+  lista.forEach(function(s){
+    const cai = situacaoDoPagamento(s).cai;
+    if(cai > ultimo) ultimo = cai;
+  });
+  return '<div class="aviso roxo">⏳<div><b>' + moeda(somarValores(lista))
+    + ' a caminho do seu Pix</b>O serviço terminou, o dinheiro já é seu. '
+    + (ultimo === hojeIso() ? "Ele cai no seu Pix hoje." : "Ele cai no seu Pix até " + diaCurto(ultimo) + ".")
+    + '</div></div>';
+}
+
+/* O antipadrão nº 2 da concorrência é cobrar ~R$ 28 por mês da diarista
+   pelo uso do app. Aqui não — e a tela diz, em vez de deixar ela desconfiar. */
+function avisoSemMensalidade(){
+  return '<div class="aviso verde">' + icone("escudo", 18)
+    + '<div><b>Sem mensalidade, sem desconto</b>'
+    + 'O aplicativo não cobra nada de você para trabalhar. O valor que aparece '
+    + 'aqui é o que cai no seu Pix.</div></div>';
+}
+
+function avisoDosExemplos(lista){
+  if(!lista.some(function(s){ return s.exemplo; })) return "";
+  return '<div class="aviso ambar">⚙<div><b>Protótipo</b>'
+    + 'Os serviços feitos antes de hoje são de exemplo, para você ver como esta '
+    + 'tela fica. No aplicativo de verdade aparece só o que você fez.</div></div>';
+}
+
+function seletorDeRecorte(){
+  const atual = recorteAtual();
+  return '<div class="recorte">' + RECORTES_DOS_GANHOS.map(function(r){
+    return '<button class="' + (r.id === atual.id ? "marcada" : "") + '" '
+      + 'onclick="escolherRecorte(\'' + r.id + '\')">' + esc(r.nome) + '</button>';
+  }).join("") + '</div>';
+}
+
+/* Espaço que não quebra entre o número e "km": a 320px o "km" caía sozinho
+   na linha de baixo. */
+function kmEscrito(km){ return String(km).replace(".", ",") + " km"; }
+
+
+/* --------------------------------------------------------------------------
+   MINHA AGENDA (tela 44 / 47)
+   -------------------------------------------------------------------------- */
+function cartaoDaAgenda(s){
+  const adicionais = s.extrato ? s.extrato.adicionais : [];
+  return '<div class="cartao">'
+    + (servicoAcontecendoAgora(s)
+      ? '<div style="margin-bottom:8px"><span class="selo verde">acontecendo agora</span></div>' : "")
+    + '<div class="servico-topo">'
+    +   '<div class="txt"><b>' + esc(s.janela) + '</b>'
+    +     '<span>' + esc(s.resumo) + '</span>'
+    +     (adicionais.length
+        ? '<span>+ ' + esc(adicionais.map(function(a){ return a.nome; }).join(", ")) + '</span>' : "")
+    +   '</div>'
+    +   '<div class="valor"><small>você recebe</small><b>' + moeda(s.valor) + '</b></div>'
+    + '</div>'
+    /* o endereço completo: depois do aceite, como a tela do aceite promete */
+    + '<div class="servico-onde">📍 '
+    +   (s.endereco ? '<b>' + esc(s.endereco) + '</b> · ' : "") + esc(s.bairro)
+    +   (s.km != null ? ' · ' + kmEscrito(s.km) : "") + '</div>'
+    /* R9: a pausa é direito dela, e a hora é ela quem escolhe */
+    + (s.horasDaJanela > 6
+      ? '<div class="servico-pausa">☕ Janela longa: você tem direito a intervalo de descanso. '
+        + 'A hora é você quem escolhe.</div>' : "")
+    + '</div>';
+}
+
+function diaDaAgenda(dia){
+  const teto = AGENDA.tetoDeHorasPorDia;
+  const estado = dia.horas > teto ? "passou" : (dia.horas === teto ? "cheio" : "");
+  return '<div class="dia-agenda"><b>' + esc(dataPorExtenso(dia.data)) + '</b>'
+    +   '<span>' + dia.horas + 'h de ' + teto + 'h no dia</span></div>'
+    + '<div class="medidor ' + estado + '"><i style="width:'
+    +   Math.min(100, Math.round(dia.horas / teto * 100)) + '%"></i></div>'
+    /* O cartão do que já terminou saiu da agenda (A8), mas as horas dele
+       continuam valendo para o dia — a tela diz isso, senão a soma parece
+       não bater com os cartões que estão embaixo. */
+    + (dia.jaFeitos && dia.jaFeitos.length
+      ? '<div class="nota-dia">Conta também ' + dia.jaFeitos.map(function(s){
+          return "das " + s.inicio + "h às " + s.fim + "h";
+        }).join(" e ") + (dia.jaFeitos.length === 1 ? ", que já terminou." : ", que já terminaram.")
+        + '</div>' : "")
+    + (estado === "cheio"
+      ? '<div class="nota-dia">Dia completo: é o máximo de um dia de trabalho, por lei.</div>' : "")
+    /* Não deveria acontecer — o aceite já recusa (cabeNaAgenda). Mas se um
+       dado antigo trouxer isso, a tela avisa em vez de esconder. */
+    + (estado === "passou"
+      ? '<div class="nota-dia passou">Passou do máximo de um dia de trabalho. '
+        + 'Fale com o suporte para reorganizar.</div>' : "")
+    + dia.servicos.map(cartaoDaAgenda).join("");
+}
+
+TELAS.diaristaAgenda = {
+  html: function(){
+    const e = situacaoDaDiarista();
+    let miolo = "";
+
+    if(!e.podeAceitar){
+      miolo = blocoAntesDeTrabalhar(e);
+    } else {
+      const dias = agendaPorDia();
+      miolo = dias.length
+        ? dias.map(diaDaAgenda).join("")
+          + '<div class="rodape-seguro">O endereço completo aparece porque você aceitou o '
+          + 'serviço. Ele é só para você chegar lá.</div>'
+        : '<div class="centro" style="flex:none;padding:18px 6px 6px;gap:10px">'
+          + '<div class="emojao" style="font-size:52px">📅</div>'
+          + '<b style="font-size:17px">Sua agenda está livre</b>'
+          + '<p class="apoio" style="margin:0">Quando você aceitar um serviço, ele aparece aqui — '
+          + 'com o dia, o horário, o endereço completo e quanto você recebe.</p></div>'
+          + '<button class="btn btn-principal" style="margin-top:14px" '
+          +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades</button>';
+
+      miolo += '<button class="btn btn-texto" style="min-height:44px;margin-top:10px" '
+        +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
+        + '<button class="btn btn-texto" style="min-height:44px" '
+        +   'onclick="ir(\'diaristaGanhos\')">Os que já passaram estão em Meus ganhos ›</button>';
+    }
+
+    return ''
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Minha agenda 📅</h2>'
+    +   '<p class="apoio">Os serviços que você aceitou, do mais próximo ao mais distante.</p>'
+    +   miolo
+    + '</div>'
+    + abasDaDiarista("agenda");
+  }
+};
+
+
+/* --------------------------------------------------------------------------
+   MEUS GANHOS (tela 45 / 48)
+   -------------------------------------------------------------------------- */
+TELAS.diaristaGanhos = {
+  html: function(){
+    const e = situacaoDaDiarista();
+    let miolo = "";
+
+    if(!e.podeAceitar){
+      miolo = blocoAntesDeTrabalhar(e, true) + avisoSemMensalidade();
+    } else {
+      const r = rendaDoConjunto();
+      /* o recorte (A9) só para o que já caiu e para a contagem; o que ainda
+         é dela e não caiu aparece inteiro, de qualquer data */
+      const feitos = feitosNoRecorte();          // a contagem: pela data do serviço
+      const pagos = caiuNoRecorte();             // o que caiu: pela data em que caiu
+      const aCaminho = feitosAindaNaoPagos("aCaminho"), semPix = feitosAindaNaoPagos("semPix");
+
+      /* SEM PIX — no topo, lendo da tabela de estados (R24), mesmo sem
+         nenhum serviço feito: é o caso de quem acabou de ser aprovada */
+      miolo += avisoDoPix(e, somarValores(semPix));
+
+      /* A RECEBER — a renda do conjunto, e o que já terminou e vem a caminho */
+      miolo += '<div class="rotulo">A receber</div>'
+        + '<div class="cartao destaque">'
+        + (r.quantidade
+          ? '<div style="font-size:13.5px;font-weight:600">' + esc(rotuloDaRendaDoConjunto(r)) + ':</div>'
+            + '<div class="valor-grande">' + moeda(r.total) + '</div>'
+            + '<div class="ajuda" style="margin:0">Cada diária fica guardada com a gente até o '
+            +   'serviço terminar, e cai no seu Pix ' + esc(e.pixQuando) + '.</div>'
+            + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
+            +   'onclick="ir(\'diaristaAgenda\')">Ver minha agenda ›</button>'
+          : '<b style="font-size:14.5px">Nenhuma diária agendada agora</b>'
+            + '<div class="ajuda">Quando você aceitar serviços, aparece aqui quanto você '
+            +   'recebe pelo conjunto.</div>'
+            + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
+            +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades ›</button>')
+        + '</div>'
+        + avisoACaminho(aCaminho);
+
+      /* RECEBIDO — no recorte escolhido. A lista embaixo do título é SÓ do
+         que já caiu (A11): antes ela listava todo serviço feito, e o que
+         ainda estava a caminho, ou esperando a chave, aparecia sob
+         "Recebido" ao lado de "R$ 0,00 caiu no seu Pix". */
+      const recorteEscrito = esc(recorteAtual().nome.toLowerCase());
+      miolo += '<div class="rotulo">Recebido</div>'
+        + seletorDeRecorte()
+        + '<div class="grade-2">'
+        +   '<div class="mini"><b>' + moeda(somarValores(pagos)) + '</b><span>caiu no seu Pix</span></div>'
+        +   '<div class="mini"><b>' + feitos.length + '</b><span>'
+        +     (feitos.length === 1 ? "serviço feito" : "serviços feitos") + '</span></div>'
+        + '</div>'
+        + (pagos.length
+          ? '<div class="cartao" style="margin-top:12px">' + pagos.map(function(s){
+              return '<div class="linha"><span class="rot">' + esc(dataPorExtenso(s.data))
+                + ' · ' + esc(s.bairro) + '</span><span class="val" style="white-space:nowrap">'
+                + moeda(s.valor) + '</span></div>';
+            }).join("") + '</div>'
+          : '<div class="vazio" style="padding:18px 10px">Nada caiu no seu Pix nos '
+            + recorteEscrito + '.<br>'
+            + (aCaminho.length || semPix.length
+              ? "O que já terminou e ainda não caiu está logo acima."
+              : "Cada serviço aparece aqui quando o dinheiro cai.")
+            + '</div>')
+        + '<button class="btn btn-claro" style="margin-top:4px" onclick="ir(\'diaristaExtrato\')">'
+        +   'Ver extrato serviço a serviço</button>'
+        + avisoSemMensalidade()
+        + avisoDosExemplos(feitos.concat(pagos, aCaminho, semPix));
+    }
+
+    return ''
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Meus ganhos 💰</h2>'
+    +   '<p class="apoio">Quanto você tem para receber e quanto já caiu no seu Pix.</p>'
+    +   miolo
+    + '</div>'
+    + abasDaDiarista("ganhos");
+  }
+};
+
+
+/* --------------------------------------------------------------------------
+   EXTRATO — serviço a serviço (tela 48B), escolha PROVISÓRIA (A12): tela
+   própria, aberta pelos ganhos, e não um pedaço da tela de ganhos — a de
+   ganhos responde "quanto", esta responde "de onde veio cada real".
+   -------------------------------------------------------------------------- */
+function linhaDoExtrato(rotulo, valor){
+  return '<div class="linha"><span class="rot">' + esc(rotulo) + '</span>'
+    + '<span class="val">' + moeda(valor) + '</span></div>';
+}
+
+function cartaoDoExtrato(s, pagamento){
+  const x = s.extrato;
+  let linhas = "";
+  if(x && s.linhasFecham){
+    linhas += linhaDoExtrato("Diária · " + s.janela, x.diaria);
+    x.adicionais.forEach(function(a){ linhas += linhaDoExtrato(a.nome + " · sua parte", a.dela); });
+    if(x.deslocamento)
+      linhas += linhaDoExtrato("Deslocamento · " + kmEscrito(s.km) + " · todo seu", x.deslocamento);
+  } else {
+    /* sem pedido guardado, ou a tabela mudou depois do aceite: vale o
+       combinado, e as linhas de hoje não fechariam com ele */
+    linhas += linhaDoExtrato("Valor combinado no aceite", s.valor);
+    if(x) linhas += '<div class="extrato-sub" style="margin-top:6px">A tabela de preços mudou '
+                  + 'depois que você aceitou. Vale o que foi combinado.</div>';
+  }
+  return '<div class="cartao extrato">'
+    + '<div class="extrato-cab"><b>' + esc(dataPorExtenso(s.data)) + '</b>'
+    +   (pagamento
+        ? '<span class="selo ' + pagamento.selo + '">' + esc(pagamento.texto) + '</span>'
+        : '<span class="selo">Agendado</span>')
+    + '</div>'
+    + '<div class="extrato-sub">' + esc(s.bairro) + ' · ' + esc(s.resumo) + '</div>'
+    + linhas
+    + '<div class="linha total"><span class="rot">Você recebe</span>'
+    +   '<span class="val">' + moeda(s.valor) + '</span></div>'
+    + '</div>';
+}
+
+/* R12 + R18 em três passos. Sem prometer nada que ainda não foi decidido
+   (cliente ausente e cancelamento são do Bloco 5 e da proposta pendente). */
+function comoODinheiroChega(e){
+  function passo(sinal, titulo, frase){
+    return '<div style="display:flex;gap:11px;align-items:flex-start;padding:8px 0">'
+      + '<div style="flex:none;width:24px;font-size:17px;line-height:1.2">' + sinal + '</div>'
+      + '<div style="flex:1;min-width:0"><b style="font-size:14px;display:block">' + esc(titulo) + '</b>'
+      + '<span style="font-size:12.5px;color:var(--suave);line-height:1.5;display:block;margin-top:2px">'
+      + esc(frase) + '</span></div></div>';
+  }
+  return '<div class="rotulo">Como o dinheiro chega até você</div>'
+    + '<div class="cartao">'
+    + passo("🔒", "O cliente paga antes",
+            "O valor fica guardado com a gente até o serviço terminar.")
+    + passo("✅", "Você termina o serviço", "O dinheiro é liberado para você.")
+    /* o passo do Pix vem da tabela de estados (R24): sem chave, a frase de
+       apoio não pode falar de prazo contado do serviço */
+    + passo("💸", e.pixPassoTitulo, e.pixPassoFrase)
+    + '</div>';
+}
+
+TELAS.diaristaExtrato = {
+  html: function(){
+    const e = situacaoDaDiarista();
+    let miolo = "";
+
+    if(!e.podeAceitar){
+      miolo = blocoAntesDeTrabalhar(e, true) + comoODinheiroChega(e) + avisoSemMensalidade();
+    } else {
+      const agendados = servicosAgendados();
+      /* O que ainda não caiu aparece INTEIRO, de qualquer data; o recorte
+         (A9) só filtra o que já caiu — senão o dinheiro devido a ela sumia
+         do extrato quando ela trocava de "30" para "7 dias". */
+      const naoCaiu = feitosAindaNaoPagos();
+      const caiu = caiuNoRecorte();         // pela data em que caiu, não a do serviço
+      miolo = avisoDoPix(e, somarValores(feitosAindaNaoPagos("semPix")))
+        + comoODinheiroChega(e)
+        + '<div class="rotulo">Agendados · a receber</div>'
+        + (agendados.length
+          ? agendados.map(function(s){ return cartaoDoExtrato(s, null); }).join("")
+          : '<div class="vazio" style="padding:14px 10px">Nenhum serviço agendado agora.</div>')
+        + (naoCaiu.length
+          ? '<div class="rotulo">Feitos · ainda não caiu no Pix</div>'
+            + naoCaiu.map(function(s){ return cartaoDoExtrato(s, situacaoDoPagamento(s)); }).join("")
+          : "")
+        + '<div class="rotulo">Feitos · já caiu no Pix</div>'
+        + seletorDeRecorte()
+        + (caiu.length
+          ? caiu.map(function(s){ return cartaoDoExtrato(s, situacaoDoPagamento(s)); }).join("")
+          : '<div class="vazio" style="padding:14px 10px">Nada caiu no seu Pix nos '
+            + esc(recorteAtual().nome.toLowerCase()) + '.</div>')
+        + avisoSemMensalidade()
+        + avisoDosExemplos(naoCaiu.concat(caiu));
+    }
+
+    return ''
+    + cabecalho("Extrato")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Serviço a serviço 🧾</h2>'
+    +   '<p class="apoio">Cada valor sai da tabela de preços. Nenhum é descontado de você.</p>'
+    +   miolo
+    + '</div>';
+  }
+};
+
+
 /* --------------------------------------------------------------------------
    A BARRA DE ABAS DELA
    -------------------------------------------------------------------------- */
 function abasDaDiarista(ativa){
+  /* Agenda e Ganhos existem desde 12/10/2026 (R26). Antes as duas abas
+     caíam no "em construção". Os ícones também mudaram: escudo é o desenho
+     de "verificada" no app inteiro, e numa aba de dinheiro confundia. */
   const itens = [
-    { id:"inicio",  ic:"casa",   nome:"Início",  tela:"diaristaHome" },
-    { id:"agenda",  ic:"lista",  nome:"Agenda",  tela:"diaristaEmBreve" },
-    { id:"ganhos",  ic:"escudo", nome:"Ganhos",  tela:"diaristaEmBreve" },
-    { id:"perfil",  ic:"pessoa", nome:"Perfil",  tela:"diaristaPerfil" },
+    { id:"inicio",  ic:"casa",       nome:"Início",  tela:"diaristaHome" },
+    { id:"agenda",  ic:"calendario", nome:"Agenda",  tela:"diaristaAgenda" },
+    { id:"ganhos",  ic:"carteira",   nome:"Ganhos",  tela:"diaristaGanhos" },
+    { id:"perfil",  ic:"pessoa",     nome:"Perfil",  tela:"diaristaPerfil" },
   ];
   return '<div class="abas">' + itens.map(function(i){
     return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="ir(\'' + i.tela + '\')">'
