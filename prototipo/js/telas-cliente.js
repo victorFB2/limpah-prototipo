@@ -2314,20 +2314,26 @@ TELAS.chatSuporte = {
    -------------------------------------------------------------------------- */
 TELAS.perfilCliente = {
   html: function(){
-    const c = E.cliente || CLIENTE_EXEMPLO;
-    const favoritas = PROFISSIONAIS.filter(function(p){ return E.favoritos.indexOf(p.id) >= 0; });
+    /* quem está logado: na maquete, a cliente de exemplo; no app, o que o
+       servidor disse (nome, e-mail e telefone da própria pessoa) */
+    const c = FONTE.ler.cliente();
+    /* as favoritas: no app, ainda não existem (null = o item nem aparece) */
+    const favoritas = FONTE.ler.favoritas();
 
     const itens = [
       { ic:"📍", nome:"Meus endereços", tela:"minhasCasas",
-        detalhe: ((c.casas || []).length || 0) + " cadastrado" + (((c.casas || []).length === 1) ? "" : "s") },
+        /* casas: null = ainda não se sabe (no app, elas chegam na entrega da casa) */
+        detalhe: (c.casas === null) ? ""
+          : ((c.casas || []).length + " cadastrado" + (((c.casas || []).length === 1) ? "" : "s")) },
       { ic:"💳", nome:"Formas de pagamento", detalhe:"Pix e cartão" },
-      { ic:"❤️", nome:"Profissionais favoritas", detalhe:favoritas.length + " salvas" },
+      favoritas ? { ic:"❤️", nome:"Profissionais favoritas", detalhe:favoritas.length + " salvas" } : null,
       { ic:"🔔", nome:"Notificações",        detalhe:"Lembretes e avisos" },
       { ic:"🛟", nome:"Ajuda e suporte",     detalhe:"Fale com a gente" },
       { ic:"📄", nome:"Termos e privacidade", detalhe:"" },
     ];
     let lista = "";
     itens.forEach(function(i){
+      if(!i) return;
       lista += '<button class="item" onclick="ir(\'' + idSeguro(i.tela || "chatSuporte") + '\')">'
         + '<div style="font-size:20px;width:28px;text-align:center">' + i.ic + '</div>'
         + '<div class="txt"><b>' + esc(i.nome) + '</b>'
@@ -2345,19 +2351,25 @@ TELAS.perfilCliente = {
     +     '<div style="font-size:13px;color:var(--suave)">' + esc(c.telefone) + '</div>'
     +   '</div>'
     +   lista
-    +   '<button class="btn btn-perigo" style="margin-top:10px" onclick="sairDaConta()">Sair da conta</button>'
-    +   '<div class="rodape-seguro">Limpah · protótipo fictício<br>'
-    +     'Nenhum dado real é usado, cobrado ou consultado.</div>'
+    +   '<button class="btn btn-perigo" style="margin-top:10px" onclick="sairDaConta(this)">Sair da conta</button>'
+    +   erroDoCampo("sair-erro", "perfilCliente", "")
+    +   soNaMaquete('<div class="rodape-seguro">Limpah · protótipo fictício<br>'
+    +     'Nenhum dado real é usado, cobrado ou consultado.</div>')
     + '</div>'
     + abas("perfil");
   }
 };
 
-function sairDaConta(){
-  E.logado = false;
-  E.perfil = null;          // senão o próximo login herda o lado anterior
-  E.tela = "perfil";
-  E.historico = [];
-  salvar();
-  ir("perfil", { limparHistorico:true });
+/* Sair da conta (o cliente, a diarista, e quem ainda não confirmou o
+   celular). Na maquete, esquece quem estava logado. No app, o servidor
+   fecha a sessão e o aparelho esquece tudo; sem internet, a pessoa
+   continua logada e a frase diz isso — no lugar "sair-erro", que toda
+   tela com "Sair da conta" tem. O botão tocado (`botao`, opcional) diz
+   "Enviando…" enquanto vai. */
+function sairDaConta(botao){
+  mostrarErro("sair-erro", "");
+  FONTE.sair({}, function(r){
+    if(!r.ok) return mostrarErro("sair-erro", r.erro);
+    ir("perfil", { limparHistorico:true });
+  }, { botao: botao || null });
 }

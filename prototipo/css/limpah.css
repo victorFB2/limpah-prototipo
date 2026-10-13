@@ -167,6 +167,9 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .btn-principal:disabled{background:#CFC6E6;color:#fff;box-shadow:none;cursor:not-allowed}
 .btn-claro{background:var(--branco);color:var(--roxo);box-shadow:var(--sombra)}
 .btn-contorno{background:transparent;color:var(--roxo);border:1.5px solid var(--roxo-borda)}
+/* desligado (o "Mandar de novo em 40 s", ou "Enviando…"): cinza, para não
+   parecer que o toque vai funcionar */
+.btn-contorno:disabled,.btn-claro:disabled,.btn-texto:disabled{color:var(--suave);border-color:var(--borda);cursor:not-allowed}
 .btn-texto{background:transparent;color:var(--roxo);padding:12px;font-weight:600}
 .btn-perigo{background:transparent;color:var(--vermelho);border:1.5px solid var(--vermelho-claro)}
 .btn+.btn{margin-top:8px}
@@ -182,7 +185,18 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
   font-size:16px;
 }
 .campo textarea{min-height:88px;resize:vertical}
+/* A frase de erro embaixo do campo. Vazia, não ocupa lugar nenhum: a tela
+   fica igual à da imagem até alguma coisa dar errado. */
+.erro-do-campo{color:var(--vermelho);font-size:13px;font-weight:600;line-height:1.45;margin-top:6px}
+.erro-do-campo:empty{display:none}
+#cod-aviso:empty{display:none}
+/* O código do celular: números grandes e espaçados, fáceis de conferir */
+.campo input.codigo{font-size:22px;font-weight:700;letter-spacing:6px;text-align:center}
 .campo input:focus,.campo textarea:focus{outline:none;border-color:var(--roxo)}
+/* Só para ler (o nome e o e-mail no "Corrigir o número"): fundo da tela e
+   texto suave, e o foco não acende o roxo */
+.campo input[readonly]{background:var(--fundo);color:var(--suave)}
+.campo input[readonly]:focus{border-color:var(--borda)}
 .campo input::placeholder,.campo textarea::placeholder{color:#A79FBC}
 
 /* ---------- cartões de escolha ---------- */

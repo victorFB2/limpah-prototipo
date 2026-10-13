@@ -41,6 +41,9 @@ TELAS.splash = {
         desenhar();
         return;
       }
+      /* no app, quem recarregou no meio do cadastro volta ao passo 1, com
+         o que tinha digitado e o pedido da senha de novo (r.aviso) */
+      avisarNaTela(r.aviso);
       ir(r.destino || "perfil", { limparHistorico:true });
     });
   }
@@ -112,27 +115,36 @@ TELAS.login = {
     +   '<h2 class="titulo">Bem-vindo(a) de volta! 👋</h2>'
     +   '<p class="apoio">Faça login para continuar</p>'
 
+    /* o e-mail e a senha já preenchidos são só da maquete (para entrar
+       com um toque); no app, os campos começam vazios */
     +   '<div class="campo"><label>E-mail ou telefone</label>'
-    +     '<input id="log-email" type="text" placeholder="Digite seu e-mail ou telefone" value="ana@exemplo.com"></div>'
+    +     '<input id="log-email" type="text" placeholder="Digite seu e-mail ou telefone" '
+    +       'autocomplete="username" autocapitalize="none" spellcheck="false"'
+    +       soNaMaquete(' value="ana@exemplo.com"') + '>'
+    +     erroDoCampo("log-email-erro", "login", "email_ou_telefone") + '</div>'
     +   '<div class="campo"><label>Senha</label>'
     +     '<div style="position:relative">'
-    +       '<input id="log-senha" type="password" placeholder="Digite sua senha" value="123456" style="padding-right:46px">'
+    +       '<input id="log-senha" type="password" placeholder="Digite sua senha" '
+    +         'autocomplete="current-password"' + soNaMaquete(' value="123456"')
+    +         ' style="padding-right:46px">'
     +       '<button onclick="verSenha(\'log-senha\')" aria-label="Mostrar senha" '
     +         'class="olho">\ud83d\udc41</button>'
-    +     '</div></div>'
+    +     '</div>'
+    +     erroDoCampo("log-erro", "login", "") + '</div>'
 
     +   '<p style="text-align:right;margin:-4px 0 18px">'
     +     '<a href="#" onclick="ir(\'recuperar\');return false;" '
     +     'style="color:var(--roxo);font-size:13px;font-weight:600;text-decoration:none">Esqueceu sua senha?</a></p>'
 
-    +   '<button class="btn btn-principal" onclick="fazerLogin()">Entrar</button>'
+    +   '<button class="btn btn-principal" onclick="fazerLogin(this)">Entrar</button>'
 
     +   '<div style="display:flex;align-items:center;gap:10px;margin:20px 0;color:var(--suave);font-size:12px">'
     +     '<div style="flex:1;height:1px;background:var(--borda)"></div>ou'
     +     '<div style="flex:1;height:1px;background:var(--borda)"></div></div>'
 
-    +   '<button class="btn btn-claro" onclick="fazerLogin()">Entrar com Google</button>'
-    +   '<button class="btn btn-claro" onclick="fazerLogin()">Entrar com Apple</button>'
+    +   '<button class="btn btn-claro" onclick="entrarComOutraConta(\'google\')">Entrar com Google</button>'
+    +   '<button class="btn btn-claro" onclick="entrarComOutraConta(\'apple\')">Entrar com Apple</button>'
+    +   erroDoCampo("log-outra-erro", "login", "outra_conta")
 
     +   '<p class="apoio" style="text-align:center;margin-top:22px">'
     +     'Ainda não tem conta? <a href="#" onclick="ir(\'perfil\');return false;" '
@@ -142,14 +154,45 @@ TELAS.login = {
   }
 };
 
-function fazerLogin(){
-  E.logado = true;
-  E.perfil = E.perfil || "cliente";
-  E.cliente = E.cliente || Object.assign({}, CLIENTE_EXEMPLO, {
-    casas: [Object.assign({}, CASA_EXEMPLO)],
+/* Entrar. Na maquete, qualquer coisa entra (e o testes.js chama isto sem a
+   tela desenhada). No app, o servidor confere o e-mail ou telefone e a
+   senha (R28), e diz para onde ir: o código do celular, os termos novos ou
+   o início. */
+function fazerLogin(botao){
+  mostrarErro("log-email-erro", "");
+  mostrarErro("log-erro", "");
+  mostrarErro("log-outra-erro", "");
+  FONTE.entrar({
+    emailOuTelefone: valorDoCampo("log-email").trim(),
+    senha: valorDoCampo("log-senha"),
+  }, function(r){
+    if(!r.ok) return mostrarErroDoLogin(r);
+    ir(r.destino, { limparHistorico:true });
+  }, { botao: botao });
+}
+
+/* "Entrar com Google" e "Entrar com Apple". Na maquete, entram como o
+   "Entrar". No app ainda não existem (R28): a frase diz que chegam em
+   breve, e como entrar enquanto isso. */
+function entrarComOutraConta(qual){
+  mostrarErro("log-outra-erro", "");
+  FONTE.entrarCom(qual, function(r){
+    if(!r.ok) return mostrarErro("log-outra-erro", r.erro);
+    ir(r.destino, { limparHistorico:true });
   });
-  salvar();
-  ir(E.perfil === "diarista" ? "diaristaHome" : "home", { limparHistorico:true });
+}
+
+function mostrarErroDoLogin(r){
+  if(r.destino) return seguirPeloErro(r);
+  mostrarErro(r.campo === "email_ou_telefone" ? "log-email-erro" : "log-erro", r.erro);
+}
+
+/* Quando a resposta manda a pessoa para outra tela (o cadastro não existe
+   mais, a sessão venceu, falta confirmar o celular...), com a frase que
+   ela vai ler lá. */
+function seguirPeloErro(r){
+  avisarNaTela(r.aviso);
+  ir(r.destino, { limparHistorico:true });
 }
 
 
@@ -187,9 +230,42 @@ TELAS.recuperarEnviado = {
 
 /* --------------------------------------------------------------------------
    04A. CADASTRO DO CLIENTE — 3 etapas
+
+   A conta só é criada no fim (passo 3, com os termos aceitos). Até lá, o
+   que a pessoa digitou fica com a tomada (FONTE): na maquete, como sempre;
+   no app, o nome, o e-mail, o telefone e o endereço ficam guardados no
+   aparelho, e a SENHA fica só na memória — nunca no aparelho. Por isso,
+   quem recarrega a página no meio do cadastro volta ao passo 1 e digita a
+   senha de novo.
+
+   Se o servidor recusar um campo do passo 1 (senha fácil, telefone que já
+   tem conta...) quando a pessoa já está no passo 3, ela volta ao passo 1,
+   com o que tinha digitado e a frase embaixo do campo.
    -------------------------------------------------------------------------- */
+const FRASE_SENHA_DE_NOVO = "Por segurança, digite a senha de novo.";
+
+/* qual lugar de erro, embaixo de qual campo do passo 1 */
+const ERRO_DO_CAMPO_DO_CADASTRO = {
+  nome: "cc-nome-erro", email: "cc-email-erro", telefone: "cc-tel-erro", senha: "cc-senha-erro",
+};
+
+function valorJaDigitado(valor){
+  return valor ? ' value="' + esc(valor) + '"' : "";
+}
+
+/* Quem veio do "Corrigir o número" corrige só o número: o nome e o e-mail
+   aparecem como estão, sem deixar mexer (a mudança seria jogada fora). */
+function soParaLer(sim){
+  return sim ? " readonly" : "";
+}
+
 TELAS.cadastroCliente = {
   html: function(){
+    /* no app, o que a pessoa já tinha digitado (vazio na maquete) */
+    const r = FONTE.ler.rascunhoDoCadastro() || {};
+    const aviso = AVISO_PARA_A_TELA;
+    const pedeASenha = !!(aviso && aviso.tela === "cadastroCliente" && aviso.senhaDeNovo);
+    const fraseDaSenha = avisoDoCampo("cadastroCliente", "senha") || (pedeASenha ? FRASE_SENHA_DE_NOVO : "");
     return ''
     + cabecalho("", { passos:[1,3] })
     + '<div class="corpo">'
@@ -197,14 +273,28 @@ TELAS.cadastroCliente = {
     +   '<p class="apoio">Crie sua conta para contratar serviços incríveis.</p>'
 
     +   '<div class="campo"><label>Nome completo</label>'
-    +     '<input id="cc-nome" type="text" placeholder="Digite seu nome completo"></div>'
+    +     '<input id="cc-nome" type="text" placeholder="Digite seu nome completo" autocomplete="name"'
+    +       valorJaDigitado(r.nome) + soParaLer(r.soONumero) + '>'
+    +     erroDoCampo("cc-nome-erro", "cadastroCliente", "nome") + '</div>'
     +   '<div class="campo"><label>E-mail</label>'
-    +     '<input id="cc-email" type="email" placeholder="Digite seu e-mail"></div>'
+    +     '<input id="cc-email" type="email" placeholder="Digite seu e-mail" autocomplete="email" '
+    +       'autocapitalize="none" spellcheck="false"' + valorJaDigitado(r.email)
+    +       soParaLer(r.soONumero) + '>'
+    +     erroDoCampo("cc-email-erro", "cadastroCliente", "email") + '</div>'
     +   '<div class="campo"><label>Telefone</label>'
-    +     '<input id="cc-tel" type="tel" placeholder="(11) 99999-9999"></div>'
+    +     '<input id="cc-tel" type="tel" placeholder="(11) 99999-9999" autocomplete="tel"'
+    +       valorJaDigitado(r.telefone) + '>'
+    +     erroDoCampo("cc-tel-erro", "cadastroCliente", "telefone") + '</div>'
+    /* o olhinho da senha, como na imagem (04A) */
     +   '<div class="campo"><label>Senha</label>'
-    +     '<input id="cc-senha" type="password" placeholder="Crie uma senha"></div>'
-    +   '<div id="cc-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
+    +     '<div style="position:relative">'
+    +       '<input id="cc-senha" type="password" placeholder="Crie uma senha" '
+    +         'autocomplete="new-password" style="padding-right:46px">'
+    +       '<button onclick="verSenha(\'cc-senha\')" aria-label="Mostrar senha" class="olho">'
+    +         '👁</button>'
+    +     '</div>'
+    +     '<div class="erro-do-campo" id="cc-senha-erro">' + esc(fraseDaSenha) + '</div></div>'
+    +   erroDoCampo("cc-erro", "cadastroCliente", "")
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="cadastroClientePasso1()">Continuar</button>'
@@ -214,21 +304,30 @@ TELAS.cadastroCliente = {
   }
 };
 
+function limparErrosDoCadastro(){
+  avisarNaTela(null);
+  ["cc-nome-erro", "cc-email-erro", "cc-tel-erro", "cc-senha-erro", "cc-erro"].forEach(function(id){
+    mostrarErro(id, "");
+  });
+}
+
 function cadastroClientePasso1(){
   const nome  = valorDoCampo("cc-nome").trim();
   const email = valorDoCampo("cc-email").trim();
+  limparErrosDoCadastro();
   if(nome.length < 3 || email.indexOf("@") < 0){
     mostrarErro("cc-erro", "Preencha ao menos o nome completo e um e-mail válido.");
     return;
   }
-  E.cliente = Object.assign({}, CLIENTE_EXEMPLO, {
+  FONTE.comecarCadastro({
     nome: nome,
-    primeiroNome: nome.split(/\s+/)[0],
     email: email,
-    telefone: valorDoCampo("cc-tel").trim() || CLIENTE_EXEMPLO.telefone,
+    telefone: valorDoCampo("cc-tel").trim(),
+    senha: valorDoCampo("cc-senha"),
+  }, function(r){
+    if(!r.ok) return mostrarErroDoCadastro(r);
+    ir("cadastroClienteEndereco");
   });
-  salvar();
-  ir("cadastroClienteEndereco");
 }
 
 /* O que o cliente fica sabendo sobre quem vê o endereço dele (A13,
@@ -245,7 +344,9 @@ function avisoDePrivacidadeDoEndereco(){
 
 TELAS.cadastroClienteEndereco = {
   html: function(){
-    const en = (E.cliente && E.cliente.endereco) || CLIENTE_EXEMPLO.endereco;
+    /* na maquete, o endereço de exemplo; no app, o que a pessoa já digitou */
+    const en = FONTE.ler.enderecoDoCadastro();
+    const cidadeEstado = [en.cidade, en.estado].filter(function(x){ return !!x; }).join(" - ");
     return ''
     + cabecalho("", { passos:[2,3] })
     + '<div class="corpo">'
@@ -255,7 +356,7 @@ TELAS.cadastroClienteEndereco = {
     +   '<div class="campo"><label>Endereço</label><input id="ce-rua" type="text" value="' + esc(en.rua) + '"></div>'
     +   '<div class="campo"><label>Complemento</label><input id="ce-comp" type="text" value="' + esc(en.complemento) + '"></div>'
     +   '<div class="campo"><label>Bairro</label><input id="ce-bairro" type="text" value="' + esc(en.bairro) + '"></div>'
-    +   '<div class="campo"><label>Cidade e estado</label><input id="ce-cidade" type="text" value="' + esc(en.cidade + " - " + en.estado) + '"></div>'
+    +   '<div class="campo"><label>Cidade e estado</label><input id="ce-cidade" type="text" value="' + esc(cidadeEstado) + '"></div>'
     +   avisoDePrivacidadeDoEndereco()
     + '</div>'
     + '<div class="rodape"><button class="btn btn-principal" onclick="cadastroClientePasso2()">Continuar</button></div>';
@@ -264,7 +365,7 @@ TELAS.cadastroClienteEndereco = {
 
 function cadastroClientePasso2(){
   const cidadeEstado = (valorDoCampo("ce-cidade") || "São Paulo - SP").split("-");
-  E.cliente.endereco = {
+  FONTE.guardarEnderecoDoCadastro({
     apelido: "Casa",
     cep:         valorDoCampo("ce-cep").trim(),
     rua:         valorDoCampo("ce-rua").trim(),
@@ -272,9 +373,9 @@ function cadastroClientePasso2(){
     bairro:      valorDoCampo("ce-bairro").trim(),
     cidade:      (cidadeEstado[0] || "").trim(),
     estado:      (cidadeEstado[1] || "SP").trim(),
-  };
-  salvar();
-  ir("cadastroClienteTermos");
+  }, function(){
+    ir("cadastroClienteTermos");
+  });
 }
 
 TELAS.cadastroClienteTermos = {
@@ -285,47 +386,81 @@ TELAS.cadastroClienteTermos = {
     +   '<h2 class="titulo">Quase lá! ✅</h2>'
     +   '<p class="apoio">Confirme os termos para criar sua conta.</p>'
 
-    +   '<div class="chave" id="chave-termos" onclick="alternarChaveVisual(this)">'
-    +     '<div class="txt"><b>Aceito os termos de uso</b><span>Regras de uso da plataforma e política de cancelamento.</span></div>'
-    +     '<div class="botao"></div></div>'
+    +   chaveDosTermos()
 
-    +   '<div class="chave" id="chave-privacidade" onclick="alternarChaveVisual(this)">'
-    +     '<div class="txt"><b>Aceito a política de privacidade</b><span>Como seus dados são usados e protegidos.</span></div>'
-    +     '<div class="botao"></div></div>'
-
-    +   '<div class="chave" onclick="alternarChaveVisual(this)">'
+    /* "Quero receber ofertas" é outro consentimento (LGPD) e ainda não é
+       guardado: no app ele não aparece, para não prometer o que não existe */
+    +   soNaMaquete('<div class="chave" onclick="alternarChaveVisual(this)">'
     +     '<div class="txt"><b>Quero receber ofertas</b><span>Opcional. Você pode desativar quando quiser.</span></div>'
-    +     '<div class="botao"></div></div>'
+    +     '<div class="botao"></div></div>')
 
-    +   '<div class="aviso verde">🛡️<div><b>Segurança é prioridade</b>'
-    +     'Todas as diaristas passam por verificação de documentos e antecedentes.</div></div>'
-    +   '<div id="ct-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
+    /* Só na maquete: no app, esta frase espera a verificação estar ligada
+       (um teste do app confere). */
+    +   soNaMaquete('<div class="aviso verde">🛡️<div><b>Segurança é prioridade</b>'
+    +     'Todas as diaristas passam por verificação de documentos e antecedentes.</div></div>')
+    +   erroDoCampo("ct-erro", "cadastroClienteTermos", "")
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="criarContaCliente()">Criar minha conta</button></div>';
+    + '<div class="rodape"><button class="btn btn-principal" onclick="criarContaCliente(this)">Criar minha conta</button></div>';
   }
 };
+
+/* As duas chaves dos documentos: no fim do cadastro e na tela "os termos
+   mudaram". */
+function chaveDosTermos(){
+  return ''
+  + '<div class="chave" id="chave-termos" onclick="alternarChaveVisual(this)">'
+  +   '<div class="txt"><b>Aceito os termos de uso</b><span>Regras de uso da plataforma e política de cancelamento.</span></div>'
+  +   '<div class="botao"></div></div>'
+
+  + '<div class="chave" id="chave-privacidade" onclick="alternarChaveVisual(this)">'
+  +   '<div class="txt"><b>Aceito a política de privacidade</b><span>Como seus dados são usados e protegidos.</span></div>'
+  +   '<div class="botao"></div></div>';
+}
 
 /* Liga/desliga visual de uma chave, sem mexer no estado geral. */
 function alternarChaveVisual(elemento){
   elemento.classList.toggle("ligada");
 }
 
-function criarContaCliente(){
+/* Cria a conta. Na maquete, na hora. No app, o servidor confere tudo de
+   novo e manda o código pelo WhatsApp; a próxima tela é a do código. */
+function criarContaCliente(botao){
   const t = chaveLigada("chave-termos");
   const p = chaveLigada("chave-privacidade");
+  mostrarErro("ct-erro", "");
   if(!t || !p){
     mostrarErro("ct-erro", "Para continuar, aceite os termos de uso e a política de privacidade.");
     return;
   }
-  E.logado = true;
-  E.perfil = "cliente";
-  salvar();
-  ir("boasVindas", { limparHistorico:true });
+  FONTE.criarConta({ papel:"cliente", aceitoOsTermos:t, aceitoAPrivacidade:p }, function(r){
+    if(!r.ok) return mostrarErroDoCadastro(r);
+    ir(r.destino, { limparHistorico:true });
+  }, { botao: botao });
+}
+
+/* A frase de erro do cadastro, no lugar certo. Campo do passo 1 recusado
+   quando a pessoa já está em outro passo: volta ao passo 1, com o que ela
+   tinha digitado e a frase embaixo do campo. A senha, ela digita de novo. */
+function mostrarErroDoCadastro(r){
+  if(r.destino) return seguirPeloErro(r);
+  const lugar = ERRO_DO_CAMPO_DO_CADASTRO[r.campo];
+  if(!lugar) return mostrarErro(E.tela === "cadastroCliente" ? "cc-erro" : "ct-erro", r.erro);
+  if(E.tela === "cadastroCliente") return mostrarErro(lugar, r.erro);
+  voltarAoPasso1DoCadastro(r);
+}
+
+function voltarAoPasso1DoCadastro(r){
+  /* o "‹" do passo 1 volta para onde estava antes do cadastro, e não para
+     o passo 3 */
+  const i = E.historico.lastIndexOf("cadastroCliente");
+  if(i >= 0) E.historico = E.historico.slice(0, i);
+  avisarNaTela({ tela:"cadastroCliente", campo:r.campo, erro:r.erro, senhaDeNovo:r.campo !== "senha" });
+  ir("cadastroCliente", { semHistorico:true });
 }
 
 TELAS.boasVindas = {
   html: function(){
-    const nome = (E.cliente && E.cliente.primeiroNome) || "por aqui";
+    const nome = FONTE.ler.cliente().primeiroNome || "por aqui";
     return ''
     + '<div class="centro">'
     +   '<div class="circulo-ok">✓</div>'
@@ -335,6 +470,175 @@ TELAS.boasVindas = {
     + '<div class="rodape"><button class="btn btn-principal" onclick="ir(\'home\',{limparHistorico:true})">Ir para o início</button></div>';
   }
 };
+
+
+/* --------------------------------------------------------------------------
+   O CÓDIGO DO CELULAR (tela nova, do app de verdade)
+
+   Depois de criar a conta, a pessoa digita o código de 6 números que chega
+   pelo WhatsApp. Só depois disso a conta pode mudar alguma coisa (pedir,
+   cadastrar casa). O mesmo vale para quem entra numa conta que ainda não
+   confirmou o celular.
+
+   "Mandar de novo" só depois de 1 minuto (quem diz quanto falta é a tomada:
+   no app, o servidor). O relógio da tela só mexe no botão, sem redesenhar:
+   redesenhar apagaria o código que a pessoa está digitando.
+
+   Na maquete, qualquer código de 6 números serve.
+   -------------------------------------------------------------------------- */
+const FRASE_DO_CODIGO_MAL_DIGITADO = "O código tem 6 números. Confira e digite de novo.";
+
+TELAS.codigoCelular = {
+  html: function(){
+    const c = FONTE.ler.confirmacao();
+    const falta = c.segundosParaMandarDeNovo;
+    return ''
+    + cabecalho("", { semVoltar:true })
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Confirme seu celular 📱</h2>'
+    +   '<p class="apoio">Mandamos um código de 6 números pelo WhatsApp para '
+    +     (c.telefone ? '<b>' + esc(c.telefone) + '</b>' : 'o seu celular') + '.'
+    /* quem digitou o número errado volta ao passo 1 para corrigir (sem
+       isto, ficava presa: o código novo ia de novo ao número errado) */
+    +     (c.podeCorrigirONumero ? ' Número errado? <a href="#" onclick="corrigirONumero();return false;" '
+    +       'style="color:var(--roxo);font-weight:700;text-decoration:none">Corrigir o número</a>' : '')
+    +   '</p>'
+    +   '<div class="campo"><label>Código</label>'
+    +     '<input id="cod-codigo" class="codigo" type="text" inputmode="numeric" '
+    +       'autocomplete="one-time-code" maxlength="7" placeholder="000000">'
+    +     erroDoCampo("cod-erro", "codigoCelular", "codigo") + '</div>'
+    +   '<p class="ajuda" id="cod-aviso">' + esc(c.aviso) + '</p>'
+    +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+    +     '<div>Qualquer código de 6 números serve. Também dá para ver a tela de quem '
+    +     'precisa aceitar os termos de novo, quando eles mudam.</div>'
+    +     '<button class="btn btn-contorno" onclick="ir(\'termosNovos\')">Ver a tela dos termos novos</button></div>')
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="confirmarCodigo(this)">Confirmar</button>'
+    +   '<button class="btn btn-contorno" id="cod-reenviar" onclick="mandarCodigoDeNovo(this)"'
+    +     (falta > 0 ? ' disabled' : '') + '>' + esc(textoDoMandarDeNovo(falta)) + '</button>'
+    +   botaoDeSair("codigoCelular")
+    + '</div>';
+  },
+  aoEntrar: function(){
+    FALTAVA_PARA_MANDAR = FONTE.ler.confirmacao().segundosParaMandarDeNovo;
+    repetir(atualizarMandarDeNovo, 1000);
+  }
+};
+
+function textoDoMandarDeNovo(falta){
+  return falta > 0 ? "Mandar de novo em " + falta + " s" : "Mandar de novo";
+}
+
+/* Quanto faltava no último toque do relógio. O botão só é ligado na
+   passagem de "falta" para "pode": enquanto o pedido está indo ("Enviando…"),
+   o relógio não mexe nele. */
+let FALTAVA_PARA_MANDAR = 0;
+
+function atualizarMandarDeNovo(){
+  const botao = document.getElementById("cod-reenviar");
+  if(!botao) return;
+  const falta = FONTE.ler.confirmacao().segundosParaMandarDeNovo;
+  if(falta > 0){
+    botao.disabled = true;
+    botao.textContent = textoDoMandarDeNovo(falta);
+  } else if(FALTAVA_PARA_MANDAR > 0){
+    botao.disabled = false;
+    botao.textContent = textoDoMandarDeNovo(0);
+  }
+  FALTAVA_PARA_MANDAR = falta;
+}
+
+function confirmarCodigo(botao){
+  const codigo = valorDoCampo("cod-codigo").replace(/[\s.\-]/g, "");
+  mostrarErro("cod-erro", "");
+  if(!/^[0-9]{6}$/.test(codigo)){
+    mostrarErro("cod-erro", FRASE_DO_CODIGO_MAL_DIGITADO);
+    return;
+  }
+  FONTE.confirmarCelular({ codigo: codigo }, function(r){
+    if(!r.ok) return mostrarErroDoCodigo(r);
+    ir(r.destino, { limparHistorico:true });
+  }, { botao: botao });
+}
+
+/* Na resposta, o relógio do botão volta a contar sozinho (no próximo
+   segundo), sem redesenhar a tela. */
+function mandarCodigoDeNovo(botao){
+  mostrarErro("cod-erro", "");
+  mostrarErro("cod-aviso", "");
+  FONTE.reenviarCodigo({}, function(r){
+    if(!r.ok) return mostrarErroDoCodigo(r);
+    if(r.destino) return ir(r.destino, { limparHistorico:true });
+    mostrarErro("cod-aviso", r.aviso || "Pronto! Mandamos um código novo.");
+  }, { botao: botao });
+}
+
+function mostrarErroDoCodigo(r){
+  if(r.destino) return seguirPeloErro(r);
+  mostrarErro("cod-erro", r.erro);
+}
+
+/* "Número errado? Corrigir o número": de volta ao passo 1, com o nome, o
+   e-mail e o número de antes, e a senha para digitar de novo. O "‹" de lá
+   volta para esta tela. Se ela deixar o mesmo número, o fim do cadastro
+   volta para cá, sem criar outra conta. */
+function corrigirONumero(){
+  mostrarErro("cod-erro", "");
+  FONTE.corrigirNumero({}, function(r){
+    if(!r.ok) return mostrarErro("cod-erro", r.erro);
+    avisarNaTela(r.aviso);
+    ir(r.destino);
+  });
+}
+
+
+/* --------------------------------------------------------------------------
+   OS TERMOS MUDARAM (tela nova, do app de verdade)
+
+   Quando o texto dos Termos de Uso ou da Política de Privacidade muda, a
+   pessoa aceita a versão nova antes de continuar. Sem aceitar, ela pode
+   sair da conta.
+   -------------------------------------------------------------------------- */
+TELAS.termosNovos = {
+  html: function(){
+    return ''
+    + cabecalho("", { semVoltar:true })
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Atualizamos nossos termos 📄</h2>'
+    +   '<p class="apoio">Para continuar usando o Limpah, confirme que você aceita a versão nova.</p>'
+    +   chaveDosTermos()
+    +   erroDoCampo("tn-erro", "termosNovos", "")
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="aceitarTermosNovos(this)">Aceitar e continuar</button>'
+    +   botaoDeSair("termosNovos")
+    + '</div>';
+  }
+};
+
+/* O "Sair da conta" das telas sem as abas (o código, os termos novos): um
+   botão só de texto, que diz "Enviando…" enquanto vai, e o lugar da frase
+   de quando não deu para sair (sem internet). */
+function botaoDeSair(tela){
+  return '<button class="btn btn-texto" onclick="sairDaConta(this)">Sair da conta</button>'
+       + erroDoCampo("sair-erro", tela, "sair");
+}
+
+function aceitarTermosNovos(botao){
+  const t = chaveLigada("chave-termos");
+  const p = chaveLigada("chave-privacidade");
+  mostrarErro("tn-erro", "");
+  if(!t || !p){
+    mostrarErro("tn-erro", "Para continuar, aceite os termos de uso e a política de privacidade.");
+    return;
+  }
+  FONTE.aceitarTermos({ aceitoOsTermos:t, aceitoAPrivacidade:p }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("tn-erro", r.erro);
+    ir(r.destino, { limparHistorico:true });
+  }, { botao: botao });
+}
 
 
 /* --------------------------------------------------------------------------
@@ -373,7 +677,7 @@ TELAS.cadastroDiarista = {
   }
 };
 
-/* O que ainda não existe do lado dela não pode dar em nada: esta tela diz
+/* Botão do lado dela sem tela própria não pode dar em nada: esta tela diz
    que está sendo construído e devolve a pessoa para a home (regra: sem becos).
 
    Até 12/10/2026 ela respondia pelas abas Agenda e Ganhos; essas telas

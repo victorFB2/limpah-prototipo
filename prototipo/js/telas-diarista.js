@@ -2043,8 +2043,9 @@ TELAS.diaristaPerfil = {
     +     '<div class="txt"><b>Falar com o suporte</b><span>Uma pessoa responde</span></div>'
     +     '<div class="seta">›</div></button>'
 
-    +   '<button class="btn btn-perigo" style="margin-top:18px" onclick="sairDaConta()">'
+    +   '<button class="btn btn-perigo" style="margin-top:18px" onclick="sairDaConta(this)">'
     +     'Sair da conta</button>'
+    +   erroDoCampo("sair-erro", "diaristaPerfil", "")
     + '</div>'
     + abasDaDiarista("perfil");
   }
@@ -2103,8 +2104,7 @@ function momentoDoServico(s, hora){
 
 /* Serviço que já passou SAI da agenda e vai para os ganhos — escolha
    PROVISÓRIA (A8). No app real quem diz "terminou" é a tela de concluir o
-   serviço (Bloco 5), que ainda não existe; no protótipo, acabou a janela,
-   acabou o serviço. */
+   serviço (Bloco 5); no protótipo, acabou a janela, acabou o serviço. */
 function servicoJaTerminou(s){ return momentoDoServico(s, s.fim) <= relogioDaAgenda(); }
 
 function servicoAcontecendoAgora(s){

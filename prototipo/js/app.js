@@ -154,6 +154,11 @@ function reiniciarPrototipo(){
    Na maquete é só um contador. */
 let NAVEGACAO = 0;
 
+/* No app, a tela em que o aparelho estava quando o app foi fechado ou
+   recarregado (o arranque sempre recomeça pela splash). A tomada do app
+   usa isto para devolver ao cadastro quem recarregou no meio dele. */
+let TELA_ANTES_DE_ABRIR = null;
+
 function ir(nome, opcoes){
   opcoes = opcoes || {};
   if(!TELAS[nome]){
@@ -185,8 +190,12 @@ function ir(nome, opcoes){
    está sempre liberada. Na maquete toda tela está liberada: nada muda. */
 function telaInicialDeQuemEstaUsando(){
   if(!E.logado) return "perfil";
-  const inicio = (E.perfil === "diarista") ? "diaristaHome" : "home";
-  return FONTE.ler.telaLiberada(inicio) ? inicio : "perfil";
+  /* No app, enquanto o início não está ligado, vale o perfil da pessoa,
+     que tem o "Sair da conta"; e, sem ele também, a escolha de perfil. */
+  const opcoes = (E.perfil === "diarista") ? ["diaristaHome", "diaristaPerfil"]
+                                           : ["home", "perfilCliente"];
+  const liberada = opcoes.find(function(t){ return FONTE.ler.telaLiberada(t); });
+  return liberada || "perfil";
 }
 
 function voltar(){
@@ -206,7 +215,11 @@ let ultimaTelaDesenhada = null;
 
 /* No app, toda tela que ainda não foi ligada ao servidor aparece assim (a
    lista das ligadas é TELAS_DO_APP, na tomada do app). Na maquete nunca
-   aparece: lá todas as telas estão liberadas. */
+   aparece: lá todas as telas estão liberadas.
+
+   Quem está logado tem também "Sair da conta". Sem ele, a diarista que
+   entrava no app não tinha como sair: o início dela ainda é este, e
+   nenhuma tela que ela alcança tinha o "Sair" (revisão da 1b). */
 const TELA_EM_BREVE = {
   html: function(){
     return '<div class="centro">'
@@ -216,6 +229,8 @@ const TELA_EM_BREVE = {
          + '</div>'
          + '<div class="rodape">'
          +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button>'
+         +   (E.logado ? '<button class="btn btn-texto" onclick="sairDaConta(this)">Sair da conta</button>'
+                       + '<div class="erro-do-campo" id="sair-erro"></div>' : '')
          + '</div>';
   }
 };
@@ -230,10 +245,44 @@ function htmlDaTela(nome){
   return FONTE.ler.telaLiberada(nome) ? TELAS[nome].html() : TELA_EM_BREVE.html();
 }
 
+/* --------------------------------------------------------------------------
+   A FRASE QUE UMA TELA DEIXA PARA OUTRA
+
+   Às vezes a frase de erro é de outra tela: a senha recusada no fim do
+   cadastro aparece embaixo do campo de senha, que fica no começo. Quem
+   decide guarda a frase aqui ({ tela, campo, erro }) e vai para a tela; ela
+   mostra a frase embaixo do campo. Some quando a pessoa sai daquela tela.
+   Na maquete quase nunca aparece: lá nada é recusado pelo servidor.
+   -------------------------------------------------------------------------- */
+let AVISO_PARA_A_TELA = null;
+
+function avisarNaTela(aviso){
+  AVISO_PARA_A_TELA = (aviso && aviso.tela) ? aviso : null;
+}
+
+function avisoDoCampo(tela, campo){
+  const a = AVISO_PARA_A_TELA;
+  return (a && a.tela === tela && (a.campo || "") === (campo || "")) ? String(a.erro || "") : "";
+}
+
+/* O lugar da frase de erro, embaixo do campo (vazio, ele não ocupa
+   espaço). `tela` e `campo` dizem qual frase guardada vai nele. */
+function erroDoCampo(id, tela, campo){
+  return '<div class="erro-do-campo" id="' + esc(id) + '">' + esc(avisoDoCampo(tela, campo)) + '</div>';
+}
+
+/* A tomada fica sabendo que a pessoa mudou de tela. Na maquete, nada
+   acontece; no app, quem sai do cadastro sem terminar não deixa o que
+   digitou guardado no aparelho (fonte-servidor.js, mudouDeTela). */
+function avisarATomadaDaTroca(de, para){
+  FONTE.mudouDeTela(de, para);
+}
+
 function desenhar(){
   let tela = TELAS[E.tela];
   if(!tela) return;
   if(!FONTE.ler.telaLiberada(E.tela)) tela = TELA_EM_BREVE;
+  if(AVISO_PARA_A_TELA && AVISO_PARA_A_TELA.tela !== E.tela) AVISO_PARA_A_TELA = null;
   pararRelogios();                 // nenhum contador de uma tela antiga sobrevive
 
   const palco = document.getElementById("palco");
@@ -254,6 +303,9 @@ function desenhar(){
      jogava a lista de volta para o topo. */
   const mesmaTela = (ultimaTelaDesenhada === E.tela);
   if(!mesmaTela) NAVEGACAO++;      // o voltar() chega aqui sem passar pelo ir()
+  /* antes de desenhar: a tela nova já aparece com o que a tomada decidiu
+     (no app, quem saiu do cadastro sem terminar não deixa nada guardado) */
+  if(!mesmaTela && ultimaTelaDesenhada) avisarATomadaDaTroca(ultimaTelaDesenhada, E.tela);
   /* .corpo é a rolagem das telas comuns; .miolo é a ficha do alerta de tela
      cheia, que rola por dentro (12/10/2026: a ficha voltava ao topo). */
   const ROLAVEIS = [".corpo", ".miolo"];
@@ -680,6 +732,7 @@ if(typeof FONTE === "undefined"){
     /* No app, quem diz se há alguém logado é o servidor, não o que ficou
        guardado no aparelho: começa sempre pela splash, que pergunta. Sem
        isso, o app desenharia a tela guardada sem nada do servidor. */
+    TELA_ANTES_DE_ABRIR = E.tela;
     E.tela = "splash";
     E.historico = [];
     E.logado = false;      // só o servidor diz que está (FONTE.arranque)
