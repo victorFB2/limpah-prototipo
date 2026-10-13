@@ -70,25 +70,26 @@ function euSouDiarista(){
   return E.diarista;
 }
 
+/* O estado dela vem de estadoDaDiarista() (dados.js), a mesma regra que o
+   servidor segue. Na maquete o celular está sempre confirmado e os termos
+   sempre em dia: as telas desses dois estados ainda não existem aqui. */
+function estadoDela(){
+  return estadoDaDiarista(euSouDiarista(), true, true);
+}
+
 /* Ela pode aceitar serviço? Só depois do Portão 2 inteiro. */
 function podeAceitarServico(){
-  const d = euSouDiarista();
-  return d.situacao === "aprovada";
+  return estadoDela().podeAceitar;
 }
 
 /* Quanto do cadastro está feito, e o que falta agora. */
 function progressoDoCadastro(){
   const d = euSouDiarista();
-  const portao2 = ["documentos", "selfie", "antecedentes", "termos"];
+  const portao2 = ETAPAS_DO_PORTAO_2;
   const feitos2 = portao2.filter(function(x){ return d.feito[x]; }).length;
 
-  /* o Portão 1 vale 20%, o 2 vale 60%, o 3 vale 20% */
-  let pct = 0;
-  if(d.feito.dados)  pct += 10;
-  if(d.feito.regiao) pct += 10;
-  pct += Math.round((feitos2 / portao2.length) * 60);
-  if(d.feito.recebimento) pct += 10;
-  if(d.feito.experiencia) pct += 10;
+  /* o Portão 1 vale 20%, o 2 vale 60%, o 3 vale 20% (a conta mora no dados.js) */
+  const pct = estadoDela().pct;
 
   let falta = "";
   if(d.situacao === "novo" && feitos2 < portao2.length){
@@ -122,8 +123,10 @@ function progressoDoCadastro(){
 function situacaoDaDiarista(){
   const d = euSouDiarista();
   const p = progressoDoCadastro();
-  const portao2 = ["documentos", "selfie", "antecedentes", "termos"];
-  const portao2Pronto = portao2.every(function(x){ return d.feito[x]; });
+  /* a chave vem da regra pura (dados.js); daqui para baixo, só as frases.
+     Recusada e suspensa ainda não têm frases na maquete: caem no último
+     caso, sem poder aceitar. */
+  const estado = estadoDela();
 
   /* O PIX, nos três estados (R26). Antes só a aprovada sabia se tinha chave:
      o extrato de quem estava em análise prometia "cai em até 1 dia útil" a
@@ -153,11 +156,11 @@ function situacaoDaDiarista(){
   };
 
   /* APROVADA — pode trabalhar */
-  if(d.situacao === "aprovada"){
+  if(estado.chave === "aprovada"){
     const faltaReceber = !temPix;
     return Object.assign({
       chave: "aprovada",
-      podeAceitar: true,
+      podeAceitar: estado.podeAceitar,
       /* na faixa do topo */
       faixaTitulo: faltaReceber ? "Falta onde você recebe" : "",
       faixaFrase:  faltaReceber ? "sem isso o dinheiro não tem para onde ir" : "",
@@ -193,7 +196,7 @@ function situacaoDaDiarista(){
   }
 
   /* EM ANÁLISE — mandou tudo, espera a gente */
-  if(d.situacao === "analise" || portao2Pronto){
+  if(estado.chave === "analise"){
     return Object.assign({
       chave: "analise",
       podeAceitar: false,
@@ -300,7 +303,7 @@ function faixaDoCadastro(){
      em análise sem faixa nenhuma: completo, esperando, e sem saber disso. */
   if(!e.faixaTitulo) return "";
 
-  return '<button class="faixa-cadastro" onclick="ir(\'' + e.faixaDestino + '\')">'
+  return '<button class="faixa-cadastro" onclick="ir(\'' + idSeguro(e.faixaDestino) + '\')">'
     +   '<div class="txt">'
     +     '<b>' + esc(e.faixaTitulo) + '</b>'
     +     (e.faixaFrase ? '<span>' + esc(e.faixaFrase) + '</span>' : "")
@@ -347,10 +350,10 @@ function interruptorTravado(){
 /* A tela de dados já existe em telas-acesso.js (cadastroDiarista).
    Aqui ela ganha continuação. */
 function salvarDadosDaDiarista(){
-  const v = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ""; };
+  const v = function(id){ return valorDoCampo(id).trim(); };
   const nome = v("dia-nome");
   if(nome.length < 3){
-    document.getElementById("dia-erro").textContent = "Digite seu nome completo para continuar.";
+    mostrarErro("dia-erro", "Digite seu nome completo para continuar.");
     return;
   }
   const d = euSouDiarista();
@@ -363,15 +366,24 @@ function salvarDadosDaDiarista(){
   ir("diaristaRegiao");
 }
 
+/* Os bairros como estão DESENHADOS na tela agora. O botão leva a POSIÇÃO
+   do bairro nesta lista, nunca o nome: o nome vem de fora do código e pode
+   ter apóstrofo ("D'Ávila"). E a posição é lida nesta lista, não numa
+   leitura nova: no app a lista vem do servidor, e se ela mudasse entre o
+   desenho e o toque (recarregou, ganhou um bairro, mudou de ordem), a
+   mesma posição marcaria outro bairro sem aviso. */
+let BAIRROS_NA_TELA = [];
+
 TELAS.diaristaRegiao = {
   html: function(){
     const d = euSouDiarista();
-    const bairros = ["Vila Madalena", "Pinheiros", "Perdizes", "Lapa", "Butantã", "Pompeia"];
+    const bairros = FONTE.ler.bairros();
+    BAIRROS_NA_TELA = bairros.slice();
     let lista = "";
-    bairros.forEach(function(b){
+    bairros.forEach(function(b, i){
       const marcado = d.bairros.indexOf(b) >= 0;
       lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
-        + 'onclick="alternarBairro(\'' + b + '\')">'
+        + 'onclick="alternarBairro(' + Number(i) + ')">'
         + '<div class="txt"><b>' + esc(b) + '</b></div>'
         + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
     });
@@ -401,7 +413,9 @@ TELAS.diaristaRegiao = {
   }
 };
 
-function alternarBairro(b){
+function alternarBairro(posicao){
+  const b = BAIRROS_NA_TELA[Number(posicao)];
+  if(!b) return;
   const d = euSouDiarista();
   const i = d.bairros.indexOf(b);
   if(i >= 0) d.bairros.splice(i, 1); else d.bairros.push(b);
@@ -421,60 +435,6 @@ function terminarPortaoUm(){
 /* --------------------------------------------------------------------------
    A HOME DELA — com oportunidades reais e cadeado
    -------------------------------------------------------------------------- */
-
-/* Oportunidades fictícias, mas com preço calculado pela tabela DE VERDADE
-   (calcularPedido). É isso que faz o Portão 1 valer a pena: ela vê o valor
-   real que vai receber, não uma promessa de "ótimas oportunidades".
-
-   Se a tabela de preços mudar, esta tela muda junto — nenhum valor aqui é
-   escrito à mão.
-
-   `rua` é o endereço completo, FICTÍCIO. Ele mora aqui e só aparece na
-   agenda, depois do aceite (R18) E a partir das 18h da véspera (A13) — quem
-   decide é enderecoLiberado(), no dados.js. Os testes 21 e 24 conferem.
-
-   `cliente` é o nome inteiro, FICTÍCIO, como o sobrenome das PROFISSIONAIS:
-   fica aqui e nunca chega à agenda dela. O aceite guarda só "Carla M." —
-   o mesmo cuidado que o cliente tem com ela (A18, item 1; teste 26).
-
-   `observacoes` é o recado do cliente, texto livre. Só aparece junto com a
-   rua (A18, item 3): o da Butantã mostra por quê — ele traz o apartamento. */
-const OPORTUNIDADES = [
-  { emDias:1, periodo:"manha", bairro:"Vila Madalena", km:2.1, rua:"Rua dos Ipês, 48",
-    cliente:"Carla Mendes",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1,
-      observacoes:"Tenho um gato bem tranquilo. Os produtos ficam embaixo da pia."}, adicionais:[] } },
-  { emDias:1, periodo:"tarde", bairro:"Pinheiros", km:3.4, rua:"Rua das Acácias, 215",
-    cliente:"Beatriz Lopes",
-    pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:4, banheiros:2,
-      observacoes:"As roupas para passar ficam no cesto da lavanderia."}, adicionais:["passar"] } },
-  { emDias:2, periodo:"manha", bairro:"Perdizes", km:4.8, rua:"Rua Jacarandá, 90",
-    cliente:"Renata Alves",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:5, banheiros:2}, adicionais:[] } },
-  { emDias:2, periodo:"tarde", bairro:"Butantã", km:5.9, rua:"Rua das Orquídeas, 37",
-    cliente:"Patrícia Gomes",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1,
-      observacoes:"É o bloco B, apartamento 32. O porteiro já vai estar avisado."}, adicionais:[] } },
-  { emDias:3, periodo:"manha", bairro:"Lapa", km:4.2, rua:"Rua dos Girassóis, 152",
-    cliente:"Luciana Rocha",
-    pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:2}, adicionais:[] } },
-  { emDias:3, periodo:"tarde", bairro:"Pompeia", km:6.3, rua:"Rua das Hortênsias, 64",
-    cliente:"Sandra Nunes",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
-  { emDias:4, periodo:"tarde", bairro:"Perdizes", km:4.6, rua:"Rua Manacá, 301",
-    cliente:"Fernanda Costa",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:2}, adicionais:["geladeira"] } },
-  /* Acrescentada em 12/10/2026 (R26): é a única que cabe no MESMO dia de
-     outra (amanhã de manhã + amanhã à noite = 8h). Sem ela, a demonstração
-     nunca mostraria a agenda chegando ao teto do dia. */
-  { emDias:1, periodo:"noite", bairro:"Pinheiros", km:2.8, rua:"Rua dos Cedros, 19",
-    cliente:"Juliana Prado",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
-];
-
-/* A cidade das oportunidades fictícias, para o link do mapa não cair numa
-   Rua dos Ipês de outro estado. No app de verdade vem da casa cadastrada. */
-const CIDADE_DAS_OPORTUNIDADES = "São Paulo - SP";
 
 const NOME_DA_LIMPEZA = { padrao:"Limpeza padrão", completa:"Limpeza completa" };
 
@@ -571,7 +531,7 @@ TELAS.diaristaHome = {
     lista.forEach(function(o){
       cards += '<button class="cartao" style="width:100%;text-align:left;border:0;font-family:inherit;'
         + 'cursor:pointer;display:block;' + (pode ? "" : "position:relative") + '" '
-        + 'onclick="abrirOportunidade(' + o.id + ')">'
+        + 'onclick="abrirOportunidade(' + Number(o.id) + ')">'
         +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
         +     '<div style="flex:1;min-width:0">'
         +       '<b style="font-size:15px">' + esc(o.quando) + ' · ' + esc(o.janela) + '</b>'
@@ -783,7 +743,7 @@ TELAS.diaristaCadastro = {
     const est = situacaoDaDiarista();
 
     function passo(feito, titulo, detalhe, destino, bloqueado){
-      return '<button class="item" ' + (bloqueado ? "disabled" : 'onclick="ir(\'' + destino + '\')"') + '>'
+      return '<button class="item" ' + (bloqueado ? "disabled" : 'onclick="ir(\'' + idSeguro(destino) + '\')"') + '>'
         + '<div style="width:26px;color:' + (feito ? "var(--verde)" : "var(--roxo)") + '">'
         +   (feito ? icone("escudo", 20) : '<span style="font-size:19px">○</span>') + '</div>'
         + '<div class="txt"><b>' + esc(titulo) + '</b><span>' + esc(detalhe) + '</span></div>'
@@ -978,9 +938,8 @@ TELAS.diaristaTermos = {
 };
 
 function aceitarTermosDaDiarista(){
-  const c = document.getElementById("chave-termos-dia");
-  if(!c || !c.classList.contains("ligada")){
-    document.getElementById("dia-termos-erro").textContent = "Para continuar, aceite os termos.";
+  if(!chaveLigada("chave-termos-dia")){
+    mostrarErro("dia-termos-erro", "Para continuar, aceite os termos.");
     return;
   }
   marcarEtapa("termos");
@@ -1065,10 +1024,9 @@ TELAS.diaristaRecebimento = {
    e manda o dinheiro para o Pix — "cadastrar" sem chave nenhuma seria
    prometer um dinheiro que não tem para onde ir. */
 function salvarChavePix(){
-  const campo = document.getElementById("dia-pix");
-  if(!campo || !campo.value.trim()){
-    const erro = document.getElementById("dia-pix-erro");
-    if(erro) erro.textContent = "Falta a chave Pix. Pode ser seu CPF, telefone ou e-mail.";
+  if(!valorDoCampo("dia-pix").trim()){
+    mostrarErro("dia-pix-erro", "Falta a chave Pix. Pode ser seu CPF, telefone ou e-mail.");
+    const campo = document.getElementById("dia-pix");
     if(campo) campo.focus();
     return;
   }
@@ -1883,7 +1841,7 @@ TELAS.diaristaAlerta = {
     }
 
     const o = oportunidadePorId(E.alerta.oportunidadeId);
-    if(!o) return TELAS.diaristaHome.html();
+    if(!o) return htmlDaTela("diaristaHome");
 
     /* o segundo a segundo NÃO passa por aqui: ver atualizarRelogioDoAlertaNaTela() */
     const restam = E.alerta.restam;
@@ -1968,7 +1926,7 @@ TELAS.diaristaDisponibilidade = {
       let botoes = "";
       PERIODOS.forEach(function(p){
         const on = tudoAberto || marcados.indexOf(p.id) >= 0;
-        botoes += '<button onclick="alternarPeriodoDoDia(' + dia + ',\'' + p.id + '\')" '
+        botoes += '<button onclick="alternarPeriodoDoDia(' + Number(dia) + ',\'' + idSeguro(p.id) + '\')" '
           + 'style="flex:1;min-height:44px;border-radius:10px;font-family:inherit;font-size:12.5px;'
           + 'font-weight:700;cursor:pointer;border:1.5px solid '
           + (on ? "var(--roxo)" : "var(--borda)") + ';'
@@ -2119,26 +2077,6 @@ const RECORTE_PADRAO = "30";
    a ideia do dono fala em "várias" (TELAS.md, IDEIA GUARDADA). Em Meus
    ganhos ela aparece sempre. Escolha PROVISÓRIA (A10). */
 const MINIMO_DE_DIARIAS_PARA_A_HOME = 2;
-
-/* SERVIÇOS JÁ FEITOS, DE EXEMPLO — escolha PROVISÓRIA (A11).
-
-   Sem eles, "Recebido" e o extrato abririam vazios e não daria para ver como
-   ficam. São fictícios do mesmo jeito que as OPORTUNIDADES: datas contadas a
-   partir de hoje e valores calculados pela tabela de verdade. Só aparecem
-   para quem já foi aprovada (antes disso ela não trabalhou), e as telas
-   dizem que são de exemplo. */
-const SERVICOS_FEITOS_DE_EXEMPLO = [
-  { haDias:2,  periodo:"manha", bairro:"Pinheiros",     km:3.1, rua:"Rua das Paineiras, 77",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1}, adicionais:["geladeira"] } },
-  { haDias:5,  periodo:"tarde", bairro:"Vila Madalena", km:2.4, rua:"Rua dos Ipês, 112",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
-  { haDias:9,  periodo:"manha", bairro:"Perdizes",      km:5.6, rua:"Rua Cambará, 45",
-    pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:1}, adicionais:["passar"] } },
-  { haDias:16, periodo:"manha", bairro:"Lapa",          km:4.0, rua:"Rua dos Girassóis, 18",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
-  { haDias:23, periodo:"tarde", bairro:"Pompeia",       km:6.1, rua:"Rua das Hortênsias, 230",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:["armarios"] } },
-];
 
 
 /* --- datas e horas ------------------------------------------------------- */
@@ -2508,7 +2446,7 @@ function blocoAntesDeTrabalhar(e, nosGanhos){
   return '<div class="aviso roxo">' + icone("escudo", 18)
     +   '<div><b>' + esc(titulo) + '</b>' + esc(frase) + '</div></div>'
     + '<button class="btn ' + (e.chave === "analise" ? "btn-contorno" : "btn-principal") + '" '
-    +   'onclick="ir(\'' + e.trabalhoDestino + '\')">' + esc(e.trabalhoBotao) + '</button>';
+    +   'onclick="ir(\'' + idSeguro(e.trabalhoDestino) + '\')">' + esc(e.trabalhoBotao) + '</button>';
 }
 
 /* Sem Pix: o aviso e o caminho para a chave. Lê só a tabela de estados
@@ -2519,7 +2457,7 @@ function avisoDoPix(e, esperando){
   if(!e.pixFalta) return "";
   const titulo = esperando > 0 ? moeda(esperando) + " " + e.pixEsperando : e.pixTitulo;
   return '<div class="aviso ambar">🔑<div><b>' + esc(titulo) + '</b>' + esc(e.pixFrase) + '</div></div>'
-    + '<button class="btn btn-principal" onclick="ir(\'' + e.pixDestino + '\')">'
+    + '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(e.pixDestino) + '\')">'
     +   esc(e.pixBotao) + '</button>';
 }
 
@@ -2541,8 +2479,8 @@ function avisoACaminho(lista){
     + '</div></div>';
 }
 
-/* O antipadrão nº 2 da concorrência é cobrar ~R$ 28 por mês da diarista
-   pelo uso do app. Aqui não — e a tela diz, em vez de deixar ela desconfiar. */
+/* O app não cobra nada dela para trabalhar (antipadrões, Bloco 7 do
+   TELAS.md) — e a tela diz, em vez de deixar ela desconfiar. */
 function avisoSemMensalidade(){
   return '<div class="aviso verde">' + icone("escudo", 18)
     + '<div><b>Sem mensalidade, sem desconto</b>'
@@ -2561,7 +2499,7 @@ function seletorDeRecorte(){
   const atual = recorteAtual();
   return '<div class="recorte">' + RECORTES_DOS_GANHOS.map(function(r){
     return '<button class="' + (r.id === atual.id ? "marcada" : "") + '" '
-      + 'onclick="escolherRecorte(\'' + r.id + '\')">' + esc(r.nome) + '</button>';
+      + 'onclick="escolherRecorte(\'' + idSeguro(r.id) + '\')">' + esc(r.nome) + '</button>';
   }).join("") + '</div>';
 }
 
@@ -2578,11 +2516,13 @@ function kmEscrito(km){ return String(km).replace(".", ",") + " km"; }
    botão dentro de outro o celular não sabe qual apertar.
 
    O número e a data vão limpos para dentro do onclick: são do próprio app,
-   mas um dado estragado com aspas quebraria o toque. */
+   mas um dado estragado com aspas quebraria o toque. O número vai por
+   Number(): fora das aspas, idSeguro() apagaria o ponto e deixaria passar
+   um nome. Número estragado vira NaN, que não acha serviço nenhum (como o
+   "null" de antes). */
 function toqueDoDetalhe(s){
-  const id = Number(s.oportunidadeId);
   const data = String(s.data || "").replace(/[^0-9-]/g, "");
-  return 'abrirServicoDaAgenda(' + (isFinite(id) ? id : "null") + ',\'' + data + '\')';
+  return 'abrirServicoDaAgenda(' + Number(s.oportunidadeId) + ',\'' + idSeguro(data) + '\')';
 }
 
 /* Quantas mensagens do cliente deste serviço ela ainda não leu — só com a
@@ -3253,7 +3193,7 @@ function abasDaDiarista(ativa){
     { id:"perfil",  ic:"pessoa",     nome:"Perfil",  tela:"diaristaPerfil" },
   ];
   return '<div class="abas">' + itens.map(function(i){
-    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="ir(\'' + i.tela + '\')">'
+    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="ir(\'' + idSeguro(i.tela) + '\')">'
          + '<span class="ic">' + icone(i.ic, 21) + '</span>' + i.nome + '</button>';
   }).join("") + '</div>';
 }

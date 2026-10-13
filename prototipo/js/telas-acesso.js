@@ -8,6 +8,11 @@
 /* --------------------------------------------------------------------------
    01. SPLASH
    -------------------------------------------------------------------------- */
+/* A frase de quando a splash não conseguiu perguntar ao servidor quem está
+   logado (sem internet, ou o servidor demorou demais). Vazia = carregando.
+   Só acontece no app: a maquete não depende de internet. */
+let SPLASH_SEM_CONEXAO = "";
+
 TELAS.splash = {
   html: function(){
     return ''
@@ -16,20 +21,43 @@ TELAS.splash = {
     +     '<div class="marca">Limpah <span class="brilho">✦</span></div>'
     +     '<div class="slogan">Sua casa bem cuidada,<br>sua vida mais leve.</div>'
     +   '</div>'
-    +   '<div style="margin-top:46px;display:flex;flex-direction:column;align-items:center;gap:12px">'
+    +   (SPLASH_SEM_CONEXAO ? splashSemConexao() :
+         '<div style="margin-top:46px;display:flex;flex-direction:column;align-items:center;gap:12px">'
     +     '<div class="girando"></div>'
     +     '<div style="font-size:12.5px;opacity:.7">Carregando...</div>'
-    +   '</div>'
+    +   '</div>')
     + '</div>';
   },
   aoEntrar: function(){
-    /* Depois de 1,8 segundo vai sozinho para a escolha de perfil.
-       No app real seria aqui que o sistema verifica se já existe sessão salva. */
-    agendar(function(){
-      if(E.tela === "splash") ir(E.logado ? "home" : "perfil", { limparHistorico:true });
-    }, 1800);
+    if(SPLASH_SEM_CONEXAO) return;     // espera o "Tentar de novo"
+    /* Quem diz para onde ir é a tomada (FONTE.arranque). Na maquete, depois
+       de 1,8 segundo, pelo que ficou guardado neste aparelho. No app, o
+       servidor responde se já existe alguém logado. A splash nunca fica
+       presa: sem resposta, diz que está sem conexão e oferece tentar de novo. */
+    FONTE.arranque(function(r){
+      if(E.tela !== "splash") return;
+      if(!r.ok){
+        SPLASH_SEM_CONEXAO = r.erro || "Sem conexão. Confira a internet e toque em Tentar de novo.";
+        desenhar();
+        return;
+      }
+      ir(r.destino || "perfil", { limparHistorico:true });
+    });
   }
 };
+
+function splashSemConexao(){
+  return ''
+  + '<div style="margin-top:46px;display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:320px">'
+  +   '<div style="font-size:14px;line-height:1.5">' + esc(SPLASH_SEM_CONEXAO) + '</div>'
+  +   '<button class="btn btn-claro" onclick="tentarArranqueDeNovo()">Tentar de novo</button>'
+  + '</div>';
+}
+
+function tentarArranqueDeNovo(){
+  SPLASH_SEM_CONEXAO = "";
+  desenhar();
+}
 
 
 /* --------------------------------------------------------------------------
@@ -187,17 +215,17 @@ TELAS.cadastroCliente = {
 };
 
 function cadastroClientePasso1(){
-  const nome  = (document.getElementById("cc-nome").value  || "").trim();
-  const email = (document.getElementById("cc-email").value || "").trim();
+  const nome  = valorDoCampo("cc-nome").trim();
+  const email = valorDoCampo("cc-email").trim();
   if(nome.length < 3 || email.indexOf("@") < 0){
-    document.getElementById("cc-erro").textContent = "Preencha ao menos o nome completo e um e-mail válido.";
+    mostrarErro("cc-erro", "Preencha ao menos o nome completo e um e-mail válido.");
     return;
   }
   E.cliente = Object.assign({}, CLIENTE_EXEMPLO, {
     nome: nome,
     primeiroNome: nome.split(/\s+/)[0],
     email: email,
-    telefone: (document.getElementById("cc-tel").value || "").trim() || CLIENTE_EXEMPLO.telefone,
+    telefone: valorDoCampo("cc-tel").trim() || CLIENTE_EXEMPLO.telefone,
   });
   salvar();
   ir("cadastroClienteEndereco");
@@ -235,13 +263,13 @@ TELAS.cadastroClienteEndereco = {
 };
 
 function cadastroClientePasso2(){
-  const cidadeEstado = (document.getElementById("ce-cidade").value || "São Paulo - SP").split("-");
+  const cidadeEstado = (valorDoCampo("ce-cidade") || "São Paulo - SP").split("-");
   E.cliente.endereco = {
     apelido: "Casa",
-    cep:         (document.getElementById("ce-cep").value    || "").trim(),
-    rua:         (document.getElementById("ce-rua").value    || "").trim(),
-    complemento: (document.getElementById("ce-comp").value   || "").trim(),
-    bairro:      (document.getElementById("ce-bairro").value || "").trim(),
+    cep:         valorDoCampo("ce-cep").trim(),
+    rua:         valorDoCampo("ce-rua").trim(),
+    complemento: valorDoCampo("ce-comp").trim(),
+    bairro:      valorDoCampo("ce-bairro").trim(),
     cidade:      (cidadeEstado[0] || "").trim(),
     estado:      (cidadeEstado[1] || "SP").trim(),
   };
@@ -283,10 +311,10 @@ function alternarChaveVisual(elemento){
 }
 
 function criarContaCliente(){
-  const t = document.getElementById("chave-termos").classList.contains("ligada");
-  const p = document.getElementById("chave-privacidade").classList.contains("ligada");
+  const t = chaveLigada("chave-termos");
+  const p = chaveLigada("chave-privacidade");
   if(!t || !p){
-    document.getElementById("ct-erro").textContent = "Para continuar, aceite os termos de uso e a política de privacidade.";
+    mostrarErro("ct-erro", "Para continuar, aceite os termos de uso e a política de privacidade.");
     return;
   }
   E.logado = true;

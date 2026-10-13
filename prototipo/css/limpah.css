@@ -77,6 +77,33 @@ body{
   #aviso-prototipo{display:none}
 }
 
+/* O app de verdade (a página do servidor, <body class="app-de-verdade">):
+   nunca tem moldura. No celular fica igual ao de cima; no computador, uma
+   coluna da largura de um celular grande, no meio da tela. A maquete não
+   usa esta classe. */
+/* A página é uma coluna da altura da tela: a faixa de aviso (quando há uma)
+   no alto, e a tela do app ocupando o resto. */
+body.app-de-verdade{
+  display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:0;
+  padding:0;min-height:0;height:100vh;height:100dvh;background:var(--fundo);
+}
+.app-de-verdade #telefone{
+  width:100%;max-width:480px;margin:0 auto;
+  flex:1 1 auto;min-height:0;height:auto;max-height:none;border-radius:0;box-shadow:none;
+}
+
+/* A faixa de aviso do app ("Atualizamos o app", "Algo deu errado"). Só o
+   app a cria (rede.js); a maquete nunca. Ela NÃO fica por cima da tela:
+   ocupa o próprio lugar no alto, e a tela desce para baixo dela. Por cima,
+   cobria o "‹" do cabeçalho, e o toque para voltar recarregava a página. */
+.faixa-do-app{
+  position:relative;z-index:1;flex:none;
+  display:block;width:100%;border:0;margin:0;cursor:pointer;font-family:inherit;
+  padding:calc(12px + env(safe-area-inset-top)) 20px 12px;
+  background:var(--roxo);color:#fff;font-size:14px;font-weight:700;line-height:1.4;
+  text-align:center;box-shadow:0 6px 18px rgba(99,56,222,.32);
+}
+
 /* ---------- estrutura de uma tela ---------- */
 .tela{flex:1;min-height:0;display:flex;flex-direction:column;animation:entra .22s ease}
 /* Redesenhar a MESMA tela nao e entrada: e troca de conteudo. Sem isto a

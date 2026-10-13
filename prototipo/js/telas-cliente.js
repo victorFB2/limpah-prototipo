@@ -18,7 +18,7 @@ TELAS.home = {
     let blocoProximo;
     if(proximo){
       const prof = PROFISSIONAIS.find(function(x){ return x.id === proximo.profissionalId; });
-      blocoProximo = '<button class="item" onclick="abrirPedido(\'' + proximo.id + '\')">'
+      blocoProximo = '<button class="item" onclick="abrirPedido(\'' + idSeguro(proximo.id) + '\')">'
         + avatar(prof.nome, prof.cor, "pequeno")
         + '<div class="txt"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
         + '<span>' + esc(dataPorExtenso(proximo.data)) + ' · ' + esc(nomePeriodo(proximo.periodo)) + '</span></div>'
@@ -39,7 +39,7 @@ TELAS.home = {
         + '<a href="#" onclick="trocarAba(\'servicos\');return false;" style="color:var(--roxo);font-weight:600;text-decoration:none;font-size:12.5px">Ver todos</a></div>';
       concluidos.slice(0, 2).forEach(function(p){
         const prof = PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; });
-        blocoRecentes += '<button class="item" onclick="abrirPedido(\'' + p.id + '\')">'
+        blocoRecentes += '<button class="item" onclick="abrirPedido(\'' + idSeguro(p.id) + '\')">'
           + avatar(prof.nome, prof.cor, "pequeno")
           + '<div class="txt"><b>' + esc(p.resumoTexto) + '</b>'
           + '<span>' + esc(dataPorExtenso(p.data)) + ' · Concluído · ' + moeda(p.total) + '</span></div></button>';
@@ -52,7 +52,7 @@ TELAS.home = {
     if(favoritas.length){
       blocoFavoritas = '<div class="rotulo">Suas favoritas ❤️</div><div class="fileira">';
       favoritas.forEach(function(p){
-        blocoFavoritas += '<button onclick="abrirPerfil(' + p.id + ')" '
+        blocoFavoritas += '<button onclick="abrirPerfil(' + Number(p.id) + ')" '
           + 'style="flex:none;width:88px;text-align:center;background:var(--branco);border:0;'
           + 'font-family:inherit;color:var(--texto);cursor:pointer;'
           + 'border-radius:14px;padding:12px 6px;box-shadow:var(--sombra)">'
@@ -106,7 +106,7 @@ TELAS.novoServico = {
     let lista = "";
     CATALOGO.forEach(function(cat){
       if(cat.disponivel){
-        lista += '<button class="opcao" onclick="escolherCategoria(\'' + cat.id + '\')">'
+        lista += '<button class="opcao" onclick="escolherCategoria(\'' + idSeguro(cat.id) + '\')">'
           + '<div class="icone">' + icone(cat.icone, 22) + '</div>'
           + '<div class="txt"><b>' + esc(cat.nome) + '</b><span>' + esc(cat.descricao) + '</span></div>'
           + '<div class="seta">›</div></button>';
@@ -200,7 +200,7 @@ TELAS.escolherCasa = {
     const casas = (E.cliente && E.cliente.casas) || [];
     let lista = "";
     casas.forEach(function(c){
-      lista += cartaoDeCasa(c, "usarCasa('" + c.id + "')");
+      lista += cartaoDeCasa(c, "usarCasa('" + idSeguro(c.id) + "')");
     });
 
     return ''
@@ -246,7 +246,7 @@ TELAS.cadastrarCasa = {
     TIPOS_DE_IMOVEL.forEach(function(t){
       const marcado = (E.casaRascunhoTipo || c.tipoImovel) === t.id;
       tipos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
-        + 'onclick="escolherTipoDeImovel(\'' + t.id + '\')" style="margin-bottom:8px">'
+        + 'onclick="escolherTipoDeImovel(\'' + idSeguro(t.id) + '\')" style="margin-bottom:8px">'
         + '<div class="icone">' + icone(t.icone === "predio" ? "predio" : t.icone, 22) + '</div>'
         + '<div class="txt"><b>' + esc(t.nome) + '</b></div>'
         + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
@@ -301,7 +301,7 @@ TELAS.cadastrarCasa = {
     +   '<button class="btn btn-principal" onclick="salvarCasa()">'
     +     (editando ? "Salvar alterações" : "Salvar e continuar") + '</button>'
     +   (editando && casas.length > 1
-       ? '<button class="btn btn-perigo" onclick="apagarCasa(\'' + editando.id + '\')">Apagar este endereço</button>'
+       ? '<button class="btn btn-perigo" onclick="apagarCasa(\'' + idSeguro(editando.id) + '\')">Apagar este endereço</button>'
        : "")
     + '</div>';
   }
@@ -323,12 +323,11 @@ function contarNaCasa(qual, delta){
 }
 
 function salvarCasa(){
-  const valor = function(id){ const e = document.getElementById(id); return e ? e.value.trim() : ""; };
+  const valor = function(id){ return valorDoCampo(id).trim(); };
   const apelido = valor("casa-apelido");
   const rua = valor("casa-rua");
   if(apelido.length < 2 || rua.length < 3){
-    document.getElementById("casa-erro").textContent =
-      "Preencha ao menos como você chama o lugar e o endereço.";
+    mostrarErro("casa-erro", "Preencha ao menos como você chama o lugar e o endereço.");
     return;
   }
   const cidadeEstado = (valor("casa-cidade") || "São Paulo - SP").split("-");
@@ -385,7 +384,7 @@ TELAS.minhasCasas = {
     const casas = (E.cliente && E.cliente.casas) || [];
     let lista = "";
     casas.forEach(function(c){
-      lista += cartaoDeCasa(c, "editarCasa('" + c.id + "')");
+      lista += cartaoDeCasa(c, "editarCasa('" + idSeguro(c.id) + "')");
     });
     if(!casas.length) lista = '<div class="vazio">Você ainda não cadastrou nenhum endereço.</div>';
 
@@ -426,12 +425,12 @@ TELAS.dataHorario = {
 
     if(temHoje){
       chips += '<button class="chip-data ' + (escolhida === hoje.iso ? "marcada" : "") + '" '
-        + 'onclick="escolherData(\'' + hoje.iso + '\')">'
+        + 'onclick="escolherData(\'' + idSeguro(hoje.iso) + '\')">'
         + '<span>Hoje</span><b>' + esc(hoje.curto) + '</b></button>';
     }
 
     chips += '<button class="chip-data ' + (escolhida === amanha.iso ? "marcada" : "") + '" '
-      + 'onclick="escolherData(\'' + amanha.iso + '\')">'
+      + 'onclick="escolherData(\'' + idSeguro(amanha.iso) + '\')">'
       + '<span>Amanhã</span><b>' + esc(amanha.curto) + '</b></button>';
 
     chips += '<button class="chip-data ' + (ehOutraData ? "marcada" : "") + '" '
@@ -465,7 +464,7 @@ TELAS.dataHorario = {
 
       /* EXCEÇÃO AUTORIZADA Nº 3: os ícones do período. */
       periodos += '<button class="opcao ' + (marcado && serve ? "marcada" : "") + '" '
-        + (serve ? 'onclick="escolherPeriodo(\'' + p.id + '\')"' : "disabled")
+        + (serve ? 'onclick="escolherPeriodo(\'' + idSeguro(p.id) + '\')"' : "disabled")
         + '>'
         + '<div class="icone">' + icone(p.id, 22) + '</div>'
         + '<div class="txt"><b>' + esc(p.nome) + ' · das ' + p.inicio + 'h às '
@@ -538,7 +537,7 @@ TELAS.calendario = {
       if(d.getMonth() !== mesAtual){ mesAtual = d.getMonth(); }
       celulas.push(
         '<button class="dia-calendario" '
-        + (livre ? 'onclick="escolherDataDoCalendario(\'' + iso + '\')"' : "disabled")
+        + (livre ? 'onclick="escolherDataDoCalendario(\'' + idSeguro(iso) + '\')"' : "disabled")
         + ' style="'
         + 'font-weight:' + (marcado ? "800" : "600") + ';cursor:' + (livre ? "pointer" : "default") + ';'
         + 'background:' + (marcado ? "var(--roxo)" : (livre ? "var(--branco)" : "transparent")) + ';'
@@ -604,7 +603,7 @@ TELAS.detalhes = {
         p.opcoes.forEach(function(o){
           const marcado = E.pedido.respostas[p.id] === o.id;
           campos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
-            + 'onclick="responder(\'' + p.id + '\',\'' + o.id + '\')">'
+            + 'onclick="responder(\'' + idSeguro(p.id) + '\',\'' + idSeguro(o.id) + '\')">'
             + '<div class="icone">' + (o.icone ? icone(o.icone, 22) : "") + '</div>'
             + '<div class="txt"><b>' + esc(o.nome) + '</b><span>' + esc(o.detalhe || "") + '</span></div>'
             + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
@@ -616,15 +615,15 @@ TELAS.detalhes = {
         campos += '<div class="contador">'
           + '<span class="nome">' + esc(p.rotulo) + '</span>'
           + '<span class="controles">'
-          +   '<button ' + (v <= p.min ? "disabled" : "") + ' onclick="contar(\'' + p.id + '\',-1)">−</button>'
+          +   '<button ' + (v <= p.min ? "disabled" : "") + ' onclick="contar(\'' + idSeguro(p.id) + '\',-1)">−</button>'
           +   '<span class="valor">' + v + '</span>'
-          +   '<button ' + (v >= p.max ? "disabled" : "") + ' onclick="contar(\'' + p.id + '\',1)">+</button>'
+          +   '<button ' + (v >= p.max ? "disabled" : "") + ' onclick="contar(\'' + idSeguro(p.id) + '\',1)">+</button>'
           + '</span></div>';
       }
 
       if(p.tipo === "texto"){
         campos += '<div class="campo"><textarea id="txt-' + p.id + '" placeholder="' + esc(p.exemplo || "") + '" '
-          + 'oninput="anotar(\'' + p.id + '\', this.value)">' + esc(E.pedido.respostas[p.id] || "") + '</textarea></div>';
+          + 'oninput="anotar(\'' + idSeguro(p.id) + '\', this.value)">' + esc(E.pedido.respostas[p.id] || "") + '</textarea></div>';
       }
 
       if(p.ajuda) campos += '<p class="ajuda">' + esc(p.ajuda) + '</p>';
@@ -825,7 +824,7 @@ TELAS.adicionais = {
       }
 
       lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
-        + 'style="flex-direction:column;align-items:stretch" onclick="alternarAdicional(\'' + a.id + '\')">'
+        + 'style="flex-direction:column;align-items:stretch" onclick="alternarAdicional(\'' + idSeguro(a.id) + '\')">'
         + '<div style="display:flex;align-items:center;gap:12px;width:100%">'
         +   '<div class="icone">' + icone(a.icone, 21) + '</div>'
         +   '<div class="txt"><b>' + esc(a.nome) + '</b>'
@@ -930,7 +929,7 @@ function alternarAdicional(id){
 TELAS.resumo = {
   html: function(){
     const conta = calcularPedido(E.pedido);
-    if(!conta) return TELAS.novoServico.html();
+    if(!conta) return htmlDaTela("novoServico");
     const c = E.cliente || CLIENTE_EXEMPLO;
     const cat = conta.categoria;
 
@@ -1016,7 +1015,7 @@ TELAS.resumo = {
 TELAS.pagamento = {
   html: function(){
     const conta = calcularPedido(E.pedido);
-    if(!conta) return TELAS.novoServico.html();
+    if(!conta) return htmlDaTela("novoServico");
     const formas = [
       { id:"pix",     icone:"⚡", nome:"Pix",              detalhe:"Aprovação na hora" },
       { id:"cartao",  icone:"💳", nome:"Cartão de crédito", detalhe:"Visa •••• 4242" },
@@ -1024,7 +1023,7 @@ TELAS.pagamento = {
     let lista = "";
     formas.forEach(function(f){
       const marcado = E.pedido.pagamento === f.id;
-      lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" onclick="escolherPagamento(\'' + f.id + '\')">'
+      lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" onclick="escolherPagamento(\'' + idSeguro(f.id) + '\')">'
         + '<div class="icone">' + f.icone + '</div>'
         + '<div class="txt"><b>' + esc(f.nome) + '</b><span>' + esc(f.detalhe) + '</span></div>'
         + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
@@ -1114,7 +1113,7 @@ function faseDaBusca(minutos){
 
 TELAS.buscando = {
   html: function(){
-    if(semPedidoEmAndamento()) return TELAS.meusServicos.html();
+    if(semPedidoEmAndamento()) return htmlDaTela("meusServicos");
     const p = pedidoAtual();
     const cat = CATALOGO.find(function(c){ return c.id === p.categoria; });
     const b = E.busca || (E.busca = { minutos:0, modo:"normal" });
@@ -1190,7 +1189,7 @@ function simularNinguemAceita(){
 /* Aos 15 minutos: o cliente decide. */
 TELAS.buscaDemorando = {
   html: function(){
-    if(semPedidoEmAndamento()) return TELAS.meusServicos.html();
+    if(semPedidoEmAndamento()) return htmlDaTela("meusServicos");
     const p = pedidoAtual();
     return ''
     + '<div class="corpo">'
@@ -1243,7 +1242,7 @@ function cancelarPorFaltaDeProfissional(){
 
 TELAS.buscaCancelada = {
   html: function(){
-    if(semPedidoEmAndamento()) return TELAS.meusServicos.html();
+    if(semPedidoEmAndamento()) return htmlDaTela("meusServicos");
     const p = pedidoAtual();
     const automatico = !!p.chamadoAberto;
     return ''
@@ -1323,7 +1322,7 @@ TELAS.confirmado = {
     const prof = p && PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; });
     /* rede de segurança: sem pedido ou sem profissional, esta tela não faz
        sentido — volta para a lista em vez de quebrar na cara do usuário */
-    if(!prof) return TELAS.meusServicos.html();
+    if(!prof) return htmlDaTela("meusServicos");
 
     const primeiro = prof.nome.split(" ")[0];
 
@@ -1340,9 +1339,9 @@ TELAS.confirmado = {
     /* As ações como linhas, e não como botões empilhados no rodapé: é o
        formato da imagem, e é o que cabe em celular baixo. */
     const acoes = [
-      { icone:"💬", texto:"Conversar com " + primeiro,     acao:"abrirConversaDoPedido('" + p.id + "')" },
-      { icone:"👤", texto:"Ver perfil completo",           acao:"abrirPerfil(" + prof.id + ")" },
-      { icone:"📋", texto:"Ver detalhes do pedido",        acao:"abrirPedido('" + p.id + "')" },
+      { icone:"💬", texto:"Conversar com " + primeiro,     acao:"abrirConversaDoPedido('" + idSeguro(p.id) + "')" },
+      { icone:"👤", texto:"Ver perfil completo",           acao:"abrirPerfil(" + Number(prof.id) + ")" },
+      { icone:"📋", texto:"Ver detalhes do pedido",        acao:"abrirPedido('" + idSeguro(p.id) + "')" },
       { icone:"🗂️", texto:"Ir para meus serviços",         acao:"trocarAba('servicos')" },
     ];
     let linhas = "";
@@ -1510,7 +1509,7 @@ TELAS.perfilProfissional = {
     + '</div>'
 
     + '<div class="rodape">'
-    +   '<button class="btn btn-contorno" onclick="alternarFavorita(' + prof.id + ')">'
+    +   '<button class="btn btn-contorno" onclick="alternarFavorita(' + Number(prof.id) + ')">'
     +     (ehFavorita ? "❤️ Nas suas favoritas" : "🤍 Adicionar aos favoritos") + '</button>'
     +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button>'
     + '</div>';
@@ -1535,7 +1534,7 @@ TELAS.meusServicos = {
           concluido: '<span class="selo cinza">Concluído</span>',
           cancelado: '<span class="selo cinza">Cancelado</span>',
         }[p.situacao] || "";
-        lista += '<button class="item" onclick="abrirPedido(\'' + p.id + '\')">'
+        lista += '<button class="item" onclick="abrirPedido(\'' + idSeguro(p.id) + '\')">'
           + (prof ? avatar(prof.nome, prof.cor, "pequeno")
                   : '<div class="avatar pequeno" style="background:#CFC6E6">?</div>')
           + '<div class="txt"><b>' + esc(p.resumoTexto) + '</b>'
@@ -1570,15 +1569,15 @@ TELAS.detalhePedido = {
         + '<div class="pessoa">' + avatar(prof.nome, prof.cor)
         + '<div class="info"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
         + '<span>' + estrelas(prof.nota) + ' · ' + prof.servicos + ' serviços</span></div></div>'
-        + '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirPerfil(' + prof.id + ')">'
+        + '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirPerfil(' + Number(prof.id) + ')">'
         + 'Ver perfil completo</button>'
-        + '<button class="btn btn-contorno" onclick="alternarFavorita(' + prof.id + ')">'
+        + '<button class="btn btn-contorno" onclick="alternarFavorita(' + Number(prof.id) + ')">'
         + (ehFavorita ? "❤️ Nas suas favoritas" : "🤍 Adicionar aos favoritos") + '</button></div>';
     }
 
     let acoes = "";
     if(p.situacao === "confirmado"){
-      acoes = '<button class="btn btn-principal" onclick="abrirConversaDoPedido(\'' + p.id + '\')">Conversar com a profissional</button>'
+      acoes = '<button class="btn btn-principal" onclick="abrirConversaDoPedido(\'' + idSeguro(p.id) + '\')">Conversar com a profissional</button>'
         + '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
         + '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar serviço</button>';
     } else if(p.situacao === "buscando"){
@@ -1781,10 +1780,6 @@ function outroPapel(papel){ return papel === "cliente" ? "diarista" : "cliente";
 function chaveDaConversaDoPedido(p){ return "pedido:" + p.id; }
 function chaveDaConversaDoServico(s){ return "servico:" + s.oportunidadeId + ":" + s.data; }
 
-/* A chave e o número do pedido vão para dentro de um onclick: só letras,
-   números, dois-pontos e traço passam. */
-function idSeguro(x){ return String(x == null ? "" : x).replace(/[^A-Za-z0-9:\-]/g, ""); }
-
 /* O que fica guardado de cada conversa: as mensagens escritas e até quando
    cada lado já leu. Nomes, dia e rua NÃO ficam aqui: vêm sempre do pedido
    ou da agenda (contextoDaConversa), para nunca envelhecerem. */
@@ -1841,35 +1836,6 @@ function contextoDaConversa(chave){
     };
   }
   return null;
-}
-
-/* AS MENSAGENS DE EXEMPLO (A18-11): quem é de mentira também escreve, para
-   o aviso poder ser visto. Cada uma só aparece depois da hora dela, e nunca
-   antes de a conversa abrir nem antes do aceite. Não ficam guardadas: são
-   lidas do relógio, como a rua. */
-function exemplosDaConversa(ctx){
-  const abre = momentoQueAConversaAbre(ctx).getTime();
-  const fecha = momentoQueAConversaFecha(ctx).getTime();
-  if(isNaN(abre) || isNaN(fecha)) return [];
-  const desde = Math.max(abre, ctx.desde || 0);
-  const quando = (isoDoDia(new Date(desde)) === ctx.data) ? "Hoje" : "Amanhã";
-  const janela = ctx.janela ? " " + ctx.janela : "";
-  function primeiro(nome){ return String(nome || "").split(" ")[0]; }
-  const lista = [];
-  if(ctx.deMentira === "diarista"){
-    const inicio = momentoDoServico(ctx, ctx.inicio).getTime();
-    lista.push({ em:desde, texto:"Oi, " + primeiro(ctx.nomes.cliente) + "! Aqui é a "
-      + primeiro(ctx.nomes.diarista) + ". 😊 " + quando + " estou aí" + janela
-      + ". Qualquer coisa, é só falar por aqui." });
-    lista.push({ em:inicio - 30 * 60000, texto:RESPOSTAS_PRONTAS_DELA[0] });
-    lista.push({ em:inicio - 2 * 60000,
-                 texto:ctx.apartamento ? "Oii, estou em frente ao prédio! 😊" : "Oii, estou aqui em frente! 😊" });
-  } else {
-    lista.push({ em:desde, texto:"Oi, " + primeiro(ctx.nomes.diarista) + "! Obrigada por aceitar. 😊 "
-      + quando + " te espero" + janela + "." });
-  }
-  return lista.filter(function(m){ return m.em >= desde && m.em < fecha; })
-    .map(function(m){ return { de:ctx.deMentira, texto:m.texto, em:m.em, exemplo:true }; });
 }
 
 /* As escritas e os exemplos que já chegaram, em ordem de hora. */
@@ -2031,7 +1997,7 @@ function cartaoDeMensagemNova(papel){
     +   '</div>'
     +   maisConversas
     +   '<button class="btn btn-principal" style="margin-top:12px" '
-    +     'onclick="abrirConversaPeloAviso(\'' + papel + '\',\'' + idSeguro(melhor.chave) + '\')">'
+    +     'onclick="abrirConversaPeloAviso(\'' + idSeguro(papel) + '\',\'' + idSeguro(melhor.chave) + '\')">'
     +     'Ver a conversa</button>'
     +   notaDoAvisoNoWhatsApp(melhor.texto)
     + '</div>';
@@ -2102,9 +2068,8 @@ function anotarSeNaoFoi(papel, texto, enviada){
 }
 
 function enviarDoCampo(papel){
-  const campo = document.getElementById("campo-conversa");
-  const texto = campo ? campo.value : "";
-  if(!String(texto).trim()){ focarCampoDaConversa(); return; }
+  const texto = valorDoCampo("campo-conversa");
+  if(!texto.trim()){ focarCampoDaConversa(); return; }
   const enviada = enviarMensagem(E.conversaNaTela, papel, texto);
   if(enviada) guardarRascunho(papel, "");
   anotarSeNaoFoi(papel, texto, enviada);
@@ -2207,7 +2172,7 @@ function mioloDaConversa(ctx, papel, agora, entrando){
         + '<div>Você está do lado de ' + esc(ctx.nomes[papel]) + (/\.$/.test(ctx.nomes[papel]) ? "" : ".")
         + ' No app de verdade cada um está '
         + 'no seu celular; aqui dá para ver os dois lados da mesma conversa.</div>'
-        + '<button class="btn btn-contorno" onclick="verOOutroLado(\'' + papel + '\')">'
+        + '<button class="btn btn-contorno" onclick="verOOutroLado(\'' + idSeguro(papel) + '\')">'
         + 'Ver o lado de ' + esc(primeiro) + '</button></div>';
   }
   return faixa + miolo;
@@ -2237,15 +2202,15 @@ function telaDaConversa(papel){
     const rascunho = RASCUNHOS_DA_CONVERSA[ctx.chave + "|" + papel] || "";
     rodape = (papel === "diarista"
         ? '<div class="respostas-prontas">' + RESPOSTAS_PRONTAS_DELA.map(function(t, i){
-            return '<button onclick="enviarRespostaPronta(' + i + ')">' + esc(t) + '</button>';
+            return '<button onclick="enviarRespostaPronta(' + Number(i) + ')">' + esc(t) + '</button>';
           }).join("") + '</div>'
         : "")
       + '<div class="compositor">'
       +   '<input id="campo-conversa" type="text" maxlength="' + TAMANHO_MAXIMO_DA_MENSAGEM + '" '
       +     'enterkeyhint="send" autocomplete="off" placeholder="Escreva uma mensagem..." '
-      +     'value="' + esc(rascunho) + '" oninput="guardarRascunho(\'' + papel + '\', this.value)" '
-      +     'onkeydown="if(event.key===\'Enter\'){event.preventDefault();enviarDoCampo(\'' + papel + '\');}">'
-      +   '<button class="btn btn-principal" aria-label="Enviar" onclick="enviarDoCampo(\'' + papel + '\')">➤</button>'
+      +     'value="' + esc(rascunho) + '" oninput="guardarRascunho(\'' + idSeguro(papel) + '\', this.value)" '
+      +     'onkeydown="if(event.key===\'Enter\'){event.preventDefault();enviarDoCampo(\'' + idSeguro(papel) + '\');}">'
+      +   '<button class="btn btn-principal" aria-label="Enviar" onclick="enviarDoCampo(\'' + idSeguro(papel) + '\')">➤</button>'
       + '</div>';
   } else {
     rodape = '<button class="btn btn-claro" onclick="' + irAoSuporte + '">Falar com o suporte</button>';
@@ -2309,7 +2274,7 @@ function atualizarConversaNaTela(){
     && E.tela === TELA_DA_CONVERSA[papel] && ultimaTelaDesenhada === E.tela
     && corpo.getAttribute("data-conversa") === idSeguro(ctx.chave)
     && situacaoDaConversa(ctx, agora) === "aberta");
-  if(!soALista){
+  if(!soALista || !corpo){
     const digitando = document.activeElement && document.activeElement.id === "campo-conversa";
     desenhar();
     if(digitando) focarCampoDaConversa();
@@ -2363,7 +2328,7 @@ TELAS.perfilCliente = {
     ];
     let lista = "";
     itens.forEach(function(i){
-      lista += '<button class="item" onclick="ir(\'' + (i.tela || "chatSuporte") + '\')">'
+      lista += '<button class="item" onclick="ir(\'' + idSeguro(i.tela || "chatSuporte") + '\')">'
         + '<div style="font-size:20px;width:28px;text-align:center">' + i.ic + '</div>'
         + '<div class="txt"><b>' + esc(i.nome) + '</b>'
         + (i.detalhe ? '<span>' + esc(i.detalhe) + '</span>' : "") + '</div>'

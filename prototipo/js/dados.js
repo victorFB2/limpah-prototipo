@@ -24,26 +24,14 @@ const TELAS = {};
 /* --------------------------------------------------------------------------
    1. TABELA DE PREÇOS  (documento, seção 11)
    -------------------------------------------------------------------------- */
-/* A TABELA (decisão R15, aprovada em 21/08/2026)
+/* A TABELA (decisão R15, aprovada em 21/08/2026).
 
    As "horas" são a JANELA DE PRESENÇA, não horas de trabalho — ver R9.
+   Piso de R$ 25/h para ela em qualquer duração.
 
-   | Janela | Cliente | Ela recebe | Margem | R$/h dela |
-   |    4h  | R$ 160  |  R$ 110    |  31%   |  R$ 27,50 |
-   |    6h  | R$ 205  |  R$ 150    |  27%   |  R$ 25,00 |
-   |    8h  | R$ 270  |  R$ 200    |  26%   |  R$ 25,00 |
-
-   Piso de R$ 25/h para ela em qualquer duração. Isso mata o incentivo
-   perverso da tabela antiga, onde ela ganhava R$ 27,50/h numa diária de 4h
-   e R$ 18,75/h numa de 8h — e ia perceber.
-
-   Somos mais caros que a Mary Help para o cliente (R$ 160 contra R$ 131 na
-   faixa de 4h) e pagamos bem melhor para ela (R$ 110 contra R$ 71). É
-   proposital: sem oferta de profissional não existe plataforma. As
-   garantias justificam o preço maior.
-
-   A faixa de 2h foi adiada: dava margem líquida negativa no volume de
-   lançamento, e o deslocamento pesa demais num serviço curto. */
+   O porquê de cada valor está no DECISOES.md, R15 — e só lá, de propósito:
+   este arquivo é público (vai para o link da maquete e para o celular de
+   quem usa o app). */
 const FAIXAS_DE_PRECO = [
   { horas: 4, clientePaga: 160, profissionalRecebe: 110 },
   { horas: 6, clientePaga: 205, profissionalRecebe: 150 },
@@ -58,8 +46,7 @@ const FAIXAS_DE_PRECO = [
    Ela vê bairro e distância ANTES de aceitar, e decide.
 
    Quem segura o trajeto é o raio pequeno, e as ondas do alerta (ONDAS, R22)
-   chamam primeiro quem está mais perto. "Raio pequeno resolve de graça o
-   que o subsídio resolveria caro."
+   chamam primeiro quem está mais perto (o porquê: DECISOES.md, R16).
 
    Só o raio manda. `gratisAteKm` e `valor` ficam aqui, neutros, apenas
    porque o teste cruzado do app de verdade (app/testes/motor_js.js) lê este
@@ -72,10 +59,8 @@ const DESLOCAMENTO = {
   valor: 0,             // nem o cliente paga, nem ela recebe à parte
 };
 
-/* Quanto do valor de um ADICIONAL vai para a profissional.
-   0.65 = 65% para ela, 35% fica com a plataforma.
-   >>> Este número foi escolhido por mim para o protótipo funcionar.
-       Precisa da sua decisão. Está anotado no DECISOES.md.            */
+/* Quanto do valor de um ADICIONAL vai para a profissional: 0.65 = 65%.
+   Provisório, esperando o dono (DECISOES.md, A2). */
 const REPASSE_DO_ADICIONAL = 0.65;
 
 
@@ -247,94 +232,8 @@ const CATALOGO = [
 ];
 
 
-/* --------------------------------------------------------------------------
-   4. PROFISSIONAIS FICTÍCIAS
-   Nenhuma dessas pessoas existe. Servem para as telas terem conteúdo.
-   -------------------------------------------------------------------------- */
-/* PRIVACIDADE — regra que vale para o produto todo:
-   o cliente vê primeiro nome + inicial do sobrenome ("Maria S."), nunca o
-   sobrenome inteiro, telefone, rede social ou endereço dela. O sobrenome
-   completo fica guardado aqui só porque o dashboard da empresa precisa
-   dele; nenhuma tela do cliente pode mostrá-lo. */
-const PROFISSIONAIS = [
-  { id:1, nome:"Maria Silva",        cor:"#C2410C", nota:4.8, avaliacoes:134, anos:5,
-    servicos:320, distancia:3.2, confianca:96, favorita:true, comparecimento:98,
-    naPlataforma:"2 anos e 4 meses",
-    especialidades:["Limpeza pesada","Organização","Pós-obra"],
-    frase:"Sou dedicada, caprichosa e gosto de deixar tudo impecável.",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
-    comentarios:[
-      { de:"Ana P.",     nota:5, quando:"há 2 semanas", texto:"Deixou a casa impecável e ainda organizou os armários. Já agendei de novo." },
-      { de:"Carlos M.",  nota:5, quando:"há 1 mês",     texto:"Pontual e muito caprichosa. Recomendo." },
-      { de:"Fernanda L.",nota:4, quando:"há 2 meses",   texto:"Fez um bom trabalho. Só demorou um pouco na cozinha." },
-    ] },
-
-  { id:2, nome:"Joana Ribeiro",      cor:"#9333EA", nota:4.9, avaliacoes:87,  anos:3,
-    servicos:210, distancia:1.8, confianca:98, favorita:true, comparecimento:100,
-    naPlataforma:"1 ano e 7 meses",
-    especialidades:["Limpeza do dia a dia","Organização","Passar roupas"],
-    frase:"Trabalho com organização e atenção aos detalhes.",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
-    comentarios:[
-      { de:"Ana P.",    nota:5, quando:"há 1 semana", texto:"Chegou no horário e trabalhou muito bem. Super atenciosa." },
-      { de:"Roberto S.",nota:5, quando:"há 3 semanas",texto:"Nunca faltou em nenhuma das vezes que agendei." },
-    ] },
-
-  { id:3, nome:"Cleide Souza",       cor:"#0D9488", nota:4.7, avaliacoes:56,  anos:8,
-    servicos:145, distancia:5.4, confianca:92, favorita:false, comparecimento:95,
-    naPlataforma:"11 meses",
-    especialidades:["Limpeza pesada","Área externa"],
-    frase:"Oito anos de experiência com limpeza residencial.",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
-    comentarios:[
-      { de:"Juliana R.", nota:5, quando:"há 1 mês", texto:"Muita experiência, deu conta de uma casa grande sozinha." },
-    ] },
-
-  { id:4, nome:"Rosângela Dias",     cor:"#B45309", nota:5.0, avaliacoes:23,  anos:2,
-    servicos:41,  distancia:2.6, confianca:89, favorita:false, comparecimento:100,
-    naPlataforma:"4 meses",
-    especialidades:["Limpeza do dia a dia","Passar roupas"],
-    frase:"Sou nova na plataforma, mas muito caprichosa!",
-    verificacoes:["Documento conferido","Selfie conferida","Antecedentes verificados"],
-    comentarios:[
-      { de:"Marcos T.", nota:5, quando:"há 3 semanas", texto:"Primeira vez que chamei e já quero de novo." },
-    ] },
-];
-
-
-/* --------------------------------------------------------------------------
-   5. CONTA FICTÍCIA DO CLIENTE
-   -------------------------------------------------------------------------- */
-const CASA_EXEMPLO = {
-  id: "casa-1",
-  apelido: "Casa",
-  tipoImovel: "apartamento",
-  comodos: 3,
-  banheiros: 1,
-  rua: "Rua das Flores, 123",
-  complemento: "Apto 42",
-  bairro: "Vila Madalena",
-  cidade: "São Paulo",
-  estado: "SP",
-  cep: "05435-000",
-};
-
-const CLIENTE_EXEMPLO = {
-  nome:"Ana Paula Moreira",
-  primeiroNome:"Ana",
-  email:"ana@exemplo.com",
-  telefone:"(11) 99999-9999",
-  cor:"#6C3AD8",
-  endereco:{
-    apelido:"Casa",
-    rua:"Rua das Flores, 123",
-    complemento:"Apto 42",
-    bairro:"Vila Madalena",
-    cidade:"São Paulo",
-    estado:"SP",
-    cep:"05435-000",
-  },
-};
+/* As profissionais e a conta do cliente, todas fictícias, moram em
+   exemplos.js: ele só é carregado na maquete. */
 
 
 /* ==========================================================================
@@ -906,9 +805,8 @@ function conversaLiberada(servico, agora){
 /* --------------------------------------------------------------------------
    O APP ESCONDE CONTATO ESCRITO — PROVISÓRIO (A18-8 e A18-9)
 
-   Combinar por fora é o maior risco do negócio: perde-se a comissão e,
-   pior, a proteção dos dois (pagamento guardado, suporte, verificação de
-   quem entra na casa). Telefone, e-mail, link, @perfil e qualquer sequência
+   Combinar por fora tira a proteção dos dois (pagamento guardado,
+   suporte, verificação de quem entra na casa). Telefone, e-mail, link, @perfil e qualquer sequência
    de 8 dígitos ou mais (pega também CPF e cartão) viram TROCA_DE_CONTATO.
 
    Uma função só, de propósito: é a mesma que filtra a conversa e o recado
@@ -1358,3 +1256,66 @@ const PERIODOS = [
   { id:"tarde", nome:"Tarde",  faixa:"12h às 16h", inicio:12 },
   { id:"noite", nome:"Noite",  faixa:"16h às 20h", inicio:16 },
 ];
+
+
+/* ==========================================================================
+   REGRAS QUE MORAVAM NAS TELAS
+
+   Funções puras: recebem o dado por parâmetro, não olham a tela, o
+   relógio nem o estado guardado. Moram aqui para que o teste cruzado do
+   app (que carrega só este arquivo) consiga compará-las com o servidor.
+   As telas continuam chamando pelos nomes de sempre.
+   ========================================================================== */
+
+/* NOME CURTO — regra de privacidade do produto
+
+   O cliente nunca vê o sobrenome inteiro da profissional. "Maria Silva"
+   aparece como "Maria S." em qualquer tela do cliente. É o que impede
+   alguém de procurar a pessoa fora do aplicativo. */
+function nomeCurto(nome){
+  const partes = String(nome || "").trim().split(/\s+/);
+  if(partes.length < 2) return partes[0] || "";
+  return partes[0] + " " + partes[partes.length - 1][0].toUpperCase() + ".";
+}
+
+/* EM QUE ESTADO A DIARISTA ESTÁ (R24): a chave, se pode aceitar e a
+   porcentagem do cadastro. As frases de cada estado continuam na tabela
+   situacaoDaDiarista(), nas telas dela.
+
+   Portão 1 vale 20%, Portão 2 vale 60%, Portão 3 vale 20%.
+
+   `celularConfirmado` e `termosEmDia` são obrigatórios: só `true` libera.
+   Sem o celular confirmado, ou com os termos novos ainda sem aceite, ela
+   continua no estado em que está, mas não aceita nem fica disponível.
+   Recusada e suspensa (decisão da equipe) vencem o resto.
+
+   As chaves são as do servidor, com uma diferença de nome: o "novo" do
+   servidor é o "incompleto" daqui. */
+const ETAPAS_DO_PORTAO_2 = ["documentos", "selfie", "antecedentes", "termos"];
+
+function estadoDaDiarista(d, celularConfirmado, termosEmDia){
+  const feito = (d && d.feito) || {};
+  const feitos2 = ETAPAS_DO_PORTAO_2.filter(function(x){ return feito[x]; }).length;
+
+  let pct = 0;
+  if(feito.dados)  pct += 10;
+  if(feito.regiao) pct += 10;
+  pct += Math.round((feitos2 / ETAPAS_DO_PORTAO_2.length) * 60);
+  if(feito.recebimento) pct += 10;
+  if(feito.experiencia) pct += 10;
+
+  const situacao = d && d.situacao;
+  let chave;
+  if(situacao === "aprovada" || situacao === "recusada" || situacao === "suspensa") chave = situacao;
+  else if(situacao === "analise" || feitos2 === ETAPAS_DO_PORTAO_2.length) chave = "analise";
+  else chave = "incompleto";
+
+  const liberada = chave === "aprovada" && celularConfirmado === true && termosEmDia === true;
+  return {
+    chave: chave,
+    podeAceitar: liberada,
+    podeFicarDisponivel: liberada,
+    faltaPix: chave === "aprovada" && !feito.recebimento,
+    pct: pct,
+  };
+}

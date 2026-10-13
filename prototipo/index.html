@@ -10,7 +10,7 @@
      cartao - e tocar nele abria o calendario em vez de abrir o servico. -->
 <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
 <title>Limpah — protótipo</title>
-<link rel="stylesheet" href="css/limpah.css?v=a20ec1bd">
+<link rel="stylesheet" href="css/limpah.css?v=211b142a">
 </head>
 <body>
 
@@ -30,10 +30,15 @@
     <a href="#" onclick="reiniciarPrototipo();return false;">Reiniciar do zero</a>
   </div>
 
-  <script charset="utf-8" src="js/dados.js?v=a20ec1bd"></script>
-  <script charset="utf-8" src="js/telas-acesso.js?v=a20ec1bd"></script>
-  <script charset="utf-8" src="js/telas-cliente.js?v=a20ec1bd"></script>
-  <script charset="utf-8" src="js/telas-diarista.js?v=a20ec1bd"></script>
-  <script charset="utf-8" src="js/app.js?v=a20ec1bd"></script>
+  <!-- A ordem importa: dados.js cria as regras e a lista de telas; os
+       exemplos e a tomada da maquete vêm antes das telas; app.js liga tudo
+       no fim. -->
+  <script charset="utf-8" src="js/dados.js?v=211b142a"></script>
+  <script charset="utf-8" src="js/exemplos.js?v=211b142a"></script>
+  <script charset="utf-8" src="js/fonte-maquete.js?v=211b142a"></script>
+  <script charset="utf-8" src="js/telas-acesso.js?v=211b142a"></script>
+  <script charset="utf-8" src="js/telas-cliente.js?v=211b142a"></script>
+  <script charset="utf-8" src="js/telas-diarista.js?v=211b142a"></script>
+  <script charset="utf-8" src="js/app.js?v=211b142a"></script>
 </body>
 </html>

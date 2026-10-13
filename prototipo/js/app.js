@@ -3,7 +3,12 @@
    Cuida de: qual tela está aberta, o botão voltar, e guardar o que o
    usuário fez (para não perder tudo ao atualizar a página).
 
-   As telas em si estão nos arquivos telas-acesso.js e telas-cliente.js.
+   As telas em si estão nos arquivos telas-acesso.js, telas-cliente.js e
+   telas-diarista.js.
+
+   Este arquivo é o mesmo na maquete e no app de verdade. O que muda entre
+   os dois é a "tomada" (FONTE): na maquete, fonte-maquete.js, que guarda
+   tudo neste aparelho; no app, a que fala com o servidor.
    ========================================================================== */
 
 
@@ -13,6 +18,8 @@
 let E = {};
 
 function estadoNovo(){
+  /* favoritas e não lidas: na maquete vêm dos exemplos; no app, nascem vazias */
+  const inicio = FONTE.ler.estadoInicial();
   return {
     tela: "splash",
     historico: [],
@@ -22,8 +29,8 @@ function estadoNovo(){
     aba: "inicio",
     pedido: pedidoNovo(),
     pedidos: [],           // serviços já solicitados
-    favoritos: [1, 2],     // ids de PROFISSIONAIS
-    naoLidas: 1,
+    favoritos: inicio.favoritos,
+    naoLidas: inicio.naoLidas,
     busca: { minutos:0, modo:"normal", jaAvisou:false },   // relógio da régua da busca
   };
 }
@@ -50,8 +57,15 @@ function pedidoNovo(){
    -------------------------------------------------------------------------- */
 const CHAVE = "limpah-prototipo-v1";
 
+/* No app, o que veio do servidor fica em E.servidor — e NÃO é guardado no
+   aparelho: é dado de outra pessoa (pedidos, agenda) ou pode ter mudado
+   desde então. Na maquete E.servidor nunca existe, e nada muda. */
+function semOQueVeioDoServidor(chave, valor){
+  return (this === E && chave === "servidor") ? undefined : valor;
+}
+
 function salvar(){
-  try{ localStorage.setItem(CHAVE, JSON.stringify(E)); }catch(e){}
+  try{ localStorage.setItem(CHAVE, JSON.stringify(E, semOQueVeioDoServidor)); }catch(e){}
 }
 
 function carregar(){
@@ -133,12 +147,20 @@ function reiniciarPrototipo(){
 /* --------------------------------------------------------------------------
    NAVEGAÇÃO
    -------------------------------------------------------------------------- */
+
+/* Sobe a cada troca de tela (ir, voltar, trocar de aba). No app, a resposta
+   do servidor que chega depois de a pessoa já ter mudado de tela é guardada,
+   mas não a arrasta de volta: a tomada confere este número antes de seguir.
+   Na maquete é só um contador. */
+let NAVEGACAO = 0;
+
 function ir(nome, opcoes){
   opcoes = opcoes || {};
   if(!TELAS[nome]){
     console.warn("Tela não encontrada:", nome);
     return;
   }
+  NAVEGACAO++;
   if(!opcoes.semHistorico && E.tela !== nome){
     E.historico.push(E.tela);
     if(E.historico.length > 40) E.historico.shift();
@@ -155,10 +177,16 @@ function ir(nome, opcoes){
 
    Antes era sempre "home" — que é a tela inicial do CLIENTE. Uma diarista
    apertando voltar sem histórico ia parar dentro do aplicativo do cliente,
-   um lugar que não é dela e de onde ela não sabia sair. */
+   um lugar que não é dela e de onde ela não sabia sair.
+
+   No app, o início de quem está logado pode ainda não estar ligado ao
+   servidor ("Chega em breve"). Voltar para ele seria ficar no mesmo lugar,
+   sem saída. Enquanto não estiver, o voltar leva à escolha de perfil, que
+   está sempre liberada. Na maquete toda tela está liberada: nada muda. */
 function telaInicialDeQuemEstaUsando(){
   if(!E.logado) return "perfil";
-  return (E.perfil === "diarista") ? "diaristaHome" : "home";
+  const inicio = (E.perfil === "diarista") ? "diaristaHome" : "home";
+  return FONTE.ler.telaLiberada(inicio) ? inicio : "perfil";
 }
 
 function voltar(){
@@ -176,12 +204,40 @@ function trocarAba(aba){
 
 let ultimaTelaDesenhada = null;
 
+/* No app, toda tela que ainda não foi ligada ao servidor aparece assim (a
+   lista das ligadas é TELAS_DO_APP, na tomada do app). Na maquete nunca
+   aparece: lá todas as telas estão liberadas. */
+const TELA_EM_BREVE = {
+  html: function(){
+    return '<div class="centro">'
+         +   '<div class="emojao">🚧</div>'
+         +   '<h2 class="titulo">Chega em breve</h2>'
+         +   '<p class="apoio">Ainda estamos preparando esta parte do aplicativo.</p>'
+         + '</div>'
+         + '<div class="rodape">'
+         +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button>'
+         + '</div>';
+  }
+};
+
+/* Algumas telas, sem assunto, mostram o desenho de OUTRA (o pagamento sem
+   pedido mostra o "novo serviço"; a busca sem pedido, "meus serviços").
+   Elas pedem por aqui, e nunca por TELAS.x.html() direto: no app, se a
+   outra tela ainda não foi liberada, aparece o "Chega em breve", e não a
+   tela de fora da lista inteira. Na maquete, a tela de sempre. Um teste do
+   app reprova TELAS.x.html() fora daqui. */
+function htmlDaTela(nome){
+  return FONTE.ler.telaLiberada(nome) ? TELAS[nome].html() : TELA_EM_BREVE.html();
+}
+
 function desenhar(){
-  const tela = TELAS[E.tela];
+  let tela = TELAS[E.tela];
   if(!tela) return;
+  if(!FONTE.ler.telaLiberada(E.tela)) tela = TELA_EM_BREVE;
   pararRelogios();                 // nenhum contador de uma tela antiga sobrevive
 
   const palco = document.getElementById("palco");
+  if(!palco) return;
 
   /* O PISCA-PISCA, e por que ele acontecia:
 
@@ -197,6 +253,7 @@ function desenhar(){
      Junto vai a rolagem: sem guardá-la, mexer num adicional lá embaixo
      jogava a lista de volta para o topo. */
   const mesmaTela = (ultimaTelaDesenhada === E.tela);
+  if(!mesmaTela) NAVEGACAO++;      // o voltar() chega aqui sem passar pelo ir()
   /* .corpo é a rolagem das telas comuns; .miolo é a ficha do alerta de tela
      cheia, que rola por dentro (12/10/2026: a ficha voltava ao topo). */
   const ROLAVEIS = [".corpo", ".miolo"];
@@ -249,9 +306,65 @@ function pararRelogios(){
    PEDACINHOS DE TELA REAPROVEITADOS
    ========================================================================== */
 
+/* Todo texto que veio de fora do código (o que a pessoa digitou, o que o
+   servidor mandou) passa por aqui antes de virar HTML. Escapa também a
+   aspa simples: sem isso, um texto com apóstrofo dentro de um atributo
+   escrito com aspas simples fecharia o atributo no meio.
+
+   ATENÇÃO: dentro de um atributo de evento (onclick="...") isto NÃO
+   protege — o navegador desfaz os escapes antes de rodar o código. Ali só
+   entra idSeguro(...), Number(...) ou texto fixo (ver idSeguro, abaixo). */
 function esc(txt){
   return String(txt == null ? "" : txt)
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+/* O que vai para DENTRO de um onclick="...". Só letras sem acento,
+   números, dois-pontos e traço passam: um nome de tela, um id, uma data.
+   Número passa por Number(...). Um teste automático reprova qualquer outro
+   valor concatenado num atributo de evento. */
+function idSeguro(x){ return String(x == null ? "" : x).replace(/[^A-Za-z0-9:\-]/g, ""); }
+
+/* O valor de um campo da tela, ou "" se o campo não está desenhado.
+   As ações leem por aqui, para nunca quebrarem quando são chamadas sem a
+   tela delas aberta (os testes da maquete fazem isso). */
+function valorDoCampo(id){
+  const campo = document.getElementById(id);
+  return (campo && campo.value != null) ? String(campo.value) : "";
+}
+
+/* Se a chave da tela (o "aceito os termos") está ligada. Sem a chave
+   desenhada, devolve false: a ação não quebra, e também não passa sem o
+   aceite. */
+function chaveLigada(id){
+  const chave = document.getElementById(id);
+  return !!(chave && chave.classList && chave.classList.contains("ligada"));
+}
+
+/* Escreve a frase de erro no lugar dela, se o lugar estiver na tela. Sem
+   ele, não faz nada — em vez de parar a ação no meio. As ações usam isto,
+   e valorDoCampo e chaveLigada, e nunca getElementById(...).algo direto:
+   um teste automático (app/testes/test_telas_estaticas.py) reprova. */
+function mostrarErro(id, texto){
+  const lugar = document.getElementById(id);
+  if(lugar) lugar.textContent = texto;
+}
+
+/* O que só existe na maquete (o quadro "NA MAQUETE", os atalhos, os
+   simuladores). No app de verdade não aparece. Aceita o HTML pronto ou uma
+   função que o monta — a função nem roda no app. */
+function soNaMaquete(html){
+  if(!FONTE.ehMaquete) return "";
+  return (typeof html === "function") ? html() : html;
+}
+
+/* O contrário: no app, onde a parte ainda não foi ligada ao servidor,
+   diz que ela chega em breve. Na maquete não aparece nada. */
+function emBreveNoApp(assunto){
+  if(FONTE.ehMaquete) return "";
+  return '<div class="aviso roxo">🚧<div><b>' + esc(assunto || "Esta parte") + ' chega em breve</b>'
+       + 'Ainda estamos preparando esta parte do aplicativo.</div></div>';
 }
 
 function moeda(valor){
@@ -293,7 +406,7 @@ function abas(ativa){
     { id:"perfil",    ic:"pessoa", nome:"Perfil" },
   ];
   return '<div class="abas">' + itens.map(function(i){
-    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="trocarAba(\'' + i.id + '\')">'
+    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="trocarAba(\'' + idSeguro(i.id) + '\')">'
          + '<span class="ic">' + icone(i.ic, 21) + '</span>' + i.nome + '</button>';
   }).join("") + '</div>';
 }
@@ -302,18 +415,8 @@ function estrelas(nota){
   return "⭐ " + Number(nota).toFixed(1).replace(".", ",");
 }
 
-/* --------------------------------------------------------------------------
-   NOME CURTO — regra de privacidade do produto
-
-   O cliente nunca vê o sobrenome inteiro da profissional. "Maria Silva"
-   aparece como "Maria S." em qualquer tela do cliente. É o que impede
-   alguém de procurar a pessoa fora do aplicativo.
-   -------------------------------------------------------------------------- */
-function nomeCurto(nome){
-  const partes = String(nome || "").trim().split(/\s+/);
-  if(partes.length < 2) return partes[0] || "";
-  return partes[0] + " " + partes[partes.length - 1][0].toUpperCase() + ".";
-}
+/* nomeCurto() — "Maria Silva" vira "Maria S." — mora no dados.js, junto
+   das outras regras que o servidor também segue. */
 
 
 /* --------------------------------------------------------------------------
@@ -543,12 +646,44 @@ function nomePeriodo(id){
 /* --------------------------------------------------------------------------
    LIGAR O APP
    -------------------------------------------------------------------------- */
-carregar();
-criarCasaDeQuemJaUsava();
 
-/* Se a pessoa já usou o protótipo antes, não faz sentido mostrar o splash
-   e a escolha de perfil de novo — o documento pede exatamente isso na
-   seção 4: "o app deve lembrar o perfil e abrir direto na home". */
-if(E.logado && E.tela === "splash") E.tela = "home";
+/* SEM A TOMADA, NÃO LIGA — mas diz por quê. Logo depois de publicar, o
+   celular pode juntar a página antiga (guardada por alguns minutos) com
+   os arquivos novos; a página antiga não carrega a tomada, e a tela
+   ficaria em branco. No app de verdade, é a mesma coisa: sem a tomada do
+   servidor, nada funciona — e esta frase aparece no lugar. */
+function avisoDeVersaoNova(){
+  const palco = document.getElementById("palco");
+  if(!palco) return;
+  palco.innerHTML = '<div class="tela"><div class="centro">'
+    + '<div class="emojao">🔄</div>'
+    + '<h2 class="titulo">Atualizamos o app</h2>'
+    + '<p class="apoio">Toque no botão para carregar a versão nova.</p>'
+    + '</div><div class="rodape">'
+    + '<button class="btn btn-principal" onclick="location.reload()">Carregar a versão nova</button>'
+    + '</div></div>';
+}
 
-desenhar();
+if(typeof FONTE === "undefined"){
+  avisoDeVersaoNova();
+} else {
+  carregar();
+
+  if(FONTE.ehMaquete){
+    criarCasaDeQuemJaUsava();
+
+    /* Se a pessoa já usou o protótipo antes, não faz sentido mostrar o splash
+       e a escolha de perfil de novo — o documento pede exatamente isso na
+       seção 4: "o app deve lembrar o perfil e abrir direto na home". */
+    if(E.logado && E.tela === "splash") E.tela = "home";
+  } else {
+    /* No app, quem diz se há alguém logado é o servidor, não o que ficou
+       guardado no aparelho: começa sempre pela splash, que pergunta. Sem
+       isso, o app desenharia a tela guardada sem nada do servidor. */
+    E.tela = "splash";
+    E.historico = [];
+    E.logado = false;      // só o servidor diz que está (FONTE.arranque)
+  }
+
+  desenhar();
+}
