@@ -69,11 +69,14 @@ TELAS.home = {
     +   '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 14px">'
     +     '<div style="font-size:12.5px;color:var(--suave)">📍 ' + esc(c.endereco.cidade + ", " + c.endereco.estado) + '</div>'
     +     '<div style="position:relative">' + avatar(c.nome, c.cor, "pequeno")
-    +       (E.naoLidas ? '<span style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;'
+    +       (naoLidasDoCliente() ? '<span style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;'
     +         'background:var(--vermelho);border:2px solid var(--fundo);border-radius:50%"></span>' : "")
     +     '</div>'
     +   '</div>'
 
+    /* mensagem nova da profissional, com o app fechado (A18): o cartão vem
+       antes de tudo — "estou em frente ao prédio" não pode esperar rolagem */
+    +   cartaoDeMensagemNova("cliente")
     +   '<h2 class="titulo">Olá, ' + esc(c.primeiroNome) + '! 👋<br>O que você precisa hoje?</h2>'
 
     +   '<button class="btn btn-principal" style="margin:18px 0 22px" onclick="comecarPedido()">Novo serviço</button>'
@@ -1301,7 +1304,10 @@ function confirmarProfissional(id){
   const p = pedidoAtual();
   p.profissionalId = id;
   p.situacao = "confirmado";
-  E.naoLidas = 1;
+  /* a hora do aceite: a conversa abre na véspera às 18h (A18), mas quem
+     aceita depois disso conversa na hora — e a primeira mensagem de
+     exemplo não pode ser de antes do aceite */
+  p.confirmadoEm = relogioDaAgenda().getTime();
   salvar();
   ir("confirmado", { limparHistorico:true });
 }
@@ -1334,7 +1340,7 @@ TELAS.confirmado = {
     /* As ações como linhas, e não como botões empilhados no rodapé: é o
        formato da imagem, e é o que cabe em celular baixo. */
     const acoes = [
-      { icone:"💬", texto:"Conversar com " + primeiro,     acao:"ir('chatProfissional')" },
+      { icone:"💬", texto:"Conversar com " + primeiro,     acao:"abrirConversaDoPedido('" + p.id + "')" },
       { icone:"👤", texto:"Ver perfil completo",           acao:"abrirPerfil(" + prof.id + ")" },
       { icone:"📋", texto:"Ver detalhes do pedido",        acao:"abrirPedido('" + p.id + "')" },
       { icone:"🗂️", texto:"Ir para meus serviços",         acao:"trocarAba('servicos')" },
@@ -1572,7 +1578,7 @@ TELAS.detalhePedido = {
 
     let acoes = "";
     if(p.situacao === "confirmado"){
-      acoes = '<button class="btn btn-principal" onclick="ir(\'chatProfissional\')">Conversar com a profissional</button>'
+      acoes = '<button class="btn btn-principal" onclick="abrirConversaDoPedido(\'' + p.id + '\')">Conversar com a profissional</button>'
         + '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
         + '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar serviço</button>';
     } else if(p.situacao === "buscando"){
@@ -1667,17 +1673,25 @@ function confirmarCancelamento(){
    -------------------------------------------------------------------------- */
 TELAS.mensagens = {
   html: function(){
-    const p = E.pedidos.find(function(x){ return x.situacao === "confirmado"; });
-    const prof = p ? PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; }) : null;
-
+    const agora = relogioDaAgenda();
     let lista = "";
-    if(prof){
-      lista += '<button class="item" onclick="ir(\'chatProfissional\')">'
-        + avatar(prof.nome, prof.cor, "pequeno")
-        + '<div class="txt"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
-        + '<span>Combinado! Chego dentro do período. 😊</span></div>'
-        + (E.naoLidas ? '<span class="selo verde">' + E.naoLidas + '</span>' : "") + '</button>';
-    }
+    /* uma linha por serviço confirmado: cada um tem a sua conversa (A18) */
+    conversasDoCliente().forEach(function(ctx){
+      const situacao = situacaoDaConversa(ctx, agora);
+      const escritas = mensagensDaConversa(ctx, agora).filter(function(m){ return m.de !== "app"; });
+      const ultima = escritas[escritas.length - 1];
+      const novas = situacao === "aberta" ? naoLidasDaConversa(ctx, "cliente", agora).length : 0;
+      let resumo;
+      if(situacao === "antes")
+        resumo = "A conversa abre " + quandoARuaAparece(ctx) + " a partir das " + HORA_DO_ENDERECO_NA_VESPERA + "h";
+      else if(ultima) resumo = ultima.texto;
+      else resumo = situacao === "fechada" ? "Conversa encerrada" : "A conversa está aberta 😊";
+      lista += '<button class="item" onclick="abrirConversaDoPedido(\'' + idSeguro(ctx.pedidoId) + '\')">'
+        + avatar(ctx.nomes.diarista, ctx.cores.diarista, "pequeno")
+        + '<div class="txt"><b>' + esc(ctx.nomes.diarista) + '</b>'
+        + '<span class="previa">' + esc(resumo) + '</span></div>'
+        + (novas ? '<span class="selo verde">' + novas + '</span>' : "") + '</button>';
+    });
     lista += '<button class="item" onclick="ir(\'chatSuporte\')">'
       + '<div class="avatar pequeno" style="background:var(--roxo)">L</div>'
       + '<div class="txt"><b>Suporte Limpah</b>'
@@ -1690,56 +1704,627 @@ TELAS.mensagens = {
   }
 };
 
-/* Monta uma conversa. As mensagens são fixas — é um protótipo. */
+/* O balão de uma mensagem — o desenho de sempre, num lugar só, para a
+   conversa do suporte e a conversa com a profissional serem iguais. */
+function balaoDaConversa(texto, hora, minha){
+  return '<div style="display:flex;justify-content:' + (minha ? "flex-end" : "flex-start") + ';margin-bottom:10px">'
+    + '<div style="max-width:76%;background:' + (minha ? "var(--roxo)" : "var(--branco)") + ';'
+    + 'color:' + (minha ? "var(--branco)" : "var(--texto)") + ';padding:11px 14px;border-radius:16px;'
+    + 'border-bottom-' + (minha ? "right" : "left") + '-radius:5px;font-size:14px;line-height:1.5;'
+    + 'overflow-wrap:anywhere;box-shadow:var(--sombra)">' + esc(texto)
+    + '<div style="font-size:10.5px;opacity:.6;margin-top:5px;text-align:right">' + esc(hora) + '</div>'
+    + '</div></div>';
+}
+
+/* O cabeçalho da conversa: voltar, a bolinha com as iniciais, o nome e uma
+   linha embaixo. */
+function cabecalhoDaConversa(titulo, subtitulo, cor){
+  return '<div class="cabecalho">'
+  +   '<button class="voltar" onclick="voltar()" aria-label="Voltar">‹</button>'
+  +   '<div class="pessoa" style="min-width:0"><div class="avatar pequeno" style="background:' + esc(cor) + '">'
+  +     esc(iniciais(titulo)) + '</div>'
+  +   '<div class="info" style="min-width:0"><b style="font-size:15px">' + esc(titulo) + '</b>'
+  +   '<span style="font-size:11.5px">' + esc(subtitulo) + '</span></div></div>'
+  + '</div>';
+}
+
+/* A conversa do SUPORTE: as mensagens ainda são fixas — é um protótipo. */
 function conversa(titulo, subtitulo, cor, mensagens, respostas){
   let baloes = "";
-  mensagens.forEach(function(m){
-    const minha = m.de === "eu";
-    baloes += '<div style="display:flex;justify-content:' + (minha ? "flex-end" : "flex-start") + ';margin-bottom:10px">'
-      + '<div style="max-width:76%;background:' + (minha ? "var(--roxo)" : "var(--branco)") + ';'
-      + 'color:' + (minha ? "#fff" : "var(--texto)") + ';padding:11px 14px;border-radius:16px;'
-      + 'border-bottom-' + (minha ? "right" : "left") + '-radius:5px;font-size:14px;line-height:1.5;'
-      + 'box-shadow:var(--sombra)">' + esc(m.texto)
-      + '<div style="font-size:10.5px;opacity:.6;margin-top:5px;text-align:right">' + esc(m.hora) + '</div>'
-      + '</div></div>';
-  });
+  mensagens.forEach(function(m){ baloes += balaoDaConversa(m.texto, m.hora, m.de === "eu"); });
 
   return ''
-  + '<div class="cabecalho">'
-  +   '<button class="voltar" onclick="voltar()">‹</button>'
-  +   '<div class="pessoa"><div class="avatar pequeno" style="background:' + cor + '">' + esc(iniciais(titulo)) + '</div>'
-  +   '<div class="info"><b style="font-size:15px">' + esc(titulo) + '</b>'
-  +   '<span style="font-size:11.5px">' + esc(subtitulo) + '</span></div></div>'
-  + '</div>'
+  + cabecalhoDaConversa(titulo, subtitulo, cor)
   + '<div class="corpo" style="background:var(--fundo)">' + baloes + '</div>'
   + '<div class="rodape">'
   +   '<div style="display:flex;gap:8px">'
-  +     '<input type="text" placeholder="Escreva uma mensagem..." style="flex:1;border:1.5px solid var(--borda);'
+  +     '<input type="text" placeholder="Escreva uma mensagem..." style="flex:1;min-width:0;border:1.5px solid var(--borda);'
   /* 16px de propósito: com menos, o iPhone dá zoom na página ao tocar no campo */
   +       'background:var(--branco);border-radius:24px;padding:13px 16px;font-size:16px;font-family:inherit">'
-  +     '<button class="btn btn-principal" style="width:50px;padding:0;border-radius:50%">➤</button>'
+  +     '<button class="btn btn-principal" style="width:50px;flex:none;padding:0;border-radius:50%" aria-label="Enviar">➤</button>'
   +   '</div>'
   +   (respostas || "")
   + '</div>';
 }
 
-TELAS.chatProfissional = {
-  html: function(){
-    const p = E.pedidos.find(function(x){ return x.situacao === "confirmado"; }) || E.pedidos[0];
-    const prof = (p && p.profissionalId)
-      ? PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; })
-      : PROFISSIONAIS[0];
-    E.naoLidas = 0; salvar();
 
-    const quando = p ? ("Serviço em " + dataPorExtenso(p.data)) : "Conversa";
+/* ==========================================================================
+   A CONVERSA CLIENTE ↔ DIARISTA — o motor dos dois lados (A18, 12/10/2026)
 
-    return conversa(nomeCurto(prof.nome), quando, prof.cor, [
-      { de:"ela", texto:"Oi! Aceitei seu pedido, pode contar comigo. 😊", hora:"14:32" },
-      { de:"ela", texto:"Você prefere que eu comece pela cozinha ou pelos quartos?", hora:"14:32" },
-      { de:"eu",  texto:"Oi! Pode começar pela cozinha, por favor.", hora:"14:35" },
-      { de:"ela", texto:"Combinado! Chego dentro do período. Até amanhã!", hora:"14:36" },
-    ]);
+   Pedido do dono: o que um lado escreve aparece para o outro, com a hora; a
+   conversa abre na véspera às 18h, junto com a rua, e fecha às 23h59 do dia
+   do serviço; ela tem respostas de um toque; e quem não está na conversa
+   ganha um aviso.
+
+   Nenhuma regra mora aqui. Abrir e fechar é situacaoDaConversa(), esconder
+   contato é esconderContatos(), e o texto do aviso é
+   textoDoAvisoDeMensagem() — os três no dados.js.
+
+   NA MAQUETE o cliente e a diarista são mundos separados: a profissional
+   que aceita o pedido do cliente ("Maria S.") e o cliente dos serviços dela
+   ("Carla M.") são de mentira. Por isso cada conversa tem uma CHAVE e duas
+   telas — a do cliente (chatProfissional) e a dela (diaristaConversa) — e
+   um quadro "NA MAQUETE" abre a mesma conversa do lado da outra pessoa
+   (A18-12). No app de verdade cada lado está num celular, e quem guarda as
+   mensagens e decide o horário é o servidor.
+   ========================================================================== */
+const TELA_DA_CONVERSA = { cliente:"chatProfissional", diarista:"diaristaConversa" };
+
+/* As respostas de um toque, só do lado dela: ela pode estar com a mão
+   ocupada (pedido do dono). Um toque ENVIA — não só preenche o campo. */
+const RESPOSTAS_PRONTAS_DELA = ["Estou a caminho", "Cheguei! Estou em frente", "Estou no interfone/portão"];
+
+const TAMANHO_MAXIMO_DA_MENSAGEM = 500;
+
+function outroPapel(papel){ return papel === "cliente" ? "diarista" : "cliente"; }
+
+function chaveDaConversaDoPedido(p){ return "pedido:" + p.id; }
+function chaveDaConversaDoServico(s){ return "servico:" + s.oportunidadeId + ":" + s.data; }
+
+/* A chave e o número do pedido vão para dentro de um onclick: só letras,
+   números, dois-pontos e traço passam. */
+function idSeguro(x){ return String(x == null ? "" : x).replace(/[^A-Za-z0-9:\-]/g, ""); }
+
+/* O que fica guardado de cada conversa: as mensagens escritas e até quando
+   cada lado já leu. Nomes, dia e rua NÃO ficam aqui: vêm sempre do pedido
+   ou da agenda (contextoDaConversa), para nunca envelhecerem. */
+function registroDaConversa(chave, criar){
+  if(!E.conversas || typeof E.conversas !== "object") E.conversas = {};
+  if(!E.conversas[chave] && criar)
+    E.conversas[chave] = { mensagens:[], lidoAte:{ cliente:0, diarista:0 }, explicouContato:false };
+  return E.conversas[chave] || null;
+}
+
+/* Quem é quem, o dia e a rua desta conversa. Sem pedido confirmado, ou sem
+   o serviço na agenda dela, não há conversa (null). */
+function contextoDaConversa(chave){
+  chave = String(chave || "");
+  if(chave.indexOf("pedido:") === 0){
+    const id = chave.slice("pedido:".length);
+    const p = (E.pedidos || []).filter(function(x){ return x.id === id; })[0];
+    const prof = p && PROFISSIONAIS.filter(function(x){ return x.id === p.profissionalId; })[0];
+    if(!p || !prof || p.situacao === "buscando" || p.situacao === "cancelado") return null;
+    const c = E.cliente || CLIENTE_EXEMPLO;
+    const casa = casaDoPedido(p);
+    const janela = janelaDoServico(p.periodo, p.horas) || {};
+    return {
+      chave: chave, pedidoId: p.id, data: p.data, inicio: janela.inicio, fim: janela.fim,
+      janela: janela.texto || "",
+      /* "Nome I." dos dois lados: o cliente nunca vê o sobrenome dela */
+      nomes: { cliente: nomeCurto(c.nome) || "Cliente", diarista: nomeCurto(prof.nome) },
+      cores: { cliente: c.cor || "var(--roxo)", diarista: prof.cor },
+      /* a rua, só para TIRAR do aviso de mensagem (A18-10) */
+      rua: (casa && casa.rua) || (c.endereco && c.endereco.rua) || "",
+      apartamento: !casa || casa.tipoImovel === "apartamento",
+      /* na maquete a profissional é de mentira: é ela quem escreve os exemplos */
+      deMentira: "diarista",
+      desde: Number(p.confirmadoEm) || 0,
+    };
   }
+  if(chave.indexOf("servico:") === 0){
+    /* o estado dela vem da tabela (R24): antes da aprovação não há serviço */
+    if(!situacaoDaDiarista().podeAceitar) return null;
+    const d = euSouDiarista();
+    const s = (d.agenda || []).filter(function(x){ return chaveDaConversaDoServico(x) === chave; })[0];
+    if(!s) return null;
+    const det = detalhesDoServico(s);
+    const origem = OPORTUNIDADES[s.oportunidadeId];
+    return {
+      chave: chave, data: s.data, inicio: s.inicio, fim: s.fim, janela: det.janela,
+      nomes: { cliente: det.cliente || "Cliente", diarista: nomeCurto(d.nome) || "Diarista" },
+      cores: { cliente: "var(--roxo)", diarista: "var(--roxo-escuro)" },
+      /* a rua guardada, mesmo antes das 18h: é só para tirá-la do aviso */
+      rua: s.endereco || ((origem && origem.bairro === s.bairro) ? origem.rua : "") || "",
+      apartamento: true,
+      deMentira: "cliente",
+      desde: Number(s.aceitoEm) || 0,
+    };
+  }
+  return null;
+}
+
+/* AS MENSAGENS DE EXEMPLO (A18-11): quem é de mentira também escreve, para
+   o aviso poder ser visto. Cada uma só aparece depois da hora dela, e nunca
+   antes de a conversa abrir nem antes do aceite. Não ficam guardadas: são
+   lidas do relógio, como a rua. */
+function exemplosDaConversa(ctx){
+  const abre = momentoQueAConversaAbre(ctx).getTime();
+  const fecha = momentoQueAConversaFecha(ctx).getTime();
+  if(isNaN(abre) || isNaN(fecha)) return [];
+  const desde = Math.max(abre, ctx.desde || 0);
+  const quando = (isoDoDia(new Date(desde)) === ctx.data) ? "Hoje" : "Amanhã";
+  const janela = ctx.janela ? " " + ctx.janela : "";
+  function primeiro(nome){ return String(nome || "").split(" ")[0]; }
+  const lista = [];
+  if(ctx.deMentira === "diarista"){
+    const inicio = momentoDoServico(ctx, ctx.inicio).getTime();
+    lista.push({ em:desde, texto:"Oi, " + primeiro(ctx.nomes.cliente) + "! Aqui é a "
+      + primeiro(ctx.nomes.diarista) + ". 😊 " + quando + " estou aí" + janela
+      + ". Qualquer coisa, é só falar por aqui." });
+    lista.push({ em:inicio - 30 * 60000, texto:RESPOSTAS_PRONTAS_DELA[0] });
+    lista.push({ em:inicio - 2 * 60000,
+                 texto:ctx.apartamento ? "Oii, estou em frente ao prédio! 😊" : "Oii, estou aqui em frente! 😊" });
+  } else {
+    lista.push({ em:desde, texto:"Oi, " + primeiro(ctx.nomes.diarista) + "! Obrigada por aceitar. 😊 "
+      + quando + " te espero" + janela + "." });
+  }
+  return lista.filter(function(m){ return m.em >= desde && m.em < fecha; })
+    .map(function(m){ return { de:ctx.deMentira, texto:m.texto, em:m.em, exemplo:true }; });
+}
+
+/* As escritas e os exemplos que já chegaram, em ordem de hora. */
+function mensagensDaConversa(ctx, agora){
+  const reg = registroDaConversa(ctx.chave, false);
+  const t = agora.getTime();
+  const todas = (reg ? reg.mensagens.slice() : []).concat(
+    exemplosDaConversa(ctx).filter(function(m){ return m.em <= t; }));
+  return todas.map(function(m, i){ return { m:m, i:i }; })
+    .sort(function(a, b){ return (a.m.em - b.m.em) || (a.i - b.i); })
+    .map(function(x){ return x.m; });
+}
+
+/* O que o outro lado escreveu e este lado ainda não viu. */
+function naoLidasDaConversa(ctx, papel, agora){
+  const reg = registroDaConversa(ctx.chave, false);
+  const lido = reg ? (Number(reg.lidoAte && reg.lidoAte[papel]) || 0) : 0;
+  return mensagensDaConversa(ctx, agora).filter(function(m){
+    return m.de === outroPapel(papel) && m.em > lido;
+  });
+}
+
+/* Na maquete, "estar com o app aberto na conversa" é estar nesta tela. */
+function estaNaConversa(papel, chave){
+  return E.tela === TELA_DA_CONVERSA[papel] && E.conversaNaTela === chave;
+}
+
+/* O AVISO: só com a conversa aberta e mensagem nova. O texto é o do
+   WhatsApp do app de verdade — nome curto, texto filtrado, e o texto só
+   vai quando não pode apontar a casa (corpo vazio: vai sem ele, A18-10). */
+function avisoDeMensagem(ctx, papel, agora){
+  if(situacaoDaConversa(ctx, agora) !== "aberta") return null;
+  const novas = naoLidasDaConversa(ctx, papel, agora);
+  if(!novas.length) return null;
+  const ultima = novas[novas.length - 1];
+  const de = ctx.nomes[outroPapel(papel)];
+  return { chave:ctx.chave, papel:papel, quantas:novas.length, de:de, em:ultima.em,
+           texto:textoDoAvisoDeMensagem(de, ultima.texto, ctx.rua),
+           corpo:corpoDoAvisoDeMensagem(ultima.texto, ctx.rua) };
+}
+
+/* ENVIAR. Fora do horário não envia (no app de verdade, o servidor recusa).
+   O texto é filtrado ANTES de guardar: o contato original não fica em lugar
+   nenhum. Quem está com a conversa na tela já leu; quem não está, ganha o
+   aviso. */
+function enviarMensagem(chave, papel, texto){
+  const ctx = contextoDaConversa(chave);
+  if(!ctx || !TELA_DA_CONVERSA[papel]) return null;
+  const agora = relogioDaAgenda();
+  if(situacaoDaConversa(ctx, agora) !== "aberta") return null;
+  const bruto = String(texto == null ? "" : texto).replace(/\s+/g, " ").trim()
+    .slice(0, TAMANHO_MAXIMO_DA_MENSAGEM);
+  if(!bruto) return null;
+  const filtrado = esconderContatos(bruto);
+  const reg = registroDaConversa(chave, true);
+  const ultima = reg.mensagens[reg.mensagens.length - 1];
+  const em = Math.max(agora.getTime(), ultima ? ultima.em + 1 : 0);
+  const m = { de:papel, texto:filtrado.texto, em:em };
+  reg.mensagens.push(m);
+  /* a explicação, uma vez por conversa (A18-8) */
+  if(filtrado.escondeu && !reg.explicouContato){
+    reg.mensagens.push({ de:"app", texto:EXPLICACAO_DO_CONTATO_ESCONDIDO, em:em });
+    reg.explicouContato = true;
+  }
+  reg.lidoAte[papel] = em;
+  if(estaNaConversa(outroPapel(papel), chave)) reg.lidoAte[outroPapel(papel)] = em;
+  salvar();
+  return m;
+}
+
+/* Abrir a conversa na tela é ler. Se havia mensagem nova AO ENTRAR, a tela
+   mostra uma vez o aviso que teria chegado no WhatsApp (a faixa âmbar).
+
+   Só ao entrar: mensagem que chega com a pessoa DENTRO da conversa só fica
+   lida. Antes o relógio da conversa redesenhava a tela, achava a mensagem
+   de exemplo não lida e mostrava "Chegou enquanto você estava fora" com a
+   pessoa ali — o contrário da regra (o aviso é só para quem está fora). */
+function lerConversa(ctx, papel, agora, entrando){
+  const novas = naoLidasDaConversa(ctx, papel, agora);
+  if(entrando){
+    const aviso = novas.length ? avisoDeMensagem(ctx, papel, agora) : null;
+    E.faixaDaConversa = aviso
+      ? { chave:ctx.chave, papel:papel, texto:aviso.texto, quantas:aviso.quantas } : null;
+  }
+  if(!novas.length) return;
+  const reg = registroDaConversa(ctx.chave, true);
+  reg.lidoAte[papel] = Math.max(Number(reg.lidoAte[papel]) || 0, novas[novas.length - 1].em);
+  salvar();
+}
+
+/* Quem ENTRA na conversa: por um botão que a abre (prepararConversa,
+   verOOutroLado), ou vindo de outra tela (voltar, recarregar a página).
+   O redesenho da própria conversa — o relógio, o envio — não é entrada. */
+let ENTRADA_NA_CONVERSA = "";
+function entrandoNaConversa(papel, chave){
+  const peloBotao = ENTRADA_NA_CONVERSA === chave;
+  ENTRADA_NA_CONVERSA = "";
+  return peloBotao || ultimaTelaDesenhada !== TELA_DA_CONVERSA[papel];
+}
+
+/* As conversas do cliente: uma por serviço confirmado. */
+function conversasDoCliente(){
+  return (E.pedidos || []).filter(function(p){ return p.situacao === "confirmado" && p.profissionalId; })
+    .map(function(p){ return contextoDaConversa(chaveDaConversaDoPedido(p)); })
+    .filter(Boolean);
+}
+
+/* As conversas dela: uma por serviço da agenda. */
+function conversasDela(){
+  return (euSouDiarista().agenda || [])
+    .map(function(s){ return contextoDaConversa(chaveDaConversaDoServico(s)); })
+    .filter(Boolean);
+}
+
+function naoLidasDoCliente(){
+  const agora = relogioDaAgenda();
+  let n = 0;
+  conversasDoCliente().forEach(function(ctx){
+    if(situacaoDaConversa(ctx, agora) === "aberta") n += naoLidasDaConversa(ctx, "cliente", agora).length;
+  });
+  return n;
+}
+
+/* O CARTÃO DE MENSAGEM NOVA, nas telas de entrada (o cliente: Início; ela:
+   Início e Agenda). Mostra a mais recente e, em âmbar, o que o app de
+   verdade faz: manda o aviso no WhatsApp (A18-13).
+
+   Com mais de uma conversa esperando, diz quantas são e de quem (A18-16):
+   antes a segunda só aparecia depois de ler a primeira. Ela acha as outras
+   pela marca em cada cartão da agenda; o cliente, na aba Mensagens. */
+function cartaoDeMensagemNova(papel){
+  const agora = relogioDaAgenda();
+  const avisos = [];
+  (papel === "cliente" ? conversasDoCliente() : conversasDela()).forEach(function(ctx){
+    const a = avisoDeMensagem(ctx, papel, agora);
+    if(a) avisos.push(a);
+  });
+  if(!avisos.length) return "";
+  avisos.sort(function(a, b){ return b.em - a.em; });
+  const melhor = avisos[0], outros = avisos.slice(1);
+  const nomesDosOutros = outros.map(function(a){ return a.de; })
+    .filter(function(n, i, lista){ return lista.indexOf(n) === i; });
+  /* o nome entre parênteses: "Juliana P." já termina em ponto */
+  const varias = outros.length > 1;
+  const maisConversas = outros.length
+    ? '<div class="mais-conversas">E mais ' + outros.length
+      + (varias ? ' conversas' : ' conversa') + ' com mensagem nova ('
+      + esc(nomesDosOutros.join(", ")) + '). '
+      + (papel === "cliente" ? (varias ? 'Estão' : 'Está') + ' na aba Mensagens.'
+                             : (varias ? 'Estão marcadas' : 'Está marcada') + ' na sua agenda.') + '</div>'
+    : "";
+  return '<div class="cartao destaque mensagem-nova">'
+    +   '<div class="pessoa">' + avatar(melhor.de, "var(--roxo)", "pequeno")
+    +     '<div class="info"><b>💬 ' + esc(melhor.de) + ' mandou mensagem</b>'
+    /* sem o texto quando ele pode apontar a casa (A18-10): o mesmo do aviso */
+    +     (melhor.corpo ? '<span>“' + esc(melhor.corpo) + '”</span>' : '<span>Abra a conversa para ler.</span>')
+    +     '</div>'
+    +     (melhor.quantas > 1 ? '<span class="selo verde">' + melhor.quantas + '</span>' : "")
+    +   '</div>'
+    +   maisConversas
+    +   '<button class="btn btn-principal" style="margin-top:12px" '
+    +     'onclick="abrirConversaPeloAviso(\'' + papel + '\',\'' + idSeguro(melhor.chave) + '\')">'
+    +     'Ver a conversa</button>'
+    +   notaDoAvisoNoWhatsApp(melhor.texto)
+    + '</div>';
+}
+
+/* A nota âmbar da maquete. É a ÚNICA coisa que o teste 3 deixa dizer o
+   nome do aplicativo de mensagem (A18-13) — e só porque ela não é contato
+   de ninguém: o texto vem de textoDoAvisoDeMensagem(), já sem telefone e
+   sem endereço. Nada de marcação dentro dela além do <b>. */
+function notaDoAvisoNoWhatsApp(texto, titulo){
+  return '<div class="nota-maquete">' + (titulo ? '<b>' + esc(titulo) + '</b>' : "")
+    + '📲 No app de verdade, este aviso chega no WhatsApp: “' + esc(texto) + '”</div>';
+}
+
+/* Abrir a conversa: a chave fica guardada para a tela saber qual é, e a
+   faixa de uma visita anterior some. */
+function prepararConversa(chave){
+  E.conversaNaTela = String(chave || "");
+  E.faixaDaConversa = null;
+  MENSAGEM_NAO_ENVIADA = null;
+  ENTRADA_NA_CONVERSA = E.conversaNaTela;
+  salvar();
+}
+
+function abrirConversaDoPedido(id){
+  E.pedidoAtual = id;
+  prepararConversa("pedido:" + id);
+  ir("chatProfissional");
+}
+
+function abrirConversaPeloAviso(papel, chave){
+  prepararConversa(chave);
+  if(papel === "diarista") ir("diaristaConversa");
+  else ir("chatProfissional");
+}
+
+/* NA MAQUETE: a mesma conversa, do lado da outra pessoa (A18-12). */
+function verOOutroLado(papel){
+  E.faixaDaConversa = null;
+  ENTRADA_NA_CONVERSA = E.conversaNaTela;
+  salvar();
+  if(papel === "cliente") ir("diaristaConversa");
+  else ir("chatProfissional");
+}
+
+/* O que está sendo digitado sobrevive a um redesenho (o relógio da conversa
+   redesenha a tela quando chega mensagem de exemplo, abre ou fecha). Só na
+   memória: rascunho não precisa sobreviver a recarregar a página. */
+const RASCUNHOS_DA_CONVERSA = {};
+function guardarRascunho(papel, valor){ RASCUNHOS_DA_CONVERSA[E.conversaNaTela + "|" + papel] = valor; }
+
+function focarCampoDaConversa(){
+  const campo = document.getElementById("campo-conversa");
+  if(campo){ try { campo.focus(); } catch(e){} }
+}
+
+/* A MENSAGEM QUE NÃO FOI. Se a conversa fecha (meia-noite) com a pessoa no
+   meio da frase, o envio é recusado — e antes nada dizia isso: o campo
+   sumia e o texto ia junto, sem aviso. Agora a tela diz que não foi, e
+   mostra o que era, para a pessoa poder levar ao suporte. Só na memória,
+   como o rascunho: é um aviso do momento. */
+let MENSAGEM_NAO_ENVIADA = null;
+function anotarSeNaoFoi(papel, texto, enviada){
+  if(enviada) return;
+  const ctx = contextoDaConversa(E.conversaNaTela);
+  if(!ctx || situacaoDaConversa(ctx, relogioDaAgenda()) === "aberta") return;
+  MENSAGEM_NAO_ENVIADA = { chave:ctx.chave, papel:papel, texto:String(texto || "").trim() };
+}
+
+function enviarDoCampo(papel){
+  const campo = document.getElementById("campo-conversa");
+  const texto = campo ? campo.value : "";
+  if(!String(texto).trim()){ focarCampoDaConversa(); return; }
+  const enviada = enviarMensagem(E.conversaNaTela, papel, texto);
+  if(enviada) guardarRascunho(papel, "");
+  anotarSeNaoFoi(papel, texto, enviada);
+  E.faixaDaConversa = null;
+  desenhar();
+  focarCampoDaConversa();
+}
+
+function enviarRespostaPronta(i){
+  const texto = RESPOSTAS_PRONTAS_DELA[i];
+  if(!texto) return;
+  anotarSeNaoFoi("diarista", texto, enviarMensagem(E.conversaNaTela, "diarista", texto));
+  E.faixaDaConversa = null;
+  desenhar();
+}
+
+/* "Hoje", "Ontem" ou "Sex, 16/10", entre mensagens de dias diferentes. */
+function diaDaMensagem(em, agora){
+  const d = new Date(em), iso = isoDoDia(d);
+  if(iso === isoDoDia(agora)) return "Hoje";
+  const ontem = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - 1);
+  if(iso === isoDoDia(ontem)) return "Ontem";
+  return DIAS_SEMANA[d.getDay()] + ", " + diaCurto(iso);
+}
+
+function horaDaMensagem(em){
+  const d = new Date(em);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+/* O subtítulo do cabeçalho: "Serviço de amanhã, ter 13/10" ou "Serviço de
+   qui, 15/10". Era "Serviço em " + dataPorExtenso, que dava "Serviço em
+   Amanhã, 13/10" (maiúscula no meio da frase). */
+function subtituloDaConversa(iso, agora){
+  const p = String(iso || "").split("-").map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2]);
+  if(p.length !== 3 || isNaN(d.getTime())) return "Serviço agendado";
+  const dia = DIAS_SEMANA[d.getDay()].toLowerCase();
+  const perto = { "0":"hoje", "1":"amanhã", "-1":"ontem" };
+  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  const diferenca = String(Math.round((d.getTime() - hoje.getTime()) / 86400000));
+  return "Serviço de " + (perto[diferenca] ? perto[diferenca] + ", " + dia + " " : dia + ", ") + diaCurto(iso);
+}
+
+/* O MIOLO DA CONVERSA: a faixa, as mensagens e o quadro da maquete. Fica à
+   parte para o relógio poder trocar SÓ a lista quando chega mensagem — sem
+   recriar o campo, que fecharia o teclado no meio da frase. */
+function mioloDaConversa(ctx, papel, agora, entrando){
+  const outro = outroPapel(papel);
+  const primeiro = String(ctx.nomes[outro]).split(" ")[0];
+  const situacao = situacaoDaConversa(ctx, agora);
+  lerConversa(ctx, papel, agora, entrando);
+
+  /* a faixa âmbar: o que chegou enquanto este lado estava fora */
+  const f = E.faixaDaConversa;
+  const faixa = (f && f.chave === ctx.chave && f.papel === papel)
+    ? notaDoAvisoNoWhatsApp(f.texto, f.quantas > 1 ? "Chegaram " + f.quantas + " mensagens enquanto você estava fora"
+                                                     : "Chegou enquanto você estava fora")
+    : "";
+
+  let miolo = "";
+  if(situacao === "antes"){
+    miolo = '<div class="centro" style="flex:none;padding:26px 6px 10px;gap:10px">'
+      + '<div class="emojao" style="font-size:52px">💬</div>'
+      + '<b style="font-size:17px">A conversa com ' + esc(primeiro) + ' abre ' + esc(quandoARuaAparece(ctx))
+      + ' a partir das ' + HORA_DO_ENDERECO_NA_VESPERA + 'h</b>'
+      + '<p class="apoio" style="margin:0">'
+      + (papel === "cliente"
+        ? 'É a mesma hora em que ela recebe a rua e o número da sua casa: é para proteger você.'
+        : 'Junto com a rua e o número. É para proteger a casa do cliente.')
+      + ' Precisa de algo antes? Fale com o suporte.</p></div>';
+  } else {
+    const msgs = mensagensDaConversa(ctx, agora);
+    let dia = "";
+    msgs.forEach(function(m){
+      const d = diaDaMensagem(m.em, agora);
+      if(d !== dia){ miolo += '<div class="dia-conversa">' + esc(d) + '</div>'; dia = d; }
+      if(m.de === "app") miolo += '<div class="msg-app">' + esc(m.texto) + '</div>';
+      else miolo += balaoDaConversa(m.texto, horaDaMensagem(m.em), m.de === papel);
+    });
+    if(!msgs.length)
+      miolo += '<div class="conversa-vazia">'
+        + (situacao === "aberta"
+          ? 'A conversa abriu. Combine por aqui portão, interfone ou a chegada. 😊'
+          : 'Ninguém escreveu nesta conversa.') + '</div>';
+    if(situacao === "fechada")
+      miolo += '<div class="aviso roxo" style="margin-top:6px">🔒<div><b>Esta conversa foi encerrada</b>'
+        + 'Ela fica aberta até as ' + ULTIMO_MINUTO_DA_CONVERSA.hora + 'h'
+        + String(ULTIMO_MINUTO_DA_CONVERSA.minuto).padStart(2, "0") + ' do dia do serviço. '
+        + 'Dá para ler o que foi escrito. Precisa de algo? Fale com o suporte.</div></div>';
+    const naoFoi = MENSAGEM_NAO_ENVIADA;
+    if(situacao !== "aberta" && naoFoi && naoFoi.chave === ctx.chave && naoFoi.papel === papel)
+      miolo += '<div class="aviso" style="margin-top:6px">⚠️<div><b>Sua mensagem não foi enviada</b>'
+        + 'A conversa fechou antes de ela sair, e ' + esc(primeiro) + ' não recebeu: “'
+        + esc(naoFoi.texto) + '”. Precisa de algo? Fale com o suporte.</div></div>';
+    if(situacao === "aberta")
+      miolo += '<div class="cartao maquete">'
+        + '<b>⚙ NA MAQUETE</b>'
+        /* "Joana T." já termina em ponto: sem ponto a mais */
+        + '<div>Você está do lado de ' + esc(ctx.nomes[papel]) + (/\.$/.test(ctx.nomes[papel]) ? "" : ".")
+        + ' No app de verdade cada um está '
+        + 'no seu celular; aqui dá para ver os dois lados da mesma conversa.</div>'
+        + '<button class="btn btn-contorno" onclick="verOOutroLado(\'' + papel + '\')">'
+        + 'Ver o lado de ' + esc(primeiro) + '</button></div>';
+  }
+  return faixa + miolo;
+}
+
+/* A TELA DA CONVERSA, dos dois lados. A cara é a da conversa que o cliente
+   sempre teve (a imagem manda no desenho); o que muda é QUANDO ela abre, e
+   que as mensagens agora são de verdade. */
+function telaDaConversa(papel){
+  const agora = relogioDaAgenda();
+  let ctx = contextoDaConversa(E.conversaNaTela);
+  /* quem chegou por um caminho sem chave (dado antigo): a do pedido aberto */
+  if(!ctx && papel === "cliente"){
+    const p = pedidoAtual();
+    ctx = p ? contextoDaConversa(chaveDaConversaDoPedido(p)) : null;
+    if(ctx) E.conversaNaTela = ctx.chave;
+  }
+  if(!ctx) return semConversa(papel);
+
+  const outro = outroPapel(papel);
+  const situacao = situacaoDaConversa(ctx, agora);
+  const corpo = mioloDaConversa(ctx, papel, agora, entrandoNaConversa(papel, ctx.chave));
+  const irAoSuporte = (papel === "cliente") ? "ir('chatSuporte')" : "ir('diaristaEmBreve')";
+
+  let rodape;
+  if(situacao === "aberta"){
+    const rascunho = RASCUNHOS_DA_CONVERSA[ctx.chave + "|" + papel] || "";
+    rodape = (papel === "diarista"
+        ? '<div class="respostas-prontas">' + RESPOSTAS_PRONTAS_DELA.map(function(t, i){
+            return '<button onclick="enviarRespostaPronta(' + i + ')">' + esc(t) + '</button>';
+          }).join("") + '</div>'
+        : "")
+      + '<div class="compositor">'
+      +   '<input id="campo-conversa" type="text" maxlength="' + TAMANHO_MAXIMO_DA_MENSAGEM + '" '
+      +     'enterkeyhint="send" autocomplete="off" placeholder="Escreva uma mensagem..." '
+      +     'value="' + esc(rascunho) + '" oninput="guardarRascunho(\'' + papel + '\', this.value)" '
+      +     'onkeydown="if(event.key===\'Enter\'){event.preventDefault();enviarDoCampo(\'' + papel + '\');}">'
+      +   '<button class="btn btn-principal" aria-label="Enviar" onclick="enviarDoCampo(\'' + papel + '\')">➤</button>'
+      + '</div>';
+  } else {
+    rodape = '<button class="btn btn-claro" onclick="' + irAoSuporte + '">Falar com o suporte</button>';
+  }
+
+  /* data-conversa: o relógio confere que a lista na tela é desta conversa
+     antes de trocá-la sozinho */
+  return cabecalhoDaConversa(ctx.nomes[outro], subtituloDaConversa(ctx.data, agora), ctx.cores[outro])
+    + '<div class="corpo" style="background:var(--fundo)" data-conversa="' + esc(idSeguro(ctx.chave)) + '">'
+    +   corpo + '</div>'
+    + '<div class="rodape">' + rodape + '</div>';
+}
+
+/* Sem conversa (pedido cancelado, serviço que saiu da agenda): diz isso e
+   leva de volta, em vez de quebrar. */
+function semConversa(papel){
+  return cabecalho("Conversa")
+    + '<div class="corpo">'
+    +   '<div class="centro" style="flex:none;padding:18px 6px 6px;gap:10px">'
+    +     '<div class="emojao" style="font-size:52px">💬</div>'
+    +     '<b style="font-size:17px">Nenhuma conversa aberta por aqui</b>'
+    +     '<p class="apoio" style="margin:0">Cada serviço confirmado tem a sua conversa, '
+    +     'que abre na véspera, a partir das ' + HORA_DO_ENDERECO_NA_VESPERA + 'h.</p></div>'
+    +   (papel === "cliente"
+      ? '<button class="btn btn-principal" style="margin-top:14px" onclick="trocarAba(\'mensagens\')">Ver minhas mensagens</button>'
+      : '<button class="btn btn-principal" style="margin-top:14px" onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver minha agenda</button>')
+    + '</div>';
+}
+
+/* O relógio da conversa: rola até a última mensagem, e acorda na hora em
+   que ela abre, fecha ou chega mensagem de exemplo. Pelo agendar(), como
+   todo relógio do app: trocar de tela desliga. */
+function aoEntrarNaConversa(){
+  agendar(function(){
+    const corpo = document.querySelector(".corpo");
+    if(corpo) corpo.scrollTop = corpo.scrollHeight;
+  }, 0);
+  const ctx = contextoDaConversa(E.conversaNaTela);
+  if(!ctx) return;
+  const agora = relogioDaAgenda().getTime();
+  const momentos = [momentoQueAConversaAbre(ctx).getTime(), momentoQueAConversaFecha(ctx).getTime()]
+    .concat(exemplosDaConversa(ctx).map(function(m){ return m.em; }))
+    .filter(function(t){ return !isNaN(t) && t > agora; });
+  if(!momentos.length) return;
+  const espera = Math.min(ESPERA_MAXIMA_DO_RELOGIO_DA_RUA_MS, Math.min.apply(null, momentos) - agora + 1000);
+  agendar(atualizarConversaNaTela, espera);
+}
+
+/* Quando o relógio acorda. Se a conversa abriu ou fechou, o rodapé muda
+   (campo, respostas, suporte) e a tela é redesenhada inteira. Se só chegou
+   mensagem, troca SÓ a lista: o campo continua o mesmo, com o que estava
+   sendo escrito e o teclado aberto — no iPhone, devolver o foco fora de
+   um toque não reabre o teclado. A mensagem que chega assim só fica lida:
+   quem está na conversa não ganha aviso (A18-10). */
+function atualizarConversaNaTela(){
+  const papel = E.tela === TELA_DA_CONVERSA.diarista ? "diarista" : "cliente";
+  const ctx = contextoDaConversa(E.conversaNaTela);
+  const agora = relogioDaAgenda();
+  const corpo = document.querySelector(".corpo[data-conversa]");
+  const soALista = !!(ctx && corpo && document.getElementById("campo-conversa")
+    && E.tela === TELA_DA_CONVERSA[papel] && ultimaTelaDesenhada === E.tela
+    && corpo.getAttribute("data-conversa") === idSeguro(ctx.chave)
+    && situacaoDaConversa(ctx, agora) === "aberta");
+  if(!soALista){
+    const digitando = document.activeElement && document.activeElement.id === "campo-conversa";
+    desenhar();
+    if(digitando) focarCampoDaConversa();
+    return;
+  }
+  corpo.innerHTML = mioloDaConversa(ctx, papel, agora, false);
+  aoEntrarNaConversa();
+}
+
+/* A CONVERSA DO LADO DO CLIENTE (tela 29). Era fixa e abria desde o aceite;
+   desde 12/10/2026 segue a regra da conversa (A18): véspera às 18h, até as
+   23h59 do dia do serviço. O desenho é o mesmo. */
+TELAS.chatProfissional = {
+  html: function(){ return telaDaConversa("cliente"); },
+  aoEntrar: function(){ aoEntrarNaConversa(); }
 };
 
 TELAS.chatSuporte = {

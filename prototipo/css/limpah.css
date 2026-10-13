@@ -424,6 +424,34 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .servico-pausa{margin-top:8px;font-size:12px;color:var(--suave);line-height:1.5}
 /* antes das 18h da véspera: o dia em que a rua e o número chegam (A13) */
 .servico-rua{margin-top:6px;font-size:12px;font-weight:600;color:var(--roxo);line-height:1.5}
+/* mensagem do cliente que ela ainda não leu, no cartão do serviço (A18-16) */
+.servico-msg{
+  display:inline-block;margin-top:8px;padding:3px 10px;border-radius:20px;
+  background:var(--roxo-claro);color:var(--roxo);font-size:12.5px;font-weight:700;line-height:1.5;
+}
+
+/* o cartão da agenda é um botão inteiro: abre o detalhe do serviço (A18).
+   O botão do navegador não herda fonte nem cor — por isso o reset aqui. */
+.cartao.servico-toque{
+  display:block;width:100%;text-align:left;border:0;cursor:pointer;
+  font-family:inherit;font-size:inherit;line-height:inherit;color:var(--texto);
+  transition:transform .08s;
+}
+.cartao.servico-toque:active{transform:scale(.99)}
+.servico-ver{margin-top:10px;font-size:13px;font-weight:700;color:var(--roxo);text-align:right}
+
+/* o detalhe do serviço: a explicação embaixo de cada item do escopo */
+.servico-ficha .linha .val{overflow-wrap:break-word}
+.servico-ficha .linha .val small{
+  display:block;font-size:12px;font-weight:400;color:var(--suave);margin-top:2px;line-height:1.4;
+}
+/* "Como chegar": Google Maps e Waze lado a lado, cada um com 44px ou mais (R21) */
+.como-chegar{display:flex;gap:10px}
+.como-chegar .btn{
+  flex:1;min-width:0;min-height:50px;padding:12px 8px;
+  display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;
+}
+.como-chegar .btn+.btn{margin-top:0}
 
 /* o recorte dos ganhos: dois botões lado a lado, 44px de altura (R21) */
 .recorte{display:flex;gap:8px;margin:0 0 12px}
@@ -436,12 +464,16 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 
 .valor-grande{font-size:30px;font-weight:800;color:var(--verde);line-height:1.15;margin:4px 0 8px}
 
-/* o cartão discreto da renda do conjunto, na home dela */
-.item.renda-conjunto .icone{
+/* o cartão discreto da renda do conjunto, na home dela, e a linha "Já
+   terminou hoje" da agenda (A18-14), que leva ao detalhe e à conversa */
+.item.renda-conjunto .icone,
+.item.ja-terminou .icone{
   width:42px;height:42px;flex:none;border-radius:12px;background:var(--roxo-claro);
   display:flex;align-items:center;justify-content:center;color:var(--roxo);
 }
-.item.renda-conjunto .seta{color:var(--roxo);font-size:16px;flex:none}
+.item.ja-terminou .icone{color:var(--verde);font-weight:800;font-size:18px}
+.item.renda-conjunto .seta,
+.item.ja-terminou .seta{color:var(--roxo);font-size:16px;flex:none}
 
 .extrato-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .extrato-cab b{font-size:14.5px}
@@ -512,3 +544,78 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .alerta-cheio .miudo{
   font-size:11.5px;opacity:.78;text-align:center;margin-top:10px;line-height:1.55;
 }
+
+
+/* ---------- a conversa cliente ↔ diarista (A18, 12/10/2026) ----------
+
+   A cara é a da conversa que o cliente já tinha (os balões continuam no
+   telas-cliente.js, balaoDaConversa). Aqui ficam só as peças novas. */
+
+/* "Hoje", "Ontem", entre mensagens de dias diferentes */
+.dia-conversa{text-align:center;font-size:11.5px;font-weight:700;color:var(--suave);margin:4px 0 10px}
+
+/* a mensagem do próprio app (a explicação do contato escondido) */
+.msg-app{
+  background:var(--roxo-claro);color:var(--roxo-escuro);border-radius:12px;
+  padding:10px 12px;margin:0 4px 12px;font-size:12.5px;line-height:1.5;text-align:center;
+}
+.conversa-vazia{text-align:center;font-size:13px;color:var(--suave);padding:18px 10px;line-height:1.55}
+
+/* as respostas de um toque dela: duas por linha, e a que sobra ocupa a
+   linha inteira. Uma por linha comia 230px do rodapé num celular de 320px;
+   assim são duas fileiras. O texto pode quebrar dentro do botão, e cada um
+   tem 44px de altura ou mais (R21) */
+.respostas-prontas{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.respostas-prontas button:last-child:nth-child(odd){grid-column:1 / -1}
+.respostas-prontas button{
+  min-width:0;min-height:44px;padding:6px 10px;border-radius:22px;cursor:pointer;
+  border:1.5px solid var(--roxo-borda);background:var(--branco);color:var(--roxo);
+  font-family:inherit;font-size:13.5px;font-weight:700;line-height:1.25;
+}
+.respostas-prontas button:active{background:var(--roxo-claro)}
+/* Com o CAMPO em foco (o teclado aberto), as respostas de um toque saem:
+   num celular de 320px o rodapé ocupava 184px, e com o teclado quase não
+   sobrava lugar para as mensagens. Quem está digitando não precisa delas;
+   ao sair do campo, elas voltam.
+
+   Só o campo, e nunca "qualquer foco no rodapé" (era :focus-within): no
+   Chrome o botão ganha foco ao ser apertado, e as respostas sumiam entre o
+   apertar e o soltar — o toque caía no vazio e nada era enviado (revisão
+   de 12/10/2026). Navegador antigo, sem :has, ignora a regra e deixa as
+   respostas sempre à vista: ocupa espaço, mas funciona. */
+.rodape:has(#campo-conversa:focus) .respostas-prontas{display:none}
+
+/* o campo e o botão de enviar. 16px no campo, senão o iPhone dá zoom */
+.compositor{display:flex;gap:8px}
+.compositor input{
+  flex:1;min-width:0;border:1.5px solid var(--borda);background:var(--branco);color:var(--texto);
+  border-radius:24px;padding:13px 16px;font-size:16px;font-family:inherit;
+}
+.compositor input:focus{outline:none;border-color:var(--roxo)}
+.compositor .btn{width:50px;min-height:50px;flex:none;padding:0;border-radius:50%}
+
+/* a nota âmbar da maquete: o que o app de verdade faz (A18-13) */
+.nota-maquete{
+  background:var(--ambar-claro);color:var(--ambar);border:1.5px dashed var(--ambar);
+  border-radius:12px;padding:10px 12px;margin:10px 0 12px;
+  font-size:12.5px;line-height:1.5;overflow-wrap:anywhere;
+}
+.nota-maquete b{display:block;margin-bottom:2px}
+
+/* o quadro "NA MAQUETE" da conversa: ver o lado do outro (A18-12) */
+.cartao.maquete{
+  border:1.5px dashed var(--ambar);background:var(--ambar-claro);box-shadow:none;
+  margin-top:14px;font-size:12.5px;line-height:1.55;color:var(--texto);
+}
+.cartao.maquete b{display:block;font-size:13px;color:var(--ambar);margin-bottom:4px}
+.cartao.maquete .btn{margin-top:10px;background:var(--branco)}
+
+/* o cartão de mensagem nova, nas telas de entrada */
+.mensagem-nova .info{flex:1;min-width:0}
+.mensagem-nova .info b{font-size:14.5px}
+.mensagem-nova .info span{overflow-wrap:anywhere;color:var(--texto)}
+/* as outras conversas com mensagem nova: o cartão mostra só a mais recente */
+.mensagem-nova .mais-conversas{margin-top:10px;font-size:12.5px;color:var(--suave);line-height:1.5}
+
+/* a última mensagem, na lista de Mensagens: uma linha só, com reticências */
+.item .txt span.previa{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

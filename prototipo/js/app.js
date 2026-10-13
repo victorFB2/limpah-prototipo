@@ -197,17 +197,23 @@ function desenhar(){
      Junto vai a rolagem: sem guardá-la, mexer num adicional lá embaixo
      jogava a lista de volta para o topo. */
   const mesmaTela = (ultimaTelaDesenhada === E.tela);
-  const corpoAntigo = palco.querySelector(".corpo");
-  const rolagem = (mesmaTela && corpoAntigo) ? corpoAntigo.scrollTop : 0;
+  /* .corpo é a rolagem das telas comuns; .miolo é a ficha do alerta de tela
+     cheia, que rola por dentro (12/10/2026: a ficha voltava ao topo). */
+  const ROLAVEIS = [".corpo", ".miolo"];
+  const rolagens = ROLAVEIS.map(function(sel){
+    const antigo = mesmaTela ? palco.querySelector(sel) : null;
+    return antigo ? antigo.scrollTop : 0;
+  });
 
   palco.innerHTML = '<div class="tela' + (mesmaTela ? " sem-animacao" : "") + '">'
                   + tela.html() + '</div>';
   ultimaTelaDesenhada = E.tela;
 
-  if(rolagem){
-    const corpo = palco.querySelector(".corpo");
-    if(corpo) corpo.scrollTop = rolagem;
-  }
+  ROLAVEIS.forEach(function(sel, i){
+    if(!rolagens[i]) return;
+    const novo = palco.querySelector(sel);
+    if(novo) novo.scrollTop = rolagens[i];
+  });
 
   if(tela.aoEntrar) tela.aoEntrar();
 }

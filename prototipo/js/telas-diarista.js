@@ -382,12 +382,17 @@ TELAS.diaristaRegiao = {
     +   '<h2 class="titulo">Onde você quer trabalhar? 📍</h2>'
     +   '<p class="apoio">Escolha os bairros que ficam bons para você. Dá para mudar quando quiser.</p>'
     +   lista
+    /* R16 revista (12/10/2026): o transporte é dela, e o valor da tela é o
+       que ela recebe. Dito aqui, antes da primeira oportunidade, para ela
+       nunca esperar um acréscimo que não vem. */
     +   '<div class="aviso roxo">🚶<div><b>Atendemos num raio de '
     +     DESLOCAMENTO.raioMaximoKm + ' km</b>'
     +     'De propósito: perto significa menos tempo de trânsito e mais tempo seu. '
-    +     'Acima de ' + DESLOCAMENTO.gratisAteKm + ' km, o cliente paga '
-    +     moeda(DESLOCAMENTO.valor) + ' de deslocamento — e esse valor é '
-    +     '<b>todo seu</b>.</div></div>'
+    /* sem <b> no meio da frase: dentro do .aviso o <b> vira título, em
+       linha própria (o "todo seu" de antes quebrava a frase assim) */
+    +     'O transporte é por sua conta, e o valor de cada oportunidade é '
+    +     'exatamente o que você recebe. Você vê o bairro e a distância '
+    +     'antes de aceitar.</div></div>'
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" ' + (d.bairros.length ? "" : "disabled")
@@ -426,28 +431,50 @@ function terminarPortaoUm(){
 
    `rua` é o endereço completo, FICTÍCIO. Ele mora aqui e só aparece na
    agenda, depois do aceite (R18) E a partir das 18h da véspera (A13) — quem
-   decide é enderecoLiberado(), no dados.js. Os testes 21 e 24 conferem. */
+   decide é enderecoLiberado(), no dados.js. Os testes 21 e 24 conferem.
+
+   `cliente` é o nome inteiro, FICTÍCIO, como o sobrenome das PROFISSIONAIS:
+   fica aqui e nunca chega à agenda dela. O aceite guarda só "Carla M." —
+   o mesmo cuidado que o cliente tem com ela (A18, item 1; teste 26).
+
+   `observacoes` é o recado do cliente, texto livre. Só aparece junto com a
+   rua (A18, item 3): o da Butantã mostra por quê — ele traz o apartamento. */
 const OPORTUNIDADES = [
   { emDias:1, periodo:"manha", bairro:"Vila Madalena", km:2.1, rua:"Rua dos Ipês, 48",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1}, adicionais:[] } },
+    cliente:"Carla Mendes",
+    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1,
+      observacoes:"Tenho um gato bem tranquilo. Os produtos ficam embaixo da pia."}, adicionais:[] } },
   { emDias:1, periodo:"tarde", bairro:"Pinheiros", km:3.4, rua:"Rua das Acácias, 215",
-    pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:4, banheiros:2}, adicionais:["passar"] } },
+    cliente:"Beatriz Lopes",
+    pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:4, banheiros:2,
+      observacoes:"As roupas para passar ficam no cesto da lavanderia."}, adicionais:["passar"] } },
   { emDias:2, periodo:"manha", bairro:"Perdizes", km:4.8, rua:"Rua Jacarandá, 90",
+    cliente:"Renata Alves",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:5, banheiros:2}, adicionais:[] } },
   { emDias:2, periodo:"tarde", bairro:"Butantã", km:5.9, rua:"Rua das Orquídeas, 37",
-    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
+    cliente:"Patrícia Gomes",
+    pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1,
+      observacoes:"É o bloco B, apartamento 32. O porteiro já vai estar avisado."}, adicionais:[] } },
   { emDias:3, periodo:"manha", bairro:"Lapa", km:4.2, rua:"Rua dos Girassóis, 152",
+    cliente:"Luciana Rocha",
     pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:2}, adicionais:[] } },
   { emDias:3, periodo:"tarde", bairro:"Pompeia", km:6.3, rua:"Rua das Hortênsias, 64",
+    cliente:"Sandra Nunes",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
   { emDias:4, periodo:"tarde", bairro:"Perdizes", km:4.6, rua:"Rua Manacá, 301",
+    cliente:"Fernanda Costa",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:2}, adicionais:["geladeira"] } },
   /* Acrescentada em 12/10/2026 (R26): é a única que cabe no MESMO dia de
      outra (amanhã de manhã + amanhã à noite = 8h). Sem ela, a demonstração
      nunca mostraria a agenda chegando ao teto do dia. */
   { emDias:1, periodo:"noite", bairro:"Pinheiros", km:2.8, rua:"Rua dos Cedros, 19",
+    cliente:"Juliana Prado",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
 ];
+
+/* A cidade das oportunidades fictícias, para o link do mapa não cair numa
+   Rua dos Ipês de outro estado. No app de verdade vem da casa cadastrada. */
+const CIDADE_DAS_OPORTUNIDADES = "São Paulo - SP";
 
 const NOME_DA_LIMPEZA = { padrao:"Limpeza padrão", completa:"Limpeza completa" };
 
@@ -481,12 +508,14 @@ function todasAsOportunidades(){
         km: c.km,
         janela: janela ? janela.texto : conta.horas + "h",
         horas: conta.horas,
-        /* com o deslocamento, que é todo dela (R16) — a mesma conta da
-           agenda e do extrato, para o valor nunca divergir */
+        /* tabela + a parte dela nos adicionais, em qualquer distância (R16
+           revista) — a mesma conta da agenda e do extrato, para o valor
+           nunca divergir */
         receber: quantoElaRecebe(c.pedido, c.km),
-        deslocamento: taxaDeDeslocamento(c.km),
         /* guardados para o aceite; NENHUMA tela anterior ao aceite usa */
         endereco: c.rua || "",
+        /* já curto: o sobrenome do cliente não sai daqui (A18) */
+        cliente: nomeCurto(c.cliente),
         pedido: c.pedido,
         resumo: tipo + " · " + c.pedido.respostas.comodos + " cômodos, "
               + c.pedido.respostas.banheiros
@@ -575,6 +604,9 @@ TELAS.diaristaHome = {
     +   '</div>'
     +   '<h2 class="titulo">Olá, ' + esc((d.nome || "").split(" ")[0] || "tudo bem") + '! 👋<br>'
     +     (pode ? "Veja o que tem para hoje." : "Veja o que está esperando por você.") + '</h2>'
+
+    /* mensagem nova de um cliente, com o app fora da conversa (A18) */
+    +   (pode ? cartaoDeMensagemNova("diarista") : "")
 
     +   (pode ? faixaDoCadastro() : interruptorTravado())
 
@@ -670,12 +702,6 @@ TELAS.diaristaOportunidade = {
     +     '<div class="linha"><span class="rot">Região</span><span class="val">' + esc(o.bairro) + '</span></div>'
     +     '<div class="linha"><span class="rot">Distância</span><span class="val">'
     +       String(o.km).replace(".", ",") + ' km</span></div>'
-    /* R16: o deslocamento já está no valor de cima, e é todo dela. Sem esta
-       linha, R$ 120 num serviço de 4h parece erro da tabela. */
-    +     (o.deslocamento
-        ? '<div class="linha"><span class="rot">Inclui deslocamento</span><span class="val">'
-          + moeda(o.deslocamento) + ' · todo seu</span></div>'
-        : "")
     +   '</div>'
     +   (o.horas > 6
       ? '<div class="aviso roxo">☕<div><b>Janela de ' + o.horas + ' horas</b>'
@@ -1226,6 +1252,11 @@ function aceitarOportunidade(){
        regras em vez de confiar num número guardado */
     periodo: o.periodo, km: o.km, endereco: o.endereco,
     pedido: JSON.parse(JSON.stringify(o.pedido || null)),
+    /* "Carla M.", para o detalhe do serviço (A18) — nunca o sobrenome */
+    cliente: o.cliente || "",
+    /* a hora do aceite: quem aceita depois das 18h da véspera conversa na
+       hora, e nenhuma mensagem de exemplo pode ser de antes do aceite */
+    aceitoEm: relogioDaAgenda().getTime(),
   }]);
   /* para a tela do aceite dizer quando a rua aparece NESTE serviço */
   E.aceitoAgora = { oportunidadeId: o.id, data: o.data };
@@ -1642,7 +1673,11 @@ function relogioDoAlerta(){
       tocarAlerta();
     }
 
-    if(E.alerta.restam > 0){ salvar(); desenhar(); return; }
+    if(E.alerta.restam > 0){
+      salvar();
+      if(!atualizarRelogioDoAlertaNaTela()) desenhar();
+      return;
+    }
 
     if(E.alerta.pergunta){
       /* não respondeu à pergunta: desliga sozinho, sem punição nenhuma */
@@ -1667,6 +1702,47 @@ function relogioDoAlerta(){
       voltarDeOndeVeio();
     }
   }, 1000);
+}
+
+/* O RELÓGIO SEM REDESENHAR A TELA.
+
+   Redesenhar o alerta inteiro a cada segundo trocava todo o conteúdo: a
+   ficha do pedido voltava para o topo e, no celular, o dedo que estava
+   rolando perdia o que segurava. O dono não conseguia descer para ver o
+   pedido (12/10/2026). Agora o segundo a segundo troca só o que muda — o
+   número, a barra, o aperto dos 30s e a contagem do som. A tela inteira só
+   é redesenhada quando muda de verdade (expirou, virou pergunta).
+
+   Os textos vêm das mesmas funções que o html() usa, para os dois nunca
+   discordarem. Devolve false quando não há o que atualizar no lugar — aí
+   quem chamou redesenha, como antes. */
+function atualizarRelogioDoAlertaNaTela(){
+  if(!E.alerta || E.alerta.pergunta || E.tela !== "diaristaAlerta") return false;
+  const caixa = document.querySelector("#palco .alerta-cheio");
+  if(!caixa) return false;
+  const relogio = caixa.querySelector(".relogio");
+  const barra = caixa.querySelector(".trilho div");
+  const toques = caixa.querySelector(".toques");
+  if(!relogio || !barra || !toques) return false;
+
+  relogio.textContent = textoDoRelogioDoAlerta(E.alerta.restam);
+  barra.style.width = fatiaDoTrilhoDoAlerta(E.alerta.restam) + "%";
+  caixa.classList.toggle("apertado", E.alerta.restam <= 30);
+  toques.textContent = textoDosToquesDoAlerta();
+  return true;
+}
+
+function textoDoRelogioDoAlerta(restam){
+  return Math.floor(restam / 60) + ":" + String(restam % 60).padStart(2, "0");
+}
+
+function fatiaDoTrilhoDoAlerta(restam){
+  return Math.max(0, Math.min(100, (restam / DISPONIBILIDADE.alertaExpiraEmSegundos) * 100));
+}
+
+function textoDosToquesDoAlerta(){
+  const n = E.toquesDoAlerta || 0;
+  return n + (n === 1 ? " vez" : " vezes");
 }
 
 /* Qualquer sinal de vida zera a conta de ignorados. Recusar TAMBÉM — recusar
@@ -1809,12 +1885,9 @@ TELAS.diaristaAlerta = {
     const o = oportunidadePorId(E.alerta.oportunidadeId);
     if(!o) return TELAS.diaristaHome.html();
 
+    /* o segundo a segundo NÃO passa por aqui: ver atualizarRelogioDoAlertaNaTela() */
     const restam = E.alerta.restam;
-    const total = DISPONIBILIDADE.alertaExpiraEmSegundos;
-    const m = Math.floor(restam / 60);
-    const seg = String(restam % 60).padStart(2, "0");
     const apertado = restam <= 30;
-    const fatia = Math.max(0, Math.min(100, (restam / total) * 100));
 
     return ''
     + '<div class="alerta-cheio' + (apertado ? " apertado" : "") + '">'
@@ -1822,8 +1895,8 @@ TELAS.diaristaAlerta = {
     +   '<div class="topo">'
     +     '<div class="sino">🔔</div>'
     +     '<div class="chamada">Novo pedido para você!</div>'
-    +     '<div class="relogio">' + m + ':' + seg + '</div>'
-    +     '<div class="trilho"><div style="width:' + fatia + '%"></div></div>'
+    +     '<div class="relogio">' + textoDoRelogioDoAlerta(restam) + '</div>'
+    +     '<div class="trilho"><div style="width:' + fatiaDoTrilhoDoAlerta(restam) + '%"></div></div>'
     +   '</div>'
 
     +   '<div class="miolo">'
@@ -1853,8 +1926,7 @@ TELAS.diaristaAlerta = {
     +       'Aceitar agora</button>'
     +     '<button class="btn btn-claro" onclick="recusarDoAlerta()">Agora não</button>'
     +     '<div class="miudo">Deixar passar não é falta. Não conta nada contra você.'
-    +       '<br>🔊 o som tocou ' + (E.toquesDoAlerta || 0)
-    +       (E.toquesDoAlerta === 1 ? ' vez' : ' vezes')
+    +       '<br>🔊 o som tocou <span class="toques">' + textoDosToquesDoAlerta() + '</span>'
     +       ' · repete a cada ' + DISPONIBILIDADE.repeteOSomACadaSegundos + 's</div>'
     +   '</div>'
     + '</div>';
@@ -2165,15 +2237,17 @@ function resumoDoPedido(pedido){
    Para esse, procura a oportunidade de onde ele veio; se não achar, mostra o
    valor combinado no aceite, sem inventar linha nenhuma. */
 function detalhesDoServico(s){
-  let pedido = s.pedido, km = s.km, endereco = s.endereco;
-  if(!pedido){
-    const origem = OPORTUNIDADES[s.oportunidadeId];
-    if(origem && origem.bairro === s.bairro){
-      pedido = origem.pedido;
-      if(km == null) km = origem.km;
-      if(!endereco) endereco = origem.rua;
-    }
+  let pedido = s.pedido, km = s.km, endereco = s.endereco, cliente = s.cliente;
+  /* a oportunidade de onde ele veio — só se for a mesma casa */
+  const origem = OPORTUNIDADES[s.oportunidadeId];
+  const daOrigem = (origem && origem.bairro === s.bairro) ? origem : null;
+  if(!pedido && daOrigem){
+    pedido = daOrigem.pedido;
+    if(km == null) km = daOrigem.km;
+    if(!endereco) endereco = daOrigem.rua;
   }
+  /* aceito antes da A18 (12/10/2026): o nome do cliente não foi guardado */
+  if(!cliente && daOrigem) cliente = daOrigem.cliente;
   const extrato = pedido ? extratoDoServico(pedido, km) : null;
 
   /* A RUA SÓ A PARTIR DAS 18H DA VÉSPERA (A13). O corte é aqui, e não no
@@ -2181,24 +2255,61 @@ function detalhesDoServico(s){
      a rua antes da hora — nenhuma consegue mostrar por engano. */
   const liberado = enderecoLiberado(s, relogioDaAgenda());
 
+  /* E A RUA SAI QUANDO O SERVIÇO TERMINA (A18-14, provisória). O detalhe
+     continua aberto pelo extrato e pela linha "Já terminou hoje" — é o
+     caminho até a conversa —, mas a rua, o "Como chegar" e o recado não
+     servem mais para nada: guardar à mostra o endereço de quem já foi
+     atendido é guardar dado pessoal sem motivo (LGPD). Antes da A18-14 a
+     rua sumia junto com o cartão da agenda (A8); assim continua. Ficam o
+     bairro e a distância. */
+  const terminou = servicoJaTerminou(s);
+  const mostraACasa = liberado && !terminou;
+
+  /* O RECADO DO CLIENTE vai junto com a rua (A18, item 3): é texto livre, e
+     o cliente pode ter escrito o apartamento ou a própria rua ali.
+
+     E passa pelo MESMO filtro da conversa (A18-8): telefone, e-mail, link e
+     @perfil viram "[contato escondido pelo app]". Sem isto, o que o app
+     esconde na conversa passava pelo recado ("me chama no zap 11 9..."). No
+     app de verdade o servidor filtra ao SALVAR o pedido: o celular dela
+     nunca recebe o contato original. */
+  const recado = esconderContatos(
+    String((pedido && pedido.respostas && pedido.respostas.observacoes) || "").trim()).texto;
+
   /* O VALOR É O COMBINADO NO ACEITE (s.receber) — é o contrato. A conta pela
      tabela de hoje serve só para quebrar o valor em linhas. Antes o valor
-     era sempre recalculado: se a tabela, o 65% ou o deslocamento mudassem,
-     todo serviço já aceito mudava de valor sem aviso (o Butantã aceito em
-     agosto por R$ 110 aparecia como R$ 120). Os exemplos não têm combinado:
-     para eles vale a tabela. */
+     era sempre recalculado: se a tabela ou o 65% mudassem, todo serviço já
+     aceito mudava de valor sem aviso. Aconteceu com a R16 revista
+     (12/10/2026): um Butantã aceito na maquete por R$ 120, com o
+     deslocamento de antes, continua valendo R$ 120 — a tabela de hoje daria
+     R$ 110. É dado antigo de maquete: no app de verdade nenhum serviço nasce
+     com deslocamento (DECISOES, R16). Os exemplos não têm combinado: para
+     eles vale a tabela. */
   const combinado = Number(s.receber);
   const temCombinado = s.receber != null && isFinite(combinado) && combinado > 0;
   const valor = temCombinado ? combinado : (extrato ? extrato.total : 0);
   return {
+    /* para o cartão da agenda abrir o detalhe certo (diaristaServico) */
+    oportunidadeId: s.oportunidadeId,
     data: s.data, inicio: s.inicio, fim: s.fim,
     /* a JANELA, nunca "N horas" (R9) */
     janela: "das " + s.inicio + "h às " + s.fim + "h",
     horasDaJanela: s.fim - s.inicio,
     bairro: s.bairro || "",
-    endereco: liberado ? (endereco || "") : "",
+    endereco: mostraACasa ? (endereco || "") : "",
     /* a frase com o dia em que a rua chega — só enquanto ela não chegou */
-    ruaDepois: (!liberado && endereco) ? fraseDaRuaNaVespera(s) : "",
+    ruaDepois: (!liberado && !terminou && endereco) ? fraseDaRuaNaVespera(s) : "",
+    /* depois do serviço: a rua saiu, e a tela diz por quê */
+    ruaSaiu: terminou && !!endereco,
+    recado: mostraACasa ? recado : "",
+    recadoDepois: !liberado && !terminou && !!recado,
+    /* a conversa com o cliente abre junto com a rua (A18, item 2) e fecha
+       às 23h59 do dia do serviço (A18-7) */
+    conversaAberta: conversaLiberada(s, relogioDaAgenda()),
+    conversaSituacao: situacaoDaConversa(s, relogioDaAgenda()),
+    /* "Carla M." — nomeCurto de novo, caso um dado antigo traga o nome inteiro */
+    cliente: cliente ? nomeCurto(cliente) : "",
+    pedido: pedido || null,
     km: km,
     resumo: pedido ? resumoDoPedido(pedido) : (s.resumo || ""),
     extrato: extrato,
@@ -2462,9 +2573,38 @@ function kmEscrito(km){ return String(km).replace(".", ",") + " km"; }
 /* --------------------------------------------------------------------------
    MINHA AGENDA (tela 44 / 47)
    -------------------------------------------------------------------------- */
+/* O cartão inteiro é o botão do detalhe (A18): "clicar e obter mais
+   informações", nas palavras do dono. Dentro dele não há outro botão — um
+   botão dentro de outro o celular não sabe qual apertar.
+
+   O número e a data vão limpos para dentro do onclick: são do próprio app,
+   mas um dado estragado com aspas quebraria o toque. */
+function toqueDoDetalhe(s){
+  const id = Number(s.oportunidadeId);
+  const data = String(s.data || "").replace(/[^0-9-]/g, "");
+  return 'abrirServicoDaAgenda(' + (isFinite(id) ? id : "null") + ',\'' + data + '\')';
+}
+
+/* Quantas mensagens do cliente deste serviço ela ainda não leu — só com a
+   conversa aberta. O cartão de aviso no topo mostra UMA conversa (a mais
+   recente); a marca em cada cartão é como ela acha as outras (A18-16). */
+function novasDoServico(s){
+  if(!s.conversaAberta) return 0;
+  const ctx = contextoDaConversa(chaveDaConversaDoServico(s));
+  return ctx ? naoLidasDaConversa(ctx, "diarista", relogioDaAgenda()).length : 0;
+}
+
+function marcaDeMensagemNova(s){
+  const novas = novasDoServico(s);
+  if(!novas) return "";
+  const primeiro = String(s.cliente || "").split(" ")[0] || "o cliente";
+  return '<div class="servico-msg">💬 ' + (novas > 1 ? novas + ' mensagens novas' : 'Mensagem nova')
+    + ' de ' + esc(primeiro) + '</div>';
+}
+
 function cartaoDaAgenda(s){
   const adicionais = s.extrato ? s.extrato.adicionais : [];
-  return '<div class="cartao">'
+  return '<button class="cartao servico-toque" onclick="' + toqueDoDetalhe(s) + '">'
     + (servicoAcontecendoAgora(s)
       ? '<div style="margin-bottom:8px"><span class="selo verde">acontecendo agora</span></div>' : "")
     + '<div class="servico-topo">'
@@ -2482,11 +2622,44 @@ function cartaoDaAgenda(s){
     +   (s.endereco ? '<b>' + esc(s.endereco) + '</b> · ' : "") + esc(s.bairro)
     +   (s.km != null ? ' · ' + kmEscrito(s.km) : "") + '</div>'
     + (s.ruaDepois ? '<div class="servico-rua">🔒 ' + esc(s.ruaDepois) + '</div>' : "")
+    + marcaDeMensagemNova(s)
     /* R9: a pausa é direito dela, e a hora é ela quem escolhe */
     + (s.horasDaJanela > 6
       ? '<div class="servico-pausa">☕ Janela longa: você tem direito a intervalo de descanso. '
         + 'A hora é você quem escolhe.</div>' : "")
-    + '</div>';
+    + '<div class="servico-ver">Ver detalhes do serviço ›</div>'
+    + '</button>';
+}
+
+/* JÁ TERMINOU HOJE (A18-14, provisória). O cartão do que terminou sai da
+   agenda (A8), mas a conversa com o cliente fica aberta até as 23h59 do dia
+   (A18-7) — e sem este caminho ela não tinha como chegar lá à tarde para
+   escrever "esqueci o guarda-chuva". Uma linha por serviço, só enquanto a
+   conversa dele está aberta. Depois disso o caminho é o extrato. */
+function terminaramComAConversaAberta(){
+  const agora = relogioDaAgenda();
+  return (euSouDiarista().agenda || [])
+    .filter(function(s){ return servicoJaTerminou(s) && situacaoDaConversa(s, agora) === "aberta"; })
+    .map(detalhesDoServico)
+    .sort(function(a, b){ return a.inicio - b.inicio; });
+}
+
+function blocoJaTerminouHoje(){
+  const lista = terminaramComAConversaAberta();
+  if(!lista.length) return "";
+  return '<div class="rotulo">Já terminou hoje</div>'
+    + lista.map(function(s){
+        const primeiro = String(s.cliente || "").split(" ")[0];
+        return '<button class="item ja-terminou" onclick="' + toqueDoDetalhe(s) + '">'
+          +   '<div class="icone">✓</div>'
+          +   '<div class="txt"><b>' + esc(s.janela) + ' · ' + esc(s.bairro) + '</b>'
+          +     '<span>A conversa com ' + esc(primeiro || "o cliente") + ' fica aberta até as '
+          +     ULTIMO_MINUTO_DA_CONVERSA.hora + 'h'
+          +     String(ULTIMO_MINUTO_DA_CONVERSA.minuto).padStart(2, "0") + '</span>'
+          +     marcaDeMensagemNova(s) + '</div>'
+          +   '<div class="seta">›</div>'
+          + '</button>';
+      }).join("");
 }
 
 function diaDaAgenda(dia){
@@ -2525,10 +2698,12 @@ TELAS.diaristaAgenda = {
       const dias = agendaPorDia();
       miolo = dias.length
         ? dias.map(diaDaAgenda).join("")
+          + blocoJaTerminouHoje()
           + '<div class="rodape-seguro">Para proteger a casa de cada cliente, a rua e o número '
           + 'aparecem a partir das ' + HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera. '
           + 'Eles são só para você chegar lá.</div>'
-        : '<div class="centro" style="flex:none;padding:18px 6px 6px;gap:10px">'
+        : blocoJaTerminouHoje()
+          + '<div class="centro" style="flex:none;padding:18px 6px 6px;gap:10px">'
           + '<div class="emojao" style="font-size:52px">📅</div>'
           + '<b style="font-size:17px">Sua agenda está livre</b>'
           + '<p class="apoio" style="margin:0">Quando você aceitar um serviço, ele aparece aqui — '
@@ -2547,6 +2722,8 @@ TELAS.diaristaAgenda = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Minha agenda 📅</h2>'
     +   '<p class="apoio">Os serviços que você aceitou, do mais próximo ao mais distante.</p>'
+    /* mensagem nova de um cliente (A18) — só para quem já trabalha (R24) */
+    +   (e.podeAceitar ? cartaoDeMensagemNova("diarista") : "")
     +   miolo
     + '</div>'
     + abasDaDiarista("agenda");
@@ -2583,6 +2760,290 @@ function redesenharQuandoARuaChegar(){
   /* +1s: acordar um tiquinho depois das 18h, nunca um tiquinho antes */
   agendar(desenhar, Math.min(ESPERA_MAXIMA_DO_RELOGIO_DA_RUA_MS, proximo - agora + 1000));
 }
+
+
+/* --------------------------------------------------------------------------
+   DETALHE DO SERVIÇO (tela 47B) — A18, 12/10/2026
+
+   Pedido do dono: "na agenda a diarista clicar e obter mais informações".
+   Tudo o que ela precisa para ir trabalhar, numa tela só.
+
+   Nenhuma regra mora aqui. A rua, o recado e a conversa chegam prontos de
+   detalhesDoServico() — que pergunta a enderecoLiberado() e a
+   conversaLiberada(), no dados.js —, o dinheiro sai de extratoDoServico(),
+   e o que fazer sai do CATALOGO e dos ADICIONAIS.
+   -------------------------------------------------------------------------- */
+
+/* Os aplicativos de mapa DELA (ROTA E CHEGADA, no TELAS.md): navegação
+   própria não. Cada link já leva o endereço escrito. Dois botões lado a
+   lado, e não um que pergunta qual: escolha provisória (A18, item 5).
+
+   Na maquete o endereço é fictício; no app de verdade o link só é montado
+   depois das 18h da véspera, porque antes o servidor nem envia a rua. */
+const COMO_CHEGAR = [
+  { nome:"Google Maps",
+    link:function(q){ return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(q); } },
+  { nome:"Waze",
+    link:function(q){ return "https://waze.com/ul?q=" + encodeURIComponent(q) + "&navigate=yes"; } },
+];
+
+function abrirServicoDaAgenda(id, data){
+  E.servicoAberto = { oportunidadeId: id, data: data };
+  salvar();
+  ir("diaristaServico");
+}
+
+/* Procurado pelo número E pela data, como o aceite — e só na agenda dela:
+   oportunidade que ela não aceitou não tem detalhe (lá vale a tela da
+   oportunidade, sem a rua). */
+function servicoAberto(){
+  const a = E.servicoAberto;
+  if(!a) return null;
+  const s = (euSouDiarista().agenda || []).filter(function(x){
+    return x.oportunidadeId === a.oportunidadeId && x.data === a.data;
+  })[0];
+  return s ? detalhesDoServico(s) : null;
+}
+
+/* A conversa com o cliente DESTE serviço (A18, 12/10/2026). A chave é o
+   número da oportunidade e a data — os mesmos que acham o serviço na agenda. */
+function abrirConversaComOCliente(){
+  const a = E.servicoAberto || {};
+  prepararConversa(chaveDaConversaDoServico({ oportunidadeId:a.oportunidadeId, data:a.data }));
+  ir("diaristaConversa");
+}
+
+/* O ESCOPO ESCRITO (Bloco 7): o que ela vai fazer, lido do catálogo — outra
+   categoria (passadeira, faxina pesada) se monta sozinha. A pergunta que é
+   a própria janela (a da passadeira) não entra: a janela já está no topo,
+   como horário, e "4 horas" aqui seria vender horas (R9). O recado do
+   cliente também não: ele tem lugar próprio, junto com a rua. */
+function linhasDoQueFazer(pedido){
+  const r = (pedido && pedido.respostas) || {};
+  const cat = CATALOGO.filter(function(c){ return c.id === (pedido || {}).categoria; })[0];
+  let linhas = "";
+  ((cat && cat.perguntas) || []).forEach(function(p){
+    const v = r[p.id];
+    if(v == null || v === "" || p.ehAJanela) return;
+    if(p.tipo === "opcao"){
+      const op = (p.opcoes || []).filter(function(o){ return String(o.id) === String(v); })[0];
+      if(!op) return;
+      linhas += '<div class="linha"><span class="rot">' + esc(p.rotulo) + '</span>'
+        + '<span class="val">' + esc(NOME_DA_LIMPEZA[op.id] || op.nome)
+        + (op.detalhe ? '<small>' + esc(op.detalhe) + '</small>' : "") + '</span></div>';
+    } else if(p.tipo === "contador"){
+      linhas += '<div class="linha"><span class="rot">' + esc(p.rotulo) + '</span>'
+        + '<span class="val">' + esc(v) + '</span></div>';
+    }
+  });
+  (pedido && pedido.adicionais || []).forEach(function(id){
+    const a = ADICIONAIS.filter(function(x){ return x.id === id; })[0];
+    if(!a) return;
+    linhas += '<div class="linha"><span class="rot">Adicional</span>'
+      + '<span class="val">' + esc(a.nome) + '<small>' + esc(a.detalhe) + '</small></span></div>';
+  });
+  if(pedido && pedido.duasProfissionais)
+    linhas += '<div class="linha"><span class="rot">Com você</span>'
+      + '<span class="val">mais uma profissional<small>O trabalho é dividido entre vocês duas.</small></span></div>';
+  return linhas;
+}
+
+function blocoComoChegar(s){
+  /* s.endereco chega vazio antes das 18h da véspera (detalhesDoServico):
+     sem rua, não há link — nem escondido */
+  if(!s.endereco) return "";
+  const destino = s.endereco + ", " + s.bairro + ", " + CIDADE_DAS_OPORTUNIDADES;
+  return '<div class="rotulo">Como chegar 🧭</div>'
+    + '<div class="como-chegar">' + COMO_CHEGAR.map(function(m){
+        return '<a class="btn btn-claro" href="' + esc(m.link(destino)) + '" '
+          + 'target="_blank" rel="noopener noreferrer">' + esc(m.nome) + '</a>';
+      }).join("") + '</div>'
+    + '<div class="ajuda">Abre o aplicativo de mapa do seu celular, com o endereço já preenchido.</div>';
+}
+
+function blocoDoCliente(s){
+  const nome = s.cliente || "";
+  const primeiro = nome ? nome.split(" ")[0] : "";
+  /* mensagem nova do cliente aparece no próprio botão */
+  const novas = novasDoServico(s);
+  const conversa = s.conversaAberta
+    ? '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirConversaComOCliente()">'
+      + '💬 Conversar com ' + esc(primeiro || "o cliente")
+      + (novas ? ' · ' + novas + (novas > 1 ? ' novas' : ' nova') : "") + '</button>'
+    : (s.conversaSituacao === "fechada"
+      /* depois das 23h59 do dia: dá para ler, não para escrever (A18-7) */
+      ? '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirConversaComOCliente()">'
+        + '💬 Ver a conversa com ' + esc(primeiro || "o cliente") + '</button>'
+        + '<div class="ajuda">A conversa fechou às 23h59 do dia do serviço. Precisa de algo? Fale com o suporte.</div>'
+      /* o dia vem da mesma frase da rua: as duas chegam juntas (A18, item 2) */
+      : '<div class="servico-rua" style="margin-top:12px">💬 A conversa com '
+        + esc(primeiro || "o cliente") + ' abre ' + esc(quandoARuaAparece(s)) + ' a partir das '
+        + HORA_DO_ENDERECO_NA_VESPERA + 'h, junto com a rua e o número.</div>');
+  return '<div class="rotulo">Quem pediu</div>'
+    + '<div class="cartao">'
+    +   '<div class="pessoa">' + avatar(nome || "Cliente", "var(--roxo)", "pequeno")
+    +     '<div class="info"><b>' + esc(nome || "Cliente") + '</b>'
+    +     '<span>Cliente Limpah</span></div></div>'
+    +   conversa
+    + '</div>';
+}
+
+function blocoDoDinheiro(s, e){
+  const x = s.extrato;
+  let linhas = "";
+  if(x && s.linhasFecham){
+    linhas += linhaDoExtrato("Diária · " + s.janela, x.diaria);
+    x.adicionais.forEach(function(a){ linhas += linhaDoExtrato(a.nome + " · sua parte", a.dela); });
+  } else {
+    /* a tabela mudou depois do aceite, ou é um dado antigo: vale o
+       combinado, como no extrato (R26) */
+    linhas += linhaDoExtrato("Valor combinado no aceite", s.valor);
+  }
+  /* Depois do serviço, o que vale é onde o dinheiro está AGORA — a mesma
+     frase do cartão do extrato (situacaoDoPagamento). Antes o detalhe
+     continuava no futuro ("fica guardado até o serviço terminar") dias
+     depois, ao lado de um extrato que dizia que já tinha caído. */
+  const pagamento = servicoJaTerminou(s) ? situacaoDoPagamento(s) : null;
+  return '<div class="rotulo">Quanto você recebe</div>'
+    + '<div class="cartao extrato">'
+    +   linhas
+    +   '<div class="linha total"><span class="rot">Você recebe</span>'
+    +     '<span class="val">' + moeda(s.valor) + '</span></div>'
+    +   (pagamento
+      ? '<div class="extrato-sub" style="margin-top:8px">Sem desconto nenhum. '
+        + '<span class="selo ' + pagamento.selo + '">' + esc(pagamento.texto) + '</span></div>'
+      : '<div class="extrato-sub" style="margin-top:8px">Sem desconto nenhum. O cliente já pagou: '
+        + 'o valor fica guardado com a gente até o serviço terminar e cai no seu Pix '
+        + esc(e.pixQuando) + '.</div>')
+    + '</div>';
+}
+
+TELAS.diaristaServico = {
+  html: function(){
+    const e = situacaoDaDiarista();
+    /* o estado dela vem da tabela (R24): antes da aprovação não há serviço */
+    if(!e.podeAceitar){
+      return cabecalho("Detalhes do serviço")
+        + '<div class="corpo">' + blocoAntesDeTrabalhar(e) + '</div>';
+    }
+
+    const s = servicoAberto();
+    if(!s){
+      return cabecalho("Detalhes do serviço")
+        + '<div class="corpo">'
+        +   '<div class="centro" style="flex:none;padding:18px 6px 6px;gap:10px">'
+        +     '<div class="emojao" style="font-size:52px">📅</div>'
+        +     '<b style="font-size:17px">Este serviço não está mais na sua agenda</b>'
+        +     '<p class="apoio" style="margin:0">Os que já terminaram ficam em Meus ganhos, '
+        +     'com quanto você recebeu por cada um.</p></div>'
+        +   '<button class="btn btn-principal" style="margin-top:14px" '
+        +     'onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver minha agenda</button>'
+        +   '<button class="btn btn-texto" style="min-height:44px" '
+        +     'onclick="ir(\'diaristaGanhos\',{limparHistorico:true})">Ver meus ganhos ›</button>'
+        + '</div>';
+    }
+
+    const terminou = servicoJaTerminou(s);
+    const que = linhasDoQueFazer(s.pedido);
+
+    return ''
+    + cabecalho("Detalhes do serviço")
+    + '<div class="corpo">'
+    +   '<div style="text-align:center;padding:6px 0 14px">'
+    +     (servicoAcontecendoAgora(s)
+        ? '<div style="margin-bottom:8px"><span class="selo verde">acontecendo agora</span></div>'
+        : (terminou ? '<div style="margin-bottom:8px"><span class="selo cinza">já terminou</span></div>' : ""))
+    +     '<div style="font-size:12px;color:var(--suave)">você recebe</div>'
+    +     '<div style="font-size:34px;font-weight:800;color:var(--verde)">' + moeda(s.valor) + '</div>'
+    +   '</div>'
+
+    /* QUANDO E ONDE — a janela, nunca "N horas" (R9); a rua só a partir das
+       18h da véspera (A13) */
+    +   '<div class="rotulo">Quando e onde</div>'
+    +   '<div class="cartao servico-ficha">'
+    +     '<div class="linha"><span class="rot">Dia</span><span class="val">'
+    +       esc(dataPorExtenso(s.data)) + '</span></div>'
+    +     '<div class="linha"><span class="rot">Você fica na casa</span><span class="val">'
+    +       esc(s.janela) + '</span></div>'
+    +     '<div class="linha"><span class="rot">Bairro</span><span class="val">' + esc(s.bairro)
+    +       (s.km != null ? ' · ' + kmEscrito(s.km) : "") + '</span></div>'
+    +     (s.endereco
+        ? '<div class="linha"><span class="rot">Endereço</span><span class="val">'
+          + esc(s.endereco) + '</span></div>'
+        : "")
+    +     (s.ruaDepois
+        ? '<div class="servico-rua">🔒 ' + esc(s.ruaDepois) + '</div>'
+          + '<div class="servico-pausa">É para proteger a casa do cliente. Junto com elas chega o '
+          + 'botão Como chegar, que abre o Google Maps ou o Waze do seu celular.</div>'
+        : "")
+    /* depois do serviço a rua sai (A18-14): a tela diz isso, em vez de
+       deixar o lugar vazio como se faltasse alguma coisa */
+    +     (s.ruaSaiu
+        ? '<div class="servico-rua">🔒 A rua e o número saíram daqui quando o serviço terminou.</div>'
+          + '<div class="servico-pausa">É para proteger a casa do cliente. A conversa com '
+          + esc((s.cliente || "o cliente").split(" ")[0]) + ' continua aqui embaixo.</div>'
+        : "")
+    +   '</div>'
+    +   blocoComoChegar(s)
+
+    /* O QUE FAZER — o escopo escrito (Bloco 7) */
+    +   (que
+        ? '<div class="rotulo">O que fazer 🧹</div><div class="cartao servico-ficha">' + que + '</div>'
+        : '<div class="rotulo">O que fazer 🧹</div><div class="cartao servico-ficha">'
+          + '<div class="linha"><span class="rot">Serviço</span><span class="val">'
+          + esc(s.resumo) + '</span></div></div>')
+    +   (s.horasDaJanela > 6
+        ? '<div class="aviso roxo">☕<div><b>Janela longa</b>Você tem direito a intervalo de '
+          + 'descanso. A hora é você quem escolhe.</div></div>'
+        : "")
+    /* o recado do cliente, junto com a rua (A18, item 3) */
+    +   (s.recado
+        ? '<div class="aviso roxo">📝<div><b>Recado de ' + esc(s.cliente || "quem pediu") + '</b>'
+          + esc(s.recado) + '</div></div>'
+        : (s.recadoDepois
+          ? '<div class="servico-rua" style="margin:0 0 12px">📝 '
+            + esc((s.cliente || "O cliente").split(" ")[0]) + ' deixou um recado. Ele aparece '
+            + 'junto com a rua e o número.</div>'
+          : ""))
+
+    +   blocoDoDinheiro(s, e)
+    +   blocoDoCliente(s)
+
+    /* Sem botão de cancelar: a política não foi decidida (A5, R20), e um
+       botão teria que dizer se há multa. O caminho é o suporte (A18, item 4). */
+    +   '<div class="rotulo">Precisa de ajuda?</div>'
+    +   (terminou
+        ? '<div class="aviso roxo" style="margin-top:0">🛟<div><b>Algum problema com este serviço?</b>'
+          + 'Fale com o suporte. Uma pessoa vê com você o que fazer.</div></div>'
+        : '<div class="aviso roxo" style="margin-top:0">🛟<div><b>Algum imprevisto, ou não vai conseguir ir?</b>'
+          + 'Fale com o suporte o quanto antes. Uma pessoa vê com você o que fazer.</div></div>')
+    +   '<button class="btn btn-claro" onclick="ir(\'diaristaEmBreve\')">Falar com o suporte</button>'
+    + '</div>';
+  },
+
+  /* Aberta na véspera, às 18h a rua, o recado e a conversa aparecem
+     sozinhos — o mesmo relógio da agenda, pelo agendar() */
+  aoEntrar: function(){ redesenharQuandoARuaChegar(); }
+};
+
+
+/* --------------------------------------------------------------------------
+   A CONVERSA COM O CLIENTE (tela 47C) — A18, 12/10/2026
+
+   A mesma cara da conversa do cliente (telaDaConversa, no telas-cliente.js),
+   do lado dela, com as respostas de um toque. Abre na véspera às 18h, junto
+   com a rua, e fecha às 23h59 do dia do serviço: quem decide é
+   situacaoDaConversa(), no dados.js. O estado dela vem de
+   situacaoDaDiarista() (R24): antes da aprovação não há serviço, e a
+   conversa nem existe (contextoDaConversa devolve vazio).
+
+   Na maquete, a mesma tela também mostra o lado da profissional de mentira
+   de um pedido do cliente — pelo quadro "NA MAQUETE" (A18-12).
+   -------------------------------------------------------------------------- */
+TELAS.diaristaConversa = {
+  html: function(){ return telaDaConversa("diarista"); },
+  aoEntrar: function(){ aoEntrarNaConversa(); }
+};
 
 
 /* --------------------------------------------------------------------------
@@ -2682,8 +3143,6 @@ function cartaoDoExtrato(s, pagamento){
   if(x && s.linhasFecham){
     linhas += linhaDoExtrato("Diária · " + s.janela, x.diaria);
     x.adicionais.forEach(function(a){ linhas += linhaDoExtrato(a.nome + " · sua parte", a.dela); });
-    if(x.deslocamento)
-      linhas += linhaDoExtrato("Deslocamento · " + kmEscrito(s.km) + " · todo seu", x.deslocamento);
   } else {
     /* sem pedido guardado, ou a tabela mudou depois do aceite: vale o
        combinado, e as linhas de hoje não fechariam com ele */
@@ -2691,6 +3150,12 @@ function cartaoDoExtrato(s, pagamento){
     if(x) linhas += '<div class="extrato-sub" style="margin-top:6px">A tabela de preços mudou '
                   + 'depois que você aceitou. Vale o que foi combinado.</div>';
   }
+  /* Serviço da agenda dela (os de exemplo não têm detalhe): o cartão leva
+     ao detalhe, e de lá à conversa — "Ver a conversa" depois que ela fecha
+     (A18-7). É o caminho para reler o que foi combinado, dias depois. */
+  const naAgenda = !s.exemplo && (euSouDiarista().agenda || []).some(function(x){
+    return x.oportunidadeId === s.oportunidadeId && x.data === s.data;
+  });
   return '<div class="cartao extrato">'
     + '<div class="extrato-cab"><b>' + esc(dataPorExtenso(s.data)) + '</b>'
     +   (pagamento
@@ -2701,6 +3166,10 @@ function cartaoDoExtrato(s, pagamento){
     + linhas
     + '<div class="linha total"><span class="rot">Você recebe</span>'
     +   '<span class="val">' + moeda(s.valor) + '</span></div>'
+    + (naAgenda
+      ? '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" onclick="'
+        + toqueDoDetalhe(s) + '">Ver detalhes do serviço ›</button>'
+      : "")
     + '</div>';
 }
 
