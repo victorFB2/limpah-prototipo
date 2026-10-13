@@ -391,7 +391,12 @@ function calcularPedido(pedido){
   const total        = precoServico + tempoExtra + precoAdicionais;
 
   const repasseUnit  = faixa.profissionalRecebe + (precoAdicionais * REPASSE_DO_ADICIONAL / quantidade);
-  const repasseTotal = repasseUnit * quantidade;
+  /* O total repassado é o que SAI de verdade: cada uma recebe o valor dela
+     já arredondado, vezes quantas são. Arredondar só a soma dava 1 centavo a
+     menos que 2 × o de cada uma, em pedidos de duas com adicional ímpar — e
+     a margem anotada ficava 1 centavo acima da real (12/10/2026). */
+  const repasseUnitArredondado = Math.round(repasseUnit * 100) / 100;
+  const repasseTotal = repasseUnitArredondado * quantidade;
 
   return {
     categoria,
@@ -412,7 +417,7 @@ function calcularPedido(pedido){
     precoBase: precoServico + tempoExtra,   // nome antigo, mantido por compatibilidade
     total,
 
-    repasseUnitario: Math.round(repasseUnit * 100) / 100,
+    repasseUnitario: repasseUnitArredondado,
     repasseTotal:    Math.round(repasseTotal * 100) / 100,
     margem:          Math.round((total - repasseTotal) * 100) / 100,
 
