@@ -217,12 +217,71 @@ const FONTE = {
     pronto({ ok:true });
   },
 
+  /* A situação dela na análise (entrega 5a): na maquete, a trilha de
+     mentira deste aparelho já está sempre à mão (ler.decisaoDaEquipe e
+     ler.conversaComAEquipe). */
+  carregarSituacao: function(pronto){
+    pronto({ ok:true });
+  },
+
+  /* A resposta dela à última decisão da equipe: entra na trilha deste
+     aparelho, com a mesma conta do servidor (até RESPOSTAS_POR_DECISAO por
+     decisão, só às que tiram ou negam o acesso: situacaoPelaTrilha). */
+  responderAEquipe: function(d, pronto){
+    const dela = FONTE.ler.diarista();
+    const texto = String((d && d.texto) || "").trim().slice(0, RESPOSTA_MAXIMA);
+    const s = situacaoPelaTrilha(dela.trilha);
+    if(!texto) return pronto({ ok:false, erro:"Escreva a sua resposta antes de enviar." });
+    if(!s.decisao || !s.decisao.podeResponder)
+      return pronto({ ok:false, erro:"Não há decisão da equipe para responder agora." });
+    acrescentarNaTrilhaDaMaquete(dela, { tipo:"respondeu", texto:texto, emRespostaA:s.decisao.id });
+    salvar();
+    pronto({ ok:true });
+  },
+
   /* As oportunidades dela (a lista e uma só): na maquete, as de exemplo já
      estão sempre à mão (ler.oportunidades). */
   carregarOportunidades: function(pronto){
     pronto({ ok:true });
   },
   carregarOportunidade: function(id, pronto){
+    pronto({ ok:true });
+  },
+
+  /* A chave "Disponível": na maquete, fica neste aparelho. */
+  ficarDisponivel: function(d, pronto){
+    FONTE.ler.diarista().disponivel = !!(d && d.disponivel);
+    pronto({ ok:true });
+  },
+
+  /* O aceite, na maquete: confere outra vez a agenda deste aparelho (entre
+     ver e tocar, ela pode ter aceitado outro pedido pelo alerta) e anota o
+     serviço nela. É isto que faz o próximo pedido do mesmo horário parar de
+     aparecer. */
+  aceitarOportunidade: function(o, pronto){
+    const d = FONTE.ler.diarista();
+    const veredito = cabeNaAgenda(o, d.agenda);
+    if(!veredito.cabe) return pronto({ ok:false, erro:veredito.motivo, motivo:"agenda" });
+    d.agenda = (d.agenda || []).concat([{
+      oportunidadeId: o.id, data: o.data, inicio: o.inicio, fim: o.fim,
+      bairro: o.bairro, resumo: o.resumo, receber: o.receber,
+      /* o que a agenda e o extrato precisam (R26): o endereço completo — que
+         fica guardado, mas só APARECE a partir das 18h da véspera (A13,
+         enderecoLiberado) — e o pedido, para o extrato refazer a conta pelas
+         regras em vez de confiar num número guardado */
+      periodo: o.periodo, km: o.km, endereco: o.endereco,
+      pedido: JSON.parse(JSON.stringify(o.pedido || null)),
+      /* "Carla M.", para o detalhe do serviço (A18) — nunca o sobrenome */
+      cliente: o.cliente || "",
+      /* a hora do aceite: quem aceita depois das 18h da véspera conversa na
+         hora, e nenhuma mensagem de exemplo pode ser de antes do aceite */
+      aceitoEm: relogioDaAgenda().getTime(),
+    }]);
+    pronto({ ok:true, aceito:{ oportunidadeId:o.id, data:o.data } });
+  },
+
+  /* A agenda dela: na maquete, já está neste aparelho (ler.agenda). */
+  carregarAgenda: function(pronto){
     pronto({ ok:true });
   },
 
@@ -365,16 +424,28 @@ const FONTE = {
                            { celularConfirmado:celular, termosEmDia:termos });
     },
 
-    /* O motivo escrito pela equipe, para a recusada ou a suspensa: na
-       maquete não há equipe. */
+    /* A última decisão da equipe sobre ela, com o que a equipe escreveu:
+       na maquete, da trilha de mentira deste aparelho, que só os
+       simuladores do quadro "NA MAQUETE" preenchem (sem eles, nada). */
     decisaoDaEquipe: function(){
-      return null;
+      return situacaoPelaTrilha(FONTE.ler.diarista().trilha).decisao;
+    },
+
+    /* A conversa inteira com a equipe (decisões e respostas), da mais
+       velha para a mais nova. Na maquete, nunca "ainda não chegou". */
+    conversaComAEquipe: function(){
+      return situacaoPelaTrilha(FONTE.ler.diarista().trilha).historico;
     },
 
     /* As oportunidades da região dela: as de exemplo, com o valor dela e o
        veredito da agenda (todasAsOportunidades, telas-diarista.js). */
     oportunidades: function(){
       return todasAsOportunidades();
+    },
+
+    /* O que ela aceitou: a agenda deste aparelho (nunca "ainda não chegou"). */
+    agenda: function(){
+      return FONTE.ler.diarista().agenda || [];
     },
 
     /* Onde o app atende (a tela "Onde atendemos" e a lista de bairros do
@@ -436,6 +507,12 @@ const FONTE = {
     /* Quem vai: a profissional de exemplo que "aceitou". */
     profissionalDoPedido: function(p){
       return (p && PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; })) || null;
+    },
+
+    /* Os nomes de quem vai, curtos ("Maria S."). Na maquete, uma só. */
+    quemVai: function(p){
+      const prof = FONTE.ler.profissionalDoPedido(p);
+      return prof ? [nomeCurto(prof.nome)] : [];
     },
 
     /* Na maquete, cancelar sempre pode (e é sempre sem custo). */
@@ -505,6 +582,20 @@ const FONTE = {
     },
   },
 };
+
+
+/* Uma linha nova na trilha de mentira dela (uma decisão "da equipe", pelos
+   simuladores, ou uma resposta dela), com o número seguinte e a hora deste
+   aparelho. No app, a trilha mora no servidor e só recebe linhas novas. */
+function acrescentarNaTrilhaDaMaquete(dela, linha){
+  const trilha = Array.isArray(dela.trilha) ? dela.trilha : [];
+  const id = trilha.reduce(function(m, l){ return Math.max(m, Number(l.id) || 0); }, 0) + 1;
+  const agora = new Date();
+  dela.trilha = trilha.concat([Object.assign({
+    id: id, situacaoAntes: "", situacaoDepois: "", texto: "", emRespostaA: null,
+    em: agora.toISOString(), emTexto: dataEHoraEmTexto(agora),
+  }, linha)]);
+}
 
 
 /* O pedido da maquete, com a conta CONGELADA dentro dele: o comprovante

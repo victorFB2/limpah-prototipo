@@ -68,6 +68,12 @@ function diaristaNova(){
        no app de verdade existem (o servidor diz). */
     celularConfirmado: true,
     termosEmDia: true,
+
+    /* O que "a equipe" decidiu sobre ela e o que ela respondeu, da linha
+       mais velha para a mais nova. Na maquete, só os simuladores do quadro
+       "NA MAQUETE" escrevem aqui (simularDecisaoDaEquipe); no app, a trilha
+       mora no servidor e não muda nem some. */
+    trilha: [],
   };
 }
 
@@ -138,6 +144,8 @@ function situacaoDaDiarista(){
      breve" (revisão da 3a; DECISOES A26, provisória). */
   const envioDosDocumentos = FONTE.ehMaquete;
   const chavePix = FONTE.ehMaquete;
+  /* e ficar disponível e aceitar serviços (entrega 6a) */
+  const aceitarPeloApp = FONTE.ehMaquete;
 
   /* O PIX, nos três estados (R26). Antes só a aprovada sabia se tinha chave:
      o extrato de quem estava em análise prometia "cai em até 1 dia útil" a
@@ -199,63 +207,81 @@ function situacaoDaDiarista(){
                  + "serviço que você fizer aparece aqui, com quanto você recebe.",
       trabalhoBotao: "Confirmar meu celular",
       trabalhoDestino: "codigoCelular",
+      /* a tela que diz como está o cadastro dela agora (entrega 5a) */
+      telaDaSituacao: "codigoCelular",
       pct: p.pct,
     }, pix, pixAntesDeAprovar);
   }
 
-  /* RECUSADA — a equipe não aprovou, com o motivo escrito (nada de punição
-     silenciosa: o motivo aparece no mapa do cadastro; responder, na 5a) */
+  /* RECUSADA — a equipe não aprovou, com o motivo escrito. Nada de punição
+     silenciosa: a tela dela (diaristaRecusada) mostra o motivo e o campo
+     para responder; a faixa, o interruptor e a oportunidade levam até lá
+     (entrega 5a; antes, ao mapa do cadastro) */
   if(estado.chave === "recusada"){
     return Object.assign({
       chave: "recusada",
       podeAceitar: false,
       faixaTitulo: "Cadastro não aprovado",
       faixaFrase:  "veja o que a nossa equipe escreveu",
-      faixaDestino: "diaristaCadastro",
+      faixaDestino: "diaristaRecusada",
       faixaSelo: "!",
       interruptorTravado: true,
-      interruptorFrase: "Seu cadastro não foi aprovado. Veja o motivo no seu cadastro.",
+      interruptorFrase: "Seu cadastro não foi aprovado. Você pode ler o motivo e responder.",
       botaoTexto: "Ver o motivo",
-      botaoDestino: "diaristaCadastro",
+      botaoDestino: "diaristaRecusada",
       botaoContorno: true,
       noCartao: "Seu cadastro não foi aprovado",
       mapaFrase: "Seu cadastro não foi aprovado, e por isso você não aceita serviços.",
       oportunidadeTitulo: "Seu cadastro não foi aprovado",
-      oportunidadeFrase: "Por isso você não pode aceitar serviços. O motivo está no seu cadastro.",
+      oportunidadeFrase: "Por isso você não pode aceitar serviços. Você pode ler o motivo e responder.",
       trabalhoTitulo: "Seu cadastro não foi aprovado",
-      trabalhoFrase: "Sem a aprovação, não há serviços na sua agenda. O motivo está no seu cadastro.",
+      trabalhoFrase: "Sem a aprovação, não há serviços na sua agenda. Você pode ler o motivo e responder.",
       ganhosTitulo: "Seu cadastro não foi aprovado",
-      ganhosFrase: "Sem a aprovação, ainda não há ganhos. O motivo está no seu cadastro.",
+      ganhosFrase: "Sem a aprovação, ainda não há ganhos. Você pode ler o motivo e responder.",
       trabalhoBotao: "Ver o motivo",
-      trabalhoDestino: "diaristaCadastro",
+      trabalhoDestino: "diaristaRecusada",
+      telaDaSituacao: "diaristaRecusada",
+      situacaoTitulo: "Seu cadastro não foi aprovado",
+      situacaoApoio: "Nossa equipe analisou o seu cadastro e, por enquanto, não aprovou. "
+                   + "Uma pessoa da equipe escreveu o motivo aqui embaixo. Se quiser, responda: "
+                   + "a gente lê tudo.",
       pct: p.pct,
     }, pix, pixAntesDeAprovar);
   }
 
-  /* SUSPENSA — já foi aprovada, e a equipe suspendeu, com o motivo escrito */
+  /* SUSPENSA — já foi aprovada, e a equipe suspendeu, com o motivo escrito.
+     A suspensão tira o aceite de serviço novo, nunca a conta: é no app que
+     ela lê o motivo e responde (diaristaSuspensa, entrega 5a) */
   if(estado.chave === "suspensa"){
     return Object.assign({
       chave: "suspensa",
       podeAceitar: false,
       faixaTitulo: "Acesso suspenso",
       faixaFrase:  "veja o que a nossa equipe escreveu",
-      faixaDestino: "diaristaCadastro",
+      faixaDestino: "diaristaSuspensa",
       faixaSelo: "!",
       interruptorTravado: true,
-      interruptorFrase: "Seu acesso a novos serviços está suspenso. Veja o motivo no seu cadastro.",
+      interruptorFrase: "Seu acesso a novos serviços está suspenso. Você pode ler o motivo e responder.",
       botaoTexto: "Ver o motivo",
-      botaoDestino: "diaristaCadastro",
+      botaoDestino: "diaristaSuspensa",
       botaoContorno: true,
       noCartao: "Seu acesso a novos serviços está suspenso",
       mapaFrase: "Seu acesso a novos serviços está suspenso.",
       oportunidadeTitulo: "Seu acesso está suspenso",
-      oportunidadeFrase: "Por isso você não pode aceitar serviços novos. O motivo está no seu cadastro.",
+      oportunidadeFrase: "Por isso você não pode aceitar serviços novos. Você pode ler o motivo e responder.",
       trabalhoTitulo: "Seu acesso a novos serviços está suspenso",
-      trabalhoFrase: "Enquanto isso, nenhum serviço novo entra na sua agenda. O motivo está no seu cadastro.",
+      trabalhoFrase: "Enquanto isso, nenhum serviço novo entra na sua agenda. Você pode ler o motivo "
+                   + "e responder.",
       ganhosTitulo: "Seu acesso a novos serviços está suspenso",
-      ganhosFrase: "Enquanto isso, nenhum serviço novo entra nos seus ganhos. O motivo está no seu cadastro.",
+      ganhosFrase: "Enquanto isso, nenhum serviço novo entra nos seus ganhos. Você pode ler o motivo "
+                 + "e responder.",
       trabalhoBotao: "Ver o motivo",
-      trabalhoDestino: "diaristaCadastro",
+      trabalhoDestino: "diaristaSuspensa",
+      telaDaSituacao: "diaristaSuspensa",
+      situacaoTitulo: "Seu acesso está suspenso",
+      situacaoApoio: "Por enquanto, você não pode aceitar serviços novos. Sua conta continua "
+                   + "aberta: uma pessoa da nossa equipe escreveu o motivo aqui embaixo, e você "
+                   + "pode responder.",
       pct: p.pct,
     }, pix);
   }
@@ -284,6 +310,7 @@ function situacaoDaDiarista(){
       ganhosFrase: "Atualizamos nossos termos. Aceite a versão nova para continuar aceitando serviços.",
       trabalhoBotao: "Ler os termos novos",
       trabalhoDestino: "termosNovos",
+      telaDaSituacao: "termosNovos",
       pct: p.pct,
     }, pix);
   }
@@ -326,6 +353,18 @@ function situacaoDaDiarista(){
         : "",
       pixBotao: "Cadastrar minha chave Pix",
       pixDestino: "diaristaRecebimento",
+      /* a tela da aprovação (entrega 5a): o título de quem foi reativada
+         depois de uma suspensão é outro; no app, ficar disponível e aceitar
+         ainda chegam (6a), e a tela não promete o que não há */
+      telaDaSituacao: "diaristaAprovada",
+      situacaoTitulo: "Cadastro aprovado! 🎉",
+      situacaoTituloDeVolta: "Seu acesso voltou! 🎉",
+      situacaoApoio: aceitarPeloApp
+        ? "Agora é só ficar disponível e aceitar os serviços que combinarem com você."
+        : "Nossa equipe aprovou o seu cadastro. Os pedidos da sua região já aparecem no início.",
+      situacaoApoioDeVolta: aceitarPeloApp
+        ? "Agora é só ficar disponível e aceitar os serviços que combinarem com você."
+        : "Nossa equipe reativou o seu acesso. Os pedidos da sua região já aparecem no início.",
       pct: p.pct,
     }, pix);
   }
@@ -350,7 +389,22 @@ function situacaoDaDiarista(){
       botaoDestino: "diaristaAnalise",
       botaoContorno: true,
       noCartao: "Você poderá aceitar assim que aprovarmos",
-      mapaFrase: "Está tudo enviado. Agora é com a gente — e a gente avisa você.",
+      /* no app, o Portão 2 não é mandado pelo aplicativo (decisão 43): é
+         combinado com a equipe, e a frase não diz "enviado" */
+      mapaFrase: envioDosDocumentos
+        ? "Está tudo enviado. Agora é com a gente — e a gente avisa você."
+        : "Seu cadastro está completo. Agora é com a gente — e a gente avisa você.",
+      telaDaSituacao: "diaristaAnalise",
+      situacaoTitulo: "Seu cadastro está em análise",
+      situacaoApoio: envioDosDocumentos
+        ? "Uma pessoa da nossa equipe está conferindo seus documentos. Costuma levar algumas "
+          + "horas — a gente avisa assim que terminar."
+        : "Uma pessoa da nossa equipe está conferindo o seu cadastro. Quando terminar, a gente "
+          + "avisa você — e a resposta aparece aqui no aplicativo.",
+      situacaoAvisoTitulo: envioDosDocumentos ? "" : "Seus documentos",
+      situacaoAvisoFrase: envioDosDocumentos ? ""
+        : "Por enquanto, a conferência dos documentos é combinada com a nossa equipe, fora do "
+          + "aplicativo. O envio pelo aplicativo chega em breve.",
       oportunidadeTitulo: "Seu cadastro está em análise",
       oportunidadeFrase: "Você não precisa fazer mais nada. Assim que aprovarmos, "
                        + "este botão libera sozinho.",
@@ -396,7 +450,9 @@ function situacaoDaDiarista(){
       : "Assim que seu cadastro for aprovado, este botão libera. Veja no seu cadastro "
         + "o que vem agora.",
     trabalhoTitulo: "Falta pouco para sua agenda começar",
-    trabalhoFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
+    /* no app, o envio dos documentos chega depois: a frase não pede */
+    trabalhoFrase: (envioDosDocumentos ? "Envie seus documentos. " : "")
+                 + "Depois da aprovação, cada serviço que você "
                  + "aceitar aparece aqui, com o dia, o bairro e quanto você recebe. "
                  + "A rua e o número chegam na véspera, a partir das "
                  + HORA_DO_ENDERECO_NA_VESPERA + "h.",
@@ -405,6 +461,7 @@ function situacaoDaDiarista(){
                + "fizer aparece aqui, com quanto você recebe e quando cai no seu Pix.",
     trabalhoBotao: envioDosDocumentos ? "Continuar meu cadastro" : "Ver meu cadastro",
     trabalhoDestino: "diaristaCadastro",
+    telaDaSituacao: "diaristaCadastro",
     pct: p.pct,
   }, pix, pixAntesDeAprovar);
 }
@@ -425,7 +482,10 @@ function atalhoDeAprovacao(){
     +   'conferir os documentos — leva algumas horas. Aqui dá para pular a '
     +   'espera.</div>'
     + '<button class="btn btn-principal" style="margin:12px 0 0" '
-    +   'onclick="simularAprovacao()">Simular: cadastro aprovado</button></div>';
+    +   'onclick="simularAprovacao()">Simular: cadastro aprovado</button>'
+    /* a equipe também pode recusar, sempre com o motivo escrito (5a) */
+    + '<button class="btn btn-contorno" style="margin:8px 0 0;background:var(--branco)" '
+    +   'onclick="simularDecisaoDaEquipe(\'recusar\')">Simular: cadastro recusado</button></div>';
 }
 
 
@@ -867,11 +927,9 @@ TELAS.diaristaHome = {
 
     +   (pode ? faixaDoCadastro() : interruptorTravado())
 
-    /* No app, ficar disponível (e o alerta) é a entrega 6a: até lá, a
-       aprovada lê que chega em breve, e não liga uma chave que não avisa
-       ninguém */
-    +   (pode ? soNaMaquete(function(){ return blocoDoDisponivel(d); })
-              + emBreveNoApp("Ficar disponível para trabalhar") : "")
+    /* a chave "Disponível" (no app, desde a 6a: com o app aberto, a lista
+       se atualiza sozinha e o pedido novo toca aqui) */
+    +   (pode ? blocoDoDisponivel(d) : "")
 
     +   agendaDela()
     +   cartaoDaRendaDoConjunto()
@@ -903,53 +961,158 @@ TELAS.diaristaHome = {
 
   /* O relógio do alerta vive aqui: desenhar() apaga todos os relógios, e o
      aoEntrar roda a cada desenho, então ele se rearma sozinho. No app, a
-     lista é pedida ao servidor uma vez por visita (a guarda está dentro). */
+     lista e a agenda são pedidas ao servidor uma vez por visita (a guarda
+     está dentro) e, com "Disponível" ligado, a lista de novo a cada 15 s. */
   aoEntrar: function(){
-    if(!FONTE.ehMaquete) pedirOportunidadesNestaVisita();
+    if(!FONTE.ehMaquete){
+      pedirOportunidadesNestaVisita();
+      pedirAAgendaNestaVisita();
+      acompanharAsOportunidades();
+    }
     relogioDoAlerta();
   }
 };
 
+/* NO APP, COM "DISPONÍVEL" LIGADO: a lista é perguntada de novo ao servidor
+   a cada SEGUNDOS_ENTRE_PERGUNTAS_DA_LISTA, enquanto o início está aberto e
+   à vista. É assim que o pedido novo chega com o app aberto (o aviso com o
+   app fechado vem depois). Nunca a cada 1 ou 2 segundos: o servidor faria
+   dez vezes mais trabalho, para nada.
+
+   QUEM CONTA É A HORA, NÃO O RELÓGIO: desenhar() apaga os relógios, e um
+   relógio de 15 s recomeçaria a cada toque na tela. A tela só é redesenhada
+   se a lista mudou (senão ela perderia o lugar onde está lendo). */
+const SEGUNDOS_ENTRE_PERGUNTAS_DA_LISTA = 15;
+let LISTA_PERGUNTADA_EM = 0;
+
+function acompanharAsOportunidades(){
+  if(!LISTA_PERGUNTADA_EM) LISTA_PERGUNTADA_EM = Date.now();
+  repetir(function(){
+    const d = euSouDiarista();
+    if(!d.disponivel || !podeAceitarServico() || document.hidden) return;
+    if(Date.now() - LISTA_PERGUNTADA_EM < SEGUNDOS_ENTRE_PERGUNTAS_DA_LISTA * 1000) return;
+    perguntarDeNovoPelaLista();
+  }, 1000);
+}
+
+function perguntarDeNovoPelaLista(){
+  LISTA_PERGUNTADA_EM = Date.now();
+  const antes = assinaturaDaLista();
+  FONTE.carregarOportunidades(function(r){
+    if(r.destino) return seguirPeloErro(r);
+    /* sem resposta: a lista de antes continua, e a próxima pergunta tenta de novo */
+    if(r.ok && assinaturaDaLista() !== antes) desenhar();
+  });
+}
+
+/* O que muda a tela: quais pedidos, e se cabem. */
+function assinaturaDaLista(){
+  return JSON.stringify((FONTE.ler.oportunidades() || []).map(function(o){
+    return [o.id, o.cabe, o.vagasAbertas];
+  }));
+}
+
 /* A chave "Disponível" da aprovada, com o som, os dias de trabalho e o
-   alerta (R22, R25). Só na maquete por enquanto: no app, é a entrega 6a. */
+   alerta (R22, R25). No app (6a), quem guarda a chave é o servidor, e o
+   alerta toca só com o app aberto: a tela diz isso, sem prometer o aviso
+   com o app fechado. */
 function blocoDoDisponivel(d){
+  const comOAppAberto = ehIPhone() || !FONTE.ehMaquete;
   return '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" onclick="alternarDisponivel()">'
     + '<div class="txt"><b>Disponível para trabalhar</b>'
     + '<span>' + (d.disponivel
-        ? (ehIPhone()
+        ? (comOAppAberto
            ? "Com o aplicativo aberto, o pedido aparece aqui."
            : "O celular toca quando aparecer pedido para você.")
         : "Ligue para ser avisada de novos pedidos.") + '</span></div>'
     + '<div class="botao"></div></div>'
+    + erroDoDisponivelAgora()
     + botaoDeTestarOSom()
-    + botaoDeVerOAlerta()
-    + avisoDoSomNoIPhone()
+    + soNaMaquete(botaoDeVerOAlerta)
+    + (FONTE.ehMaquete ? avisoDoSomNoIPhone() : avisoDoAlertaNoApp(d))
     /* Sempre visível, não só com a chave ligada: ela precisa poder
-       acertar os dias ANTES de começar a receber alerta. */
-    + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
+       acertar os dias ANTES de começar a receber alerta. No app, a grade
+       é a entrega 6c. */
+    + soNaMaquete('<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
     /* 📅 e não 🗓: o segundo sai como quadradinho vazio no Windows. */
-    +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
+    +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>')
     + avisoDeQuePausou()
     + cartaoDoAlerta();
+}
+
+/* No app, com a chave ligada: o que ela pode esperar, sem prometer o
+   aviso com o app fechado (ele vem depois). */
+function avisoDoAlertaNoApp(d){
+  if(!d.disponivel) return "";
+  return '<div class="aviso roxo" style="margin:-2px 0 12px">📲<div>'
+    + '<b>Deixe o aplicativo aberto na tela</b>'
+    + 'Com ele aberto, a lista se atualiza sozinha e o pedido novo toca aqui. '
+    + 'Com o app fechado, ainda não chega aviso: o aviso pelo celular chega em breve.'
+    + '</div></div>';
+}
+
+/* A chave que o servidor não deixou mudar (sem internet, ou o estado dela
+   mudou): a frase fica embaixo da chave, só nesta visita. */
+let ERRO_DO_DISPONIVEL = null;           // { frase, navegacao }
+
+function erroDoDisponivelAgora(){
+  if(!ERRO_DO_DISPONIVEL || ERRO_DO_DISPONIVEL.navegacao !== NAVEGACAO) return "";
+  return '<div class="erro-do-campo" style="margin:-6px 0 10px">' + esc(ERRO_DO_DISPONIVEL.frase) + '</div>';
+}
+
+/* Quantos alertas seguidos ela deixou passar (a pergunta "ainda está
+   disponível?" vem depois de 3). Na maquete, no E.diarista, como sempre; no
+   app, só neste aparelho (é a conversa da tela com ela, não vai ao servidor). */
+function ignoradosSeguidos(){
+  return FONTE.ehMaquete ? (euSouDiarista().ignoradosSeguidos || 0) : (Number(E.ignoradosSeguidos) || 0);
+}
+
+function anotarIgnorados(n){
+  if(FONTE.ehMaquete) euSouDiarista().ignoradosSeguidos = n;
+  else E.ignoradosSeguidos = n;
 }
 
 function alternarDisponivel(){
   const d = euSouDiarista();
   if(!podeAceitarServico()) return;
-  d.disponivel = !d.disponivel;
-
-  /* ligar de novo é sinal de vida, e apaga o aviso da pausa automática */
-  E.desligouSozinho = false;
-  d.ignoradosSeguidos = 0;
-  if(!d.disponivel){ E.alerta = null; }
-  salvar();
+  const ligar = !d.disponivel;
+  ERRO_DO_DISPONIVEL = null;
 
   /* O toque nesta chave é o que libera o som no navegador: ele só deixa
      tocar depois que a pessoa tocou em alguma coisa. Um bip curtinho aqui
-     confirma para ela que o som funciona — e destrava o alerta de verdade. */
-  if(d.disponivel) tocarAlerta();
+     confirma para ela que o som funciona — e destrava o alerta de verdade.
+     Toca AQUI, ainda dentro do toque: no app a resposta do servidor chega
+     depois, e o iPhone não libera som fora do toque. */
+  if(ligar) tocarAlerta();
 
-  desenhar();
+  FONTE.ficarDisponivel({ disponivel: ligar }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok){
+      ERRO_DO_DISPONIVEL = { frase: r.erro || "", navegacao: NAVEGACAO };
+      return desenhar();
+    }
+    /* ligar de novo é sinal de vida, e apaga o aviso da pausa automática */
+    E.desligouSozinho = false;
+    anotarIgnorados(0);
+    if(!ligar){ E.alerta = null; }
+    /* quem liga quer ver o que tem agora: a próxima pergunta sai já */
+    if(ligar) LISTA_PERGUNTADA_EM = 1;
+    salvar();
+    desenhar();
+  });
+}
+
+/* Desligar a chave sem ela tocar nela (a pergunta "ainda está disponível?"
+   sem resposta, ou o "Pausar"). sozinho: o aviso "Pausamos por você". */
+function desligarODisponivel(sozinho){
+  FONTE.ficarDisponivel({ disponivel: false }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    E.alerta = null;
+    anotarIgnorados(0);
+    if(r.ok && sozinho) E.desligouSozinho = true;
+    salvar();
+    desenhar();
+  });
 }
 
 function abrirOportunidade(id){
@@ -1039,13 +1202,10 @@ TELAS.diaristaOportunidade = {
     +   '<div class="rodape-seguro">' + esc(quandoARuaApareceSeAceitar(o)) + '</div>'
     + '</div>'
     + '<div class="rodape">'
-    /* no app, aceitar é a entrega 6a: a aprovada lê que chega em breve, e
-       nenhum botão finge que aceitou */
-    +   (pode && !FONTE.ehMaquete
-      ? emBreveNoApp("Aceitar serviços pelo app")
-        + '<button class="btn btn-texto" onclick="voltar()">Voltar</button>'
-      : pode
-      ? '<button class="btn btn-principal" onclick="aceitarOportunidade()">Aceitar este serviço</button>'
+    /* aceitar: na maquete, a agenda deste aparelho; no app (6a), o
+       servidor, que confere tudo de novo e decide quem fica com a vaga */
+    +   (pode
+      ? '<button class="btn btn-principal" onclick="aceitarOportunidade(this)">Aceitar este serviço</button>'
         + '<button class="btn btn-texto" onclick="voltar()">Agora não</button>'
       : (function(){
           /* o botão vem da tabela de estados (R24), como o do interruptor */
@@ -1077,14 +1237,25 @@ function servicoQueAcabouDeAceitar(){
 TELAS.diaristaAceitou = {
   html: function(){
     /* A13: "o endereço completo já está na sua agenda" só é verdade a partir
-       das 18h da véspera. Antes disso a tela diz o dia em que a rua chega. */
+       das 18h da véspera. Antes disso a tela diz o dia em que a rua chega.
+       No app, quem diz se a hora já passou é o servidor (ruaLiberada). */
     const s = servicoQueAcabouDeAceitar();
-    const jaTemARua = !!s && enderecoLiberado(s, relogioDaAgenda());
+    if(s && s.situacao === "aguardando_segunda") return aceitouEFaltaASegunda(s);
+    const jaTemARua = !!s && ((typeof s.ruaLiberada === "boolean") ? s.ruaLiberada
+                                                                   : enderecoLiberado(s, relogioDaAgenda()));
     return ''
     + '<div class="centro">'
     +   '<div class="circulo-ok">✓</div>'
     +   '<h2 class="titulo">Pedido aceito! ✅</h2>'
-    +   (jaTemARua
+    +   (jaTemARua && !FONTE.ehMaquete
+      /* no app, a rua chega pela tela do serviço, que ainda está sendo
+         construída: nada de dizer que ela já está na agenda */
+      ? '<p class="apoio">Combinamos com o cliente. O serviço já está na sua agenda, '
+        + 'com o bairro e a distância.</p>'
+        + '<div class="aviso roxo" style="text-align:left;margin:4px 0 0">🔒<div>'
+        +   '<b>A rua e o número já podem aparecer</b>'
+        +   'Eles vão aparecer no detalhe do serviço, que chega em breve no app.</div></div>'
+      : jaTemARua
       ? '<p class="apoio">Combinamos com o cliente. O endereço completo já está na sua agenda.</p>'
       : '<p class="apoio">Combinamos com o cliente. O serviço já está na sua agenda, '
         + 'com o bairro e a distância.</p>'
@@ -1100,8 +1271,41 @@ TELAS.diaristaAceitou = {
     +   '<button class="btn btn-texto" style="min-height:44px" '
     +     'onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver na minha agenda ›</button>'
     + '</div>';
-  }
+  },
+  /* no app, quem recarregou a página aqui pergunta a agenda de novo */
+  aoEntrar: function(){ if(!FONTE.ehMaquete) pedirAAgendaNestaVisita(); }
 };
+
+
+/* O pedido de duas, com só ela por enquanto (A16): ainda não é serviço
+   confirmado. A tela diz isso e até quando a segunda pode aceitar (o
+   horário vem do servidor). Não promete rua nem dinheiro. */
+function aceitouEFaltaASegunda(s){
+  return ''
+    + '<div class="centro">'
+    +   '<div class="circulo-ok">✓</div>'
+    +   '<h2 class="titulo">Você aceitou! Falta a segunda 🤝</h2>'
+    +   '<p class="apoio">Este pedido é para duas profissionais. Ele só fica confirmado '
+    +     'quando a segunda aceitar.</p>'
+    +   '<div class="aviso ambar" style="text-align:left;margin:4px 0 0">⏳<div>'
+    +     '<b>Ainda não está confirmado</b>' + esc(fraseDaSegunda(s)) + '</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">Voltar ao início</button>'
+    +   '<button class="btn btn-texto" style="min-height:44px" '
+    +     'onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver na minha agenda ›</button>'
+    + '</div>';
+}
+
+/* "Se ninguém aceitar até as 14h35, o pedido é cancelado sem custo e você
+   fica livre." O horário é o que o servidor mandou (caiAs). */
+function fraseDaSegunda(s){
+  const quando = new Date(Number(s.caiAs) || NaN);
+  const ate = isNaN(quando.getTime()) ? "a busca terminar"
+    : "as " + quando.getHours() + "h" + String(quando.getMinutes()).padStart(2, "0");
+  return "Se a segunda não aceitar até " + ate + ", o pedido é cancelado sem custo para o "
+       + "cliente e você fica livre. Nada é anotado contra você.";
+}
 
 
 /* ==========================================================================
@@ -1141,7 +1345,7 @@ TELAS.diaristaCadastro = {
        selfie espera a decisão de onde guardá-los, e o Pix espera o
        pagamento. A tela diz isso, em vez de levar a quatro "Chega em
        breve" — e não promete uma verificação que o app não faz. */
-    +   (FONTE.ehMaquete ? portoesDoisETresNaMaquete(d) : portoesDoisETresNoApp())
+    +   (FONTE.ehMaquete ? portoesDoisETresNaMaquete(d) : portoesDoisETresNoApp(d, est))
 
     +   soNaMaquete('<div class="aviso roxo">🔒<div><b>Por que só agora pedimos documento</b>'
     +     'Você já viu quanto pode ganhar aqui. Agora sim faz sentido a gente '
@@ -1163,30 +1367,58 @@ TELAS.diaristaCadastro = {
   }
 };
 
-function portoesDoisETresNoApp(){
-  return '<div class="rotulo">2 · Para poder aceitar</div>'
-    + '<div class="aviso roxo">📄<div><b>O envio dos documentos chega em breve</b>'
-    +   'Ainda estamos preparando esta parte do aplicativo. Nossa equipe vai falar com '
-    +   'você para combinar os próximos passos.</div></div>'
+/* No app, o Portão 2 ainda não é mandado pelo aplicativo (decisão 43).
+   Enquanto falta, a tela diz que a equipe combina com ela; depois de
+   marcado (pela equipe, fora do aplicativo), diz isso — e não "enviado". */
+function portoesDoisETresNoApp(d, est){
+  const feito2 = ETAPAS_DO_PORTAO_2.every(function(x){ return !!(d.feito && d.feito[x]); });
+  /* a aprovada não lê "depois da aprovação" (achado no navegador, 5a) */
+  const aprovada = !!est && (est.chave === "aprovada" || est.chave === "termos");
+  return '<div class="rotulo">2 · Para poder aceitar'
+    +   (feito2 ? ' <span class="selo verde">feito</span>' : '') + '</div>'
+    + (feito2
+      ? '<div class="aviso verde">' + icone("escudo", 18) + '<div><b>Feito com a nossa equipe</b>'
+        + 'Esta parte foi combinada com a nossa equipe, fora do aplicativo.</div></div>'
+      : '<div class="aviso roxo">📄<div><b>O envio dos documentos chega em breve</b>'
+        + 'Ainda estamos preparando esta parte do aplicativo. Nossa equipe vai falar com '
+        + 'você para combinar os próximos passos.</div></div>')
     + '<div class="rotulo">3 · Para poder receber</div>'
-    + '<div class="aviso roxo">🔑<div><b>A chave Pix a gente pede depois da aprovação</b>'
-    +   'Antes disso, ainda não há pagamento para você.</div></div>';
+    + (aprovada
+      ? '<div class="aviso roxo">🔑<div><b>Cadastrar a chave Pix chega em breve</b>'
+        + 'Assim que o pagamento pelo aplicativo começar, você cadastra a sua chave aqui.</div></div>'
+      : '<div class="aviso roxo">🔑<div><b>A chave Pix a gente pede depois da aprovação</b>'
+        + 'Antes disso, ainda não há pagamento para você.</div></div>');
 }
 
-/* Recusada ou suspensa: o que a nossa equipe escreveu, para ela ler (nada
-   de punição silenciosa). Vem da tomada: no app, o motivo que a equipe
-   gravou (o /eu manda junto); na maquete, não há equipe — nada aparece.
-   Responder ao motivo é a entrega 5a. */
+/* O que a nossa equipe escreveu, para ela ler (nada de punição silenciosa):
+   a recusada e a suspensa, com o caminho para a tela dela, onde ela lê a
+   conversa inteira e responde (entrega 5a); a aprovada, a nota da equipe,
+   quando houver (tudo o que a equipe escreve, ela lê). Vem da tomada: no
+   app, o que a equipe gravou (o /eu manda junto); na maquete, a trilha de
+   mentira dos simuladores — sem eles, nada aparece. */
 function blocoDaDecisaoDaEquipe(est){
-  if(est.chave !== "recusada" && est.chave !== "suspensa") return "";
+  const contraEla = (est.chave === "recusada" || est.chave === "suspensa");
+  if(!contraEla && est.chave !== "aprovada") return "";
   const decisao = FONTE.ler.decisaoDaEquipe();
   if(!decisao || !decisao.motivo) return "";
-  return '<div class="cartao">'
-    +   '<b style="font-size:13px">O que a nossa equipe escreveu</b>'
-    +   '<div style="font-size:14px;margin-top:6px;line-height:1.55;white-space:pre-line">'
-    +     esc(decisao.motivo) + '</div>'
-    + '</div>'
-    + emBreveNoApp("Responder à nossa equipe");
+  return cartaoDoQueAEquipeEscreveu(decisao)
+    + (contraEla
+      ? '<button class="btn btn-contorno" style="margin:0 0 12px" '
+        + 'onclick="ir(\'' + idSeguro(est.telaDaSituacao) + '\')">'
+        + (decisao.podeResponder ? "Ler tudo e responder" : "Ler a conversa") + '</button>'
+      : '');
+}
+
+/* O cartão com o último texto da equipe. "A resposta da nossa equipe"
+   quando a equipe manteve a decisão respondendo a ela. */
+function cartaoDoQueAEquipeEscreveu(decisao){
+  return '<div class="cartao destaque">'
+    +   '<b style="font-size:13px">'
+    +     (decisao.tipo === "manteve" ? "A resposta da nossa equipe" : "O que a nossa equipe escreveu")
+    +   '</b>'
+    +   (decisao.emTexto ? '<div class="ajuda" style="margin-top:2px">' + esc(decisao.emTexto) + '</div>' : '')
+    +   '<div class="texto-da-equipe">' + esc(decisao.motivo) + '</div>'
+    + '</div>';
 }
 
 /* A ORDEM DO PORTÃO 2 — cada etapa emenda na seguinte.
@@ -1353,18 +1585,59 @@ function aceitarTermosDaDiarista(){
   marcarEtapa("termos");
 }
 
-/* --- análise e aprovação --- */
+/* ==========================================================================
+   A SITUAÇÃO DELA NA ANÁLISE (entrega 5a do app/PLANO-TELAS.md)
+
+   Quatro telas: em análise, aprovada, recusada e suspensa. As frases moram
+   na tabela situacaoDaDiarista (R24); o que a equipe escreveu e o que ela
+   respondeu vêm da tomada (no app, o servidor; na maquete, a trilha de
+   mentira dos simuladores do quadro "NA MAQUETE").
+
+   NINGUÉM É PUNIDO EM SILÊNCIO (antipadrões do Bloco 7): a recusada e a
+   suspensa leem o motivo escrito por uma pessoa da equipe e respondem por
+   escrito, ali mesmo — até RESPOSTAS_POR_DECISAO vezes por decisão; a equipe
+   responde mantendo a decisão (também por escrito) ou mudando-a, e aí ela
+   pode responder de novo. Quem decidiu não aparece: quem responde é a
+   Limpah. No app, ao entrar, a recusada e a suspensa caem direto na tela
+   delas (fonte-servidor.js, destinoDeQuemEntrou).
+
+   O Portão 2 ainda não é mandado pelo aplicativo (decisão 43): no app, a
+   tela de análise diz isso, sem prometer envio nenhum.
+   ========================================================================== */
+
+/* Uma tela de situação aberta com o cadastro em OUTRA situação (a equipe
+   decidiu enquanto isso; a tela veio pelo "voltar"): diz que mudou e leva
+   à tela certa, em vez de mostrar o que não vale mais. */
+function situacaoQueMudou(e){
+  return cabecalho("Meu cadastro")
+    + '<div class="corpo">'
+    +   '<div class="aviso roxo">🔄<div><b>A situação do seu cadastro mudou</b>'
+    +     'Toque abaixo para ver como ele está agora.</div></div>'
+    +   '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(e.telaDaSituacao || "diaristaCadastro")
+    +     '\',{limparHistorico:true})">Ver como está meu cadastro</button>'
+    + '</div>';
+}
+
+/* --- em análise --- */
 TELAS.diaristaAnalise = {
   html: function(){
+    const e = situacaoDaDiarista();
+    if(e.chave !== "analise") return situacaoQueMudou(e);
     return ''
     + '<div class="centro">'
     +   '<div class="pulsando" style="font-size:60px">🔎</div>'
-    +   '<h2 class="titulo">Seu cadastro está em análise</h2>'
-    +   '<p class="apoio">Uma pessoa da nossa equipe está conferindo seus documentos. '
-    +     'Costuma levar algumas horas — a gente avisa assim que terminar.</p>'
+    +   '<h2 class="titulo">' + esc(e.situacaoTitulo) + '</h2>'
+    +   '<p class="apoio">' + esc(e.situacaoApoio) + '</p>'
     +   '<div class="girando roxo"></div>'
     + '</div>'
-    + '<div class="corpo" style="flex:none">' + atalhoDeAprovacao() + '</div>'
+    /* o que vem embaixo encolhe e rola num celular baixo (o centro fica) */
+    + '<div class="corpo" style="flex:0 1 auto">'
+    +   (e.situacaoAvisoTitulo
+      ? '<div class="aviso roxo">📄<div><b>' + esc(e.situacaoAvisoTitulo) + '</b>'
+        + esc(e.situacaoAvisoFrase) + '</div></div>'
+      : '')
+    +   atalhoDeAprovacao()
+    + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
     +     'Ver oportunidades enquanto isso</button>'
@@ -1372,31 +1645,250 @@ TELAS.diaristaAnalise = {
   }
 };
 
+/* O atalho de sempre: "a equipe" aprova o cadastro em análise. */
 function simularAprovacao(){
-  const d = euSouDiarista();
-  d.situacao = "aprovada";
-  salvar();
-  ir("diaristaAprovada", { limparHistorico:true });
+  simularDecisaoDaEquipe("aprovar");
 }
 
+/* --- aprovada --- */
 TELAS.diaristaAprovada = {
   html: function(){
+    const e = situacaoDaDiarista();
+    if(e.chave !== "aprovada") return situacaoQueMudou(e);
+    const decisao = FONTE.ler.decisaoDaEquipe();
+    const daAprovacao = !!decisao && decisao.tipo === "aprovou";
+    /* quem volta de uma suspensão lê que o acesso voltou */
+    const deVolta = daAprovacao && decisao.antes === "suspensa";
+    /* desde a 6a, ficar disponível e aceitar já funcionam no app */
+    const embaixo = (daAprovacao && decisao.motivo ? cartaoDoQueAEquipeEscreveu(decisao) : "")
+      + soNaMaquete(atalhosDaEquipeNaMaquete);
     return ''
     + '<div class="centro">'
     +   '<div class="circulo-ok">✓</div>'
-    +   '<h2 class="titulo">Cadastro aprovado! 🎉</h2>'
-    +   '<p class="apoio">Agora é só ficar disponível e aceitar os serviços que combinarem com você.</p>'
-    +   '<div class="aviso verde" style="text-align:left">' + icone("escudo", 18)
+    +   '<h2 class="titulo">' + esc(deVolta ? e.situacaoTituloDeVolta : e.situacaoTitulo) + '</h2>'
+    +   '<p class="apoio">' + esc(deVolta ? e.situacaoApoioDeVolta : e.situacaoApoio) + '</p>'
+    /* a verificação de documentos ainda não está no app (decisão 43): o
+       selo de "verificada" fica só na maquete */
+    +   soNaMaquete('<div class="aviso verde" style="text-align:left">' + icone("escudo", 18)
     +     '<div><b>Você está verificada</b>'
     +     'Documento conferido, identidade confirmada e antecedentes verificados. '
-    +     'O cliente vê esses selos no seu perfil.</div></div>'
+    +     'O cliente vê esses selos no seu perfil.</div></div>')
     + '</div>'
+    + (embaixo ? '<div class="corpo" style="flex:0 1 auto">' + embaixo + '</div>' : '')
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
     +     'Ver oportunidades</button>'
     + '</div>';
   }
 };
+
+/* --- recusada e suspensa: o motivo, a conversa e a resposta --- */
+TELAS.diaristaRecusada = {
+  html: function(){ return telaDaDecisaoContraEla("recusada"); },
+  aoEntrar: function(){ pedirASituacaoNestaVisita(); }
+};
+
+TELAS.diaristaSuspensa = {
+  html: function(){ return telaDaDecisaoContraEla("suspensa"); },
+  aoEntrar: function(){ pedirASituacaoNestaVisita(); }
+};
+
+function telaDaDecisaoContraEla(qual){
+  const e = situacaoDaDiarista();
+  if(e.chave !== qual) return situacaoQueMudou(e);
+  const decisao = FONTE.ler.decisaoDaEquipe();
+  const pode = !!decisao && decisao.podeResponder;
+  return cabecalho("Meu cadastro")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">' + esc(e.situacaoTitulo) + '</h2>'
+    +   '<p class="apoio">' + esc(e.situacaoApoio) + '</p>'
+    +   (decisao && decisao.motivo ? cartaoDoQueAEquipeEscreveu(decisao) : '')
+    +   (respostaAcabouDeIr()
+      ? '<div class="aviso verde">✓<div><b>Resposta enviada</b>A nossa equipe vai ler e '
+        + 'responder por aqui. Quando houver novidade, a gente avisa você.</div></div>'
+      : '')
+    +   '<div id="conversa-equipe">' + conversaComAEquipe() + '</div>'
+    +   campoDaResposta(decisao)
+    +   soNaMaquete(atalhosDaEquipeNaMaquete)
+    + '</div>'
+    + '<div class="rodape">'
+    +   (pode
+      ? '<button class="btn btn-principal" onclick="responderAEquipe(this)">Enviar resposta</button>'
+        + erroDoCampo("resp-erro", qual, "")
+      : '')
+    +   '<button class="btn ' + (pode ? "btn-texto" : "btn-principal") + '" '
+    +     'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ir para o início</button>'
+    + '</div>';
+}
+
+/* O campo da resposta, enquanto ela pode responder; depois das respostas
+   desta decisão, a frase de que a equipe vai ler e responder. */
+function campoDaResposta(decisao){
+  if(!decisao || ACOES_QUE_ELA_PODE_RESPONDER.indexOf(decisao.tipo) < 0) return "";
+  if(!decisao.podeResponder){
+    return '<div class="aviso roxo">💬<div><b>A nossa equipe vai ler e responder por aqui</b>'
+      + 'Você já mandou ' + Number(RESPOSTAS_POR_DECISAO) + ' respostas sobre esta decisão. '
+      + 'Quando a equipe responder, você pode escrever de novo.</div></div>';
+  }
+  const restam = Number(decisao.respostasRestantes) || 0;
+  return '<div class="campo" style="margin-top:18px"><label for="resp-texto">Sua resposta</label>'
+    + '<textarea id="resp-texto" maxlength="' + Number(RESPOSTA_MAXIMA) + '" '
+    +   'placeholder="Conte o seu lado, com calma. Uma pessoa da nossa equipe lê tudo."></textarea></div>'
+    + '<p class="ajuda" style="margin-top:-6px">'
+    +   (restam === 1 ? "Você ainda pode mandar 1 resposta sobre esta decisão."
+                      : "Você pode mandar até " + restam + " respostas sobre esta decisão.")
+    + '</p>';
+}
+
+/* A conversa com a equipe: as decisões e as respostas dela, da mais velha
+   para a mais nova. Só aparece com mais de uma linha (a primeira decisão
+   sozinha já está no cartão de cima). No app, enquanto não chegou do
+   servidor: "Carregando…", ou o que houve, com "Tentar de novo". */
+const O_QUE_A_EQUIPE_FEZ = {
+  aprovou: "aprovou o cadastro",
+  recusou: "não aprovou o cadastro",
+  suspendeu: "suspendeu o acesso",
+  manteve: "respondeu",
+  respondeu: "respondeu",
+};
+
+function conversaComAEquipe(){
+  const linhas = FONTE.ler.conversaComAEquipe();
+  if(linhas === null){
+    const frase = erroDaSituacaoAgora();
+    if(!frase) return '<p class="ajuda">Carregando a conversa com a nossa equipe…</p>';
+    return '<div class="aviso ambar">⚠️<div>' + esc(frase) + '</div></div>'
+      + '<button class="btn btn-contorno" onclick="tentarASituacaoDeNovo()">Tentar de novo</button>';
+  }
+  if(linhas.length < 2) return "";
+  return '<div class="rotulo">A conversa sobre o seu cadastro</div>'
+    + linhas.map(function(l){
+        const dela = l.quem === "voce";
+        const oQue = (l.tipo === "aprovou" && l.antes === "suspensa") ? "reativou o acesso"
+                   : (O_QUE_A_EQUIPE_FEZ[l.tipo] || "");
+        return '<div class="fala' + (dela ? " dela" : "") + '">'
+          + '<div class="quem"><b>' + (dela ? "Você" : "Nossa equipe") + '</b>'
+          +   '<span>' + esc(l.emTexto) + '</span></div>'
+          + (dela ? '' : '<div class="o-que">' + esc(oQue) + '</div>')
+          + (l.texto ? '<div class="texto-da-equipe">' + esc(l.texto) + '</div>' : '')
+          + '</div>';
+      }).join("");
+}
+
+/* NO APP, a conversa vem do servidor: uma vez a cada visita à tela. Sem
+   resposta, a frase e "Tentar de novo"; nada é pedido de novo sozinho. */
+let SITUACAO_PEDIDA = null;              // { navegacao, terminou, frase }
+
+function pedirASituacaoNestaVisita(){
+  if(FONTE.ehMaquete) return;
+  if(SITUACAO_PEDIDA && SITUACAO_PEDIDA.navegacao === NAVEGACAO) return;
+  const pedida = { navegacao: NAVEGACAO, terminou: false, frase: "" };
+  SITUACAO_PEDIDA = pedida;
+  FONTE.carregarSituacao(function(r){
+    if(r.destino) return seguirPeloErro(r);
+    pedida.terminou = true;
+    pedida.frase = r.ok ? "" : (r.erro || "");
+    depoisDaSituacao();
+  });
+}
+
+function erroDaSituacaoAgora(){
+  return (SITUACAO_PEDIDA && SITUACAO_PEDIDA.navegacao === NAVEGACAO && SITUACAO_PEDIDA.terminou)
+    ? SITUACAO_PEDIDA.frase : "";
+}
+
+/* A conversa chegou. Se ela já está escrevendo a resposta, só a conversa
+   muda de lugar: redesenhar a tela apagaria o que foi digitado e fecharia
+   o teclado do iPhone (PLANO-TELAS, B6). Sem texto no campo, a tela inteira
+   (o cartão de cima e o campo também podem ter mudado). */
+function depoisDaSituacao(){
+  const lugar = document.getElementById("conversa-equipe");
+  if(lugar && valorDoCampo("resp-texto").trim()){
+    lugar.innerHTML = conversaComAEquipe();
+    return;
+  }
+  desenhar();
+}
+
+function tentarASituacaoDeNovo(){
+  SITUACAO_PEDIDA = null;
+  desenhar();
+}
+
+/* A RESPOSTA DELA. O botão diz "Enviando…" até o servidor responder (a
+   tela não é redesenhada: o texto continua no campo). Deu certo: a tela
+   volta com a resposta na conversa e o aviso de que a equipe vai ler. Não
+   deu: a frase embaixo do botão, e o texto continua lá. */
+let RESPOSTA_ENVIADA_NA_NAVEGACAO = -1;
+
+function respostaAcabouDeIr(){
+  return RESPOSTA_ENVIADA_NA_NAVEGACAO === NAVEGACAO;
+}
+
+function responderAEquipe(botao){
+  const texto = valorDoCampo("resp-texto").trim();
+  mostrarErro("resp-erro", "");
+  if(!texto) return mostrarErro("resp-erro", "Escreva a sua resposta antes de enviar.");
+  FONTE.responderAEquipe({ texto: texto }, depoisDaResposta, { botao: botao || null });
+}
+
+function depoisDaResposta(r){
+  if(!r.ok && r.destino) return seguirPeloErro(r);
+  if(!r.ok) return mostrarErro("resp-erro", r.erro);
+  RESPOSTA_ENVIADA_NA_NAVEGACAO = NAVEGACAO;
+  /* o que voltou não deu para ler: a conversa é pedida de novo */
+  if(FONTE.ler.conversaComAEquipe() === null) SITUACAO_PEDIDA = null;
+  desenhar();
+}
+
+/* NA MAQUETE: o que a equipe decide no app de verdade (a fila da equipe é
+   a entrega 5c). Só o que a tabela da equipe deixa (DECISOES_DA_EQUIPE, a
+   mesma do servidor), com os textos de exemplo do exemplos.js; "manter" só
+   depois de uma resposta dela. */
+function simularDecisaoDaEquipe(nome){
+  if(!FONTE.ehMaquete) return;
+  const d = euSouDiarista();
+  const dec = DECISOES_DA_EQUIPE[nome];
+  const chave = estadoDela().chave;
+  if(!dec || dec.de.indexOf(chave) < 0) return;
+  const trilha = d.trilha || [];
+  const ultima = trilha[trilha.length - 1];
+  if(nome === "manter" && !(ultima && ultima.tipo === "respondeu")) return;
+  const textos = TEXTOS_DA_EQUIPE_DE_EXEMPLO;
+  const texto = (nome === "aprovar") ? (chave === "analise" ? "" : textos.aprovarDeNovo) : textos[nome];
+  acrescentarNaTrilhaDaMaquete(d, { tipo: dec.acao, situacaoAntes: chave,
+                                    situacaoDepois: dec.para || chave, texto: texto });
+  if(dec.para){
+    d.situacao = dec.para;
+    if(dec.para !== "aprovada") d.disponivel = false;    // como no servidor
+  }
+  salvar();
+  ir(situacaoDaDiarista().telaDaSituacao, { limparHistorico:true });
+}
+
+/* O quadro "NA MAQUETE" das telas da situação: o que a equipe pode decidir
+   agora, pela tabela. */
+function atalhosDaEquipeNaMaquete(){
+  const chave = estadoDela().chave;
+  const trilha = euSouDiarista().trilha || [];
+  const ultima = trilha[trilha.length - 1];
+  const botoes = [];
+  if(chave === "aprovada")
+    botoes.push('<button class="btn btn-contorno" onclick="simularDecisaoDaEquipe(\'suspender\')">'
+      + 'Simular: acesso suspenso</button>');
+  if(chave === "recusada" || chave === "suspensa"){
+    if(ultima && ultima.tipo === "respondeu")
+      botoes.push('<button class="btn btn-contorno" onclick="simularDecisaoDaEquipe(\'manter\')">'
+        + 'Simular: a equipe responde</button>');
+    botoes.push('<button class="btn btn-contorno" onclick="simularDecisaoDaEquipe(\'aprovar\')">'
+      + 'Simular: a equipe aprova de novo</button>');
+  }
+  if(!botoes.length) return "";
+  return '<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+    + '<div>No aplicativo de verdade, quem decide e escreve é uma pessoa da nossa equipe. '
+    + 'Aqui dá para ver como fica.</div>'
+    + botoes.join("") + '</div>';
+}
 
 
 /* ==========================================================================
@@ -1507,7 +1999,9 @@ function agendaDela(){
   marcados.forEach(function(s){
     itens += '<div class="linha"><span class="rot">' + esc(dataPorExtenso(s.data))
       + '</span><span class="val">' + s.inicio + 'h às ' + s.fim + 'h · '
-      + esc(s.bairro) + '</span></div>';
+      + esc(s.bairro)
+      /* o pedido de duas com só ela (A16): ainda não é serviço confirmado */
+      + (s.situacao === "aguardando_segunda" ? " · falta a segunda" : "") + '</span></div>';
   });
   return '<div class="rotulo">Você já tem</div><div class="cartao">' + itens + '</div>';
 }
@@ -1591,59 +2085,55 @@ function avisoDoPushParaOTime(){
 }
 
 /* Aceitar de verdade: entra na agenda dela. É isto que faz o próximo pedido
-   do mesmo horário parar de aparecer. */
-function aceitarOportunidade(){
-  const d = euSouDiarista();
+   do mesmo horário parar de aparecer. Quem confere e grava é a FONTE: na
+   maquete, a agenda deste aparelho; no app (6a), o servidor, que confere
+   tudo de novo (aprovada, a agenda dela, a mesma casa, o prazo da busca) e
+   decide quem fica com a vaga. O "não deu" mostra a frase de quem decidiu. */
+function aceitarOportunidade(botao){
   if(!podeAceitarServico()) return;               // a trava, de novo e por último
 
   const o = oportunidadePorId(E.oportunidadeAberta || 0);
   if(!o) return;
 
-  /* confere outra vez na hora de aceitar: entre ver e tocar, ela pode ter
-     aceitado outro pedido pelo alerta */
-  const veredito = cabeNaAgenda(o, d.agenda);
-  if(!veredito.cabe){
-    E.recusadoPelaAgenda = veredito.motivo;
+  FONTE.aceitarOportunidade(o, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok){
+      E.recusadoPelaAgenda = r.erro || "";
+      E.naoDeuPorque = r.motivo || "";
+      salvar();
+      return ir("diaristaConflito");
+    }
+    /* para a tela do aceite dizer quando a rua aparece NESTE serviço */
+    E.aceitoAgora = r.aceito;
+    E.alerta = null;
+    anotarIgnorados(0);
     salvar();
-    ir("diaristaConflito");
-    return;
-  }
-
-  d.agenda = (d.agenda || []).concat([{
-    oportunidadeId: o.id, data: o.data, inicio: o.inicio, fim: o.fim,
-    bairro: o.bairro, resumo: o.resumo, receber: o.receber,
-    /* o que a agenda e o extrato precisam (R26): o endereço completo — que
-       fica guardado, mas só APARECE a partir das 18h da véspera (A13,
-       enderecoLiberado) — e o pedido, para o extrato refazer a conta pelas
-       regras em vez de confiar num número guardado */
-    periodo: o.periodo, km: o.km, endereco: o.endereco,
-    pedido: JSON.parse(JSON.stringify(o.pedido || null)),
-    /* "Carla M.", para o detalhe do serviço (A18) — nunca o sobrenome */
-    cliente: o.cliente || "",
-    /* a hora do aceite: quem aceita depois das 18h da véspera conversa na
-       hora, e nenhuma mensagem de exemplo pode ser de antes do aceite */
-    aceitoEm: relogioDaAgenda().getTime(),
-  }]);
-  /* para a tela do aceite dizer quando a rua aparece NESTE serviço */
-  E.aceitoAgora = { oportunidadeId: o.id, data: o.data };
-  E.alerta = null;
-  d.ignoradosSeguidos = 0;
-  salvar();
-  ir("diaristaAceitou", { limparHistorico:true });
+    ir("diaristaAceitou", { limparHistorico:true });
+  }, { botao: botao || null });
 }
 
-/* Quando o horário some debaixo dela. Raro, mas precisa ter tela: um "não"
-   sem explicação parece defeito do aplicativo. */
+/* Quando o horário some debaixo dela — ou, no app, quando outra aceitou
+   antes, o pedido caiu ou ficou em cima da hora. Raro, mas precisa ter
+   tela: um "não" sem explicação parece defeito do aplicativo. A frase é a
+   de quem decidiu (a agenda da maquete, ou o servidor). */
+function fraseDoNaoDeu(){
+  const frase = String(E.recusadoPelaAgenda || "Você já tem serviço nesse dia").trim();
+  return /[.!?]$/.test(frase) ? frase : frase + ".";
+}
+
 TELAS.diaristaConflito = {
   html: function(){
+    /* "agenda" (ou sem motivo, na maquete): o horário; o resto, o pedido */
+    const peloHorario = !E.naoDeuPorque || E.naoDeuPorque === "agenda";
     return ''
     + cabecalho("Não deu")
     + '<div class="corpo">'
     +   '<div class="centro" style="flex:none;padding:20px 6px 6px">'
-    +     '<div class="emojao">📅</div>'
-    +     '<h2 class="titulo">Esse horário não cabe mais</h2>'
-    +     '<p class="apoio">' + esc(E.recusadoPelaAgenda || "Você já tem serviço nesse dia.")
-    +       '.<br>Nada foi anotado contra você.</p>'
+    +     '<div class="emojao">' + (peloHorario ? "📅" : "⏰") + '</div>'
+    +     '<h2 class="titulo">' + (peloHorario ? "Esse horário não cabe mais"
+                                              : "Esse pedido não está mais com você") + '</h2>'
+    +     '<p class="apoio">' + esc(fraseDoNaoDeu())
+    +       '<br>Nada foi anotado contra você.</p>'
     +   '</div>'
     + '</div>'
     + '<div class="rodape">'
@@ -2048,19 +2538,16 @@ function relogioDoAlerta(){
     if(E.alerta.pergunta){
       /* não respondeu à pergunta: desliga sozinho, sem punição nenhuma */
       E.alerta = null;
-      d.disponivel = false;
-      d.ignoradosSeguidos = 0;
-      E.desligouSozinho = true;
       salvar();
-      desenhar();
+      desligarODisponivel(true);
       return;
     }
 
     /* o alerta expirou sem resposta */
     E.alerta = null;
-    d.ignoradosSeguidos = (d.ignoradosSeguidos || 0) + 1;
+    anotarIgnorados(ignoradosSeguidos() + 1);
     salvar();
-    if(d.ignoradosSeguidos >= DISPONIBILIDADE.alertasIgnoradosAtePerguntar){
+    if(ignoradosSeguidos() >= DISPONIBILIDADE.alertasIgnoradosAtePerguntar){
       E.telaAntesDoAlerta = null;
       ir("diaristaHome", { limparHistorico:true });
       perguntarSeAindaEsta();
@@ -2116,8 +2603,7 @@ function textoDosToquesDoAlerta(){
    minutos esperando. Punir quem recusa seria punir o comportamento que a
    gente quer. */
 function deiSinalDeVida(){
-  const d = euSouDiarista();
-  d.ignoradosSeguidos = 0;
+  anotarIgnorados(0);
   salvar();
 }
 
@@ -2152,12 +2638,9 @@ function continuoDisponivel(){
 }
 
 function pausarAgora(){
-  const d = euSouDiarista();
   E.alerta = null;
-  d.disponivel = false;
-  d.ignoradosSeguidos = 0;
   salvar();
-  desenhar();
+  desligarODisponivel(false);
 }
 
 /* O cartão — agora só para a pergunta "ainda está disponível?".
@@ -2298,7 +2781,12 @@ TELAS.diaristaAlerta = {
     + '</div>';
   },
 
-  aoEntrar: function(){ relogioDoAlerta(); }
+  /* no app, quem recarregou a página aqui pergunta a lista de novo (o
+     alerta é de um pedido dela) */
+  aoEntrar: function(){
+    if(!FONTE.ehMaquete) pedirOportunidadesNestaVisita();
+    relogioDoAlerta();
+  }
 };
 
 /* O aviso de que o próprio app pausou. */
@@ -2517,7 +3005,11 @@ function momentoDoServico(s, hora){
 /* Serviço que já passou SAI da agenda e vai para os ganhos — escolha
    PROVISÓRIA (A8). No app real quem diz "terminou" é a tela de concluir o
    serviço (Bloco 5); no protótipo, acabou a janela, acabou o serviço. */
-function servicoJaTerminou(s){ return momentoDoServico(s, s.fim) <= relogioDaAgenda(); }
+function servicoJaTerminou(s){
+  /* no app, quem diz é o servidor (o relógio do celular pode estar errado) */
+  if(typeof s.terminou === "boolean") return s.terminou;
+  return momentoDoServico(s, s.fim) <= relogioDaAgenda();
+}
 
 function servicoAcontecendoAgora(s){
   const agora = relogioDaAgenda();
@@ -2591,6 +3083,7 @@ function resumoDoPedido(pedido){
    Para esse, procura a oportunidade de onde ele veio; se não achar, mostra o
    valor combinado no aceite, sem inventar linha nenhuma. */
 function detalhesDoServico(s){
+  if(s.doServidor) return detalhesDoServidor(s);
   let pedido = s.pedido, km = s.km, endereco = s.endereco, cliente = s.cliente;
   /* a oportunidade de onde ele veio — só se for a mesma casa */
   const origem = OPORTUNIDADES[s.oportunidadeId];
@@ -2671,6 +3164,37 @@ function detalhesDoServico(s){
     linhasFecham: !!extrato && Math.abs(extrato.total - valor) < 0.005,
     valor: valor,
     exemplo: !!s.exemplo,
+  };
+}
+
+/* NO APP (6a), o serviço vem pronto do servidor, e só com o que ela pode
+   ver agora: nada da rua (a rua chega pela tela do serviço, entrega 6b; o
+   servidor diz só se as 18h da véspera já passaram), nada do recado, do
+   cliente nem da conversa (entrega 8). O valor é o combinado no aceite. */
+function detalhesDoServidor(s){
+  const terminou = s.terminou === true;
+  return {
+    oportunidadeId: s.oportunidadeId,
+    data: s.data, inicio: s.inicio, fim: s.fim,
+    janela: s.janela || ("das " + s.inicio + "h às " + s.fim + "h"),
+    horasDaJanela: s.fim - s.inicio,
+    bairro: s.bairro || "",
+    endereco: "",
+    ruaDepois: (!s.ruaLiberada && !terminou) ? fraseDaRuaNaVespera(s) : "",
+    ruaNoDetalhe: !!s.ruaLiberada && !terminou,
+    ruaSaiu: false,
+    recado: "", recadoDepois: false,
+    conversaAberta: false, conversaSituacao: "antes",
+    cliente: "", pedido: null,
+    km: s.km,
+    resumo: s.resumo || "",
+    extrato: null,
+    adicionaisDoServidor: Array.isArray(s.adicionais) ? s.adicionais : [],
+    linhasFecham: false,
+    valor: Number(s.receber) || 0,
+    exemplo: false,
+    situacao: s.situacao || "confirmado",
+    caiAs: s.caiAs || null,
   };
 }
 
@@ -2823,7 +3347,8 @@ function prazoDoPix(){
    cabeça dela. A soma é exatamente o que ela recebe pelos aceitos — o
    teste 22 confere. */
 function rendaDoConjunto(){
-  const lista = servicosAgendados();
+  /* o pedido de duas que ainda espera a segunda não é diária combinada (A16) */
+  const lista = servicosAgendados().filter(function(s){ return s.situacao !== "aguardando_segunda"; });
   return { quantidade: lista.length, total: somarValores(lista) };
 }
 
@@ -2959,9 +3484,14 @@ function marcaDeMensagemNova(s){
 }
 
 function cartaoDaAgenda(s){
-  const adicionais = s.extrato ? s.extrato.adicionais : [];
+  const adicionais = s.extrato ? s.extrato.adicionais : (s.adicionaisDoServidor || []);
+  const faltaASegunda = s.situacao === "aguardando_segunda";
   return '<button class="cartao servico-toque" onclick="' + toqueDoDetalhe(s) + '">'
-    + (servicoAcontecendoAgora(s)
+    /* o pedido de duas com só ela (A16): não é serviço confirmado, e ela
+       sabe até quando a segunda pode aceitar */
+    + (faltaASegunda
+      ? '<div style="margin-bottom:8px"><span class="selo ambar">falta a segunda profissional</span></div>'
+      : servicoAcontecendoAgora(s)
       ? '<div style="margin-bottom:8px"><span class="selo verde">acontecendo agora</span></div>' : "")
     + '<div class="servico-topo">'
     +   '<div class="txt"><b>' + esc(s.janela) + '</b>'
@@ -2978,6 +3508,12 @@ function cartaoDaAgenda(s){
     +   (s.endereco ? '<b>' + esc(s.endereco) + '</b> · ' : "") + esc(s.bairro)
     +   (s.km != null ? ' · ' + kmEscrito(s.km) : "") + '</div>'
     + (s.ruaDepois ? '<div class="servico-rua">🔒 ' + esc(s.ruaDepois) + '</div>' : "")
+    /* no app, depois das 18h da véspera: a rua vai aparecer no detalhe do
+       serviço, que ainda está sendo construído (6b) */
+    + (s.ruaNoDetalhe ? '<div class="servico-rua">🔒 A rua e o número vão aparecer no detalhe do '
+      + 'serviço, que chega em breve no app.</div>' : "")
+    + (faltaASegunda ? '<div class="servico-rua">⏳ Ainda não está confirmado. '
+      + esc(fraseDaSegunda(s)) + '</div>' : "")
     + marcaDeMensagemNova(s)
     /* R9: a pausa é direito dela, e a hora é ela quem escolhe */
     + (s.horasDaJanela > 6
@@ -2993,6 +3529,8 @@ function cartaoDaAgenda(s){
    escrever "esqueci o guarda-chuva". Uma linha por serviço, só enquanto a
    conversa dele está aberta. Depois disso o caminho é o extrato. */
 function terminaramComAConversaAberta(){
+  /* no app, a conversa é a entrega 8: até lá, nada */
+  if(!FONTE.ehMaquete) return [];
   const agora = relogioDaAgenda();
   return (euSouDiarista().agenda || [])
     .filter(function(s){ return servicoJaTerminou(s) && situacaoDaConversa(s, agora) === "aberta"; })
@@ -3050,6 +3588,9 @@ TELAS.diaristaAgenda = {
 
     if(!e.podeAceitar){
       miolo = blocoAntesDeTrabalhar(e);
+    } else if(FONTE.ler.agenda() === null){
+      /* no app, enquanto a agenda não chegou do servidor (ou sem internet) */
+      miolo = agendaAindaNao();
     } else {
       const dias = agendaPorDia();
       miolo = dias.length
@@ -3068,8 +3609,9 @@ TELAS.diaristaAgenda = {
           + '<button class="btn btn-principal" style="margin-top:14px" '
           +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades</button>';
 
-      miolo += '<button class="btn btn-texto" style="min-height:44px;margin-top:10px" '
-        +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
+      /* os dias de trabalho (a grade) no app são a entrega 6c */
+      miolo += soNaMaquete('<button class="btn btn-texto" style="min-height:44px;margin-top:10px" '
+        +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>')
         + '<button class="btn btn-texto" style="min-height:44px" '
         +   'onclick="ir(\'diaristaGanhos\')">Os que já passaram estão em Meus ganhos ›</button>';
     }
@@ -3078,8 +3620,10 @@ TELAS.diaristaAgenda = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Minha agenda 📅</h2>'
     +   '<p class="apoio">Os serviços que você aceitou, do mais próximo ao mais distante.</p>'
-    /* mensagem nova de um cliente (A18) — só para quem já trabalha (R24) */
-    +   (e.podeAceitar ? cartaoDeMensagemNova("diarista") : "")
+    /* mensagem nova de um cliente (A18) — só para quem já trabalha (R24).
+       No app, a conversa é a entrega 8 */
+    +   (e.podeAceitar ? soNaMaquete(function(){ return cartaoDeMensagemNova("diarista"); }) : "")
+    +   (agendaComErro() && FONTE.ler.agenda() !== null ? '<p class="ajuda">' + esc(agendaComErro()) + '</p>' : "")
     +   miolo
     + '</div>'
     + abasDaDiarista("agenda");
@@ -3087,9 +3631,48 @@ TELAS.diaristaAgenda = {
 
   /* Com a agenda aberta na véspera, às 18h a rua aparece sozinha, sem ela
      precisar sair e voltar. Pelo agendar(), como todo relógio do app:
-     trocar de tela desliga. */
-  aoEntrar: function(){ redesenharQuandoARuaChegar(); }
+     trocar de tela desliga. No app, a agenda vem do servidor, uma vez por
+     visita. */
+  aoEntrar: function(){
+    if(!FONTE.ehMaquete) pedirAAgendaNestaVisita();
+    redesenharQuandoARuaChegar();
+  }
 };
+
+/* NO APP, a agenda vem do servidor (6a): uma vez a cada visita ao início ou
+   à agenda. Sem resposta, a frase e "Tentar de novo"; nada é pedido de novo
+   sozinho (a não ser às 18h da véspera, com a agenda aberta). */
+let AGENDA_PEDIDA_NA_NAVEGACAO = -1;
+let ERRO_DA_AGENDA = null;               // { frase, navegacao }
+
+function agendaComErro(){
+  return (ERRO_DA_AGENDA && ERRO_DA_AGENDA.navegacao === NAVEGACAO) ? ERRO_DA_AGENDA.frase : "";
+}
+
+function pedirAAgendaNestaVisita(){
+  if(AGENDA_PEDIDA_NA_NAVEGACAO === NAVEGACAO || agendaComErro()) return;
+  AGENDA_PEDIDA_NA_NAVEGACAO = NAVEGACAO;
+  FONTE.carregarAgenda(depoisDaAgenda);
+}
+
+function depoisDaAgenda(r){
+  if(r.destino) return seguirPeloErro(r);
+  ERRO_DA_AGENDA = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+  desenhar();
+}
+
+function tentarAAgendaDeNovo(){
+  ERRO_DA_AGENDA = null;
+  AGENDA_PEDIDA_NA_NAVEGACAO = -1;
+  desenhar();
+}
+
+function agendaAindaNao(){
+  const erro = agendaComErro();
+  if(!erro) return '<p class="apoio">Carregando sua agenda…</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="tentarAAgendaDeNovo()">Tentar de novo</button>';
+}
 
 /* Teto de 6 horas por espera: um relógio de vários dias, no celular que
    dorme, atrasa à toa. Acordar antes e reagendar não custa nada. */
@@ -3113,6 +3696,14 @@ function redesenharQuandoARuaChegar(){
     proximo = Math.min(proximo, quando);
   });
   if(proximo === Infinity) return;
+  if(!FONTE.ehMaquete){
+    /* no app, quem diz que a hora chegou é o servidor: às 18h a agenda é
+       perguntada de novo. Hora que já passou (o relógio do celular adiantado)
+       não arma nada: senão a agenda seria perguntada sem parar */
+    if(proximo <= agora) return;
+    agendar(tentarAAgendaDeNovo, Math.min(ESPERA_MAXIMA_DO_RELOGIO_DA_RUA_MS, proximo - agora + 1000));
+    return;
+  }
   /* +1s: acordar um tiquinho depois das 18h, nunca um tiquinho antes */
   agendar(desenhar, Math.min(ESPERA_MAXIMA_DO_RELOGIO_DA_RUA_MS, proximo - agora + 1000));
 }

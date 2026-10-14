@@ -1760,6 +1760,8 @@ function seguirARegua(r){
   const p = pedidoAtual();
   if(!p) return desenhar();
   if(p.situacao === "cancelado") return ir("buscaCancelada", { limparHistorico:true });
+  /* uma diarista aceitou (as duas, no pedido de duas): "Diarista confirmada!" */
+  if(p.situacao === "confirmado") return ir("confirmado", { limparHistorico:true });
   if(!pedidoNaBusca(p)) return ir("detalhePedido", { limparHistorico:true });
   const b = FONTE.ler.busca(p);
   if(E.tela === "buscando" && b.passo === "perguntar_ao_cliente" && !jaPerguntouAos15(p.id)){
@@ -1986,10 +1988,15 @@ function confirmarProfissional(id){
 TELAS.confirmado = {
   html: function(){
     const p = pedidoAtual();
-    const prof = p && PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; });
+    const prof = p ? FONTE.ler.profissionalDoPedido(p) : null;
     /* rede de segurança: sem pedido ou sem profissional, esta tela não faz
        sentido — volta para a lista em vez de quebrar na cara do usuário */
     if(!prof) return htmlDaTela("meusServicos");
+    /* no app, só aparece da profissional o que o servidor mandou: o nome
+       curto. A nota, a experiência e os selos da imagem ficam para quando
+       o app tiver avaliações e a conferência de documentos: até lá, "Nova
+       na Limpah" (ver A32) */
+    if(!FONTE.ehMaquete) return confirmadoNoApp(p);
 
     const primeiro = prof.nome.split(" ")[0];
 
@@ -2059,6 +2066,51 @@ TELAS.confirmado = {
     + abas("inicio");
   }
 };
+
+
+/* "Diarista confirmada!" no app (6a): o mesmo desenho, só com o que é
+   verdade agora. Quem vai ("Maria S.", ou as duas) vem pronto do servidor:
+   nunca o sobrenome, o telefone ou o endereço dela. */
+function confirmadoNoApp(p){
+  const nomes = FONTE.ler.quemVai(p);
+  const duas = nomes.length > 1;
+  const quem = nomes.join(" e ");
+  const primeiro = String(nomes[0] || "").split(" ")[0];
+  let pessoas = "";
+  nomes.forEach(function(nome, i){
+    pessoas += '<div class="pessoa"' + (i ? ' style="margin-top:12px"' : "") + '>'
+      + avatar(nome, "", "") + '<div class="info"><b>' + esc(nome) + '</b>'
+      + '<span>Nova na Limpah</span></div></div>';
+  });
+  const acoes = [
+    { icone:"💬", texto:"Conversar com " + (duas ? "as profissionais" : primeiro),
+      acao:"abrirConversaDoPedido('" + idSeguro(p.id) + "')" },
+    { icone:"📋", texto:"Ver detalhes do pedido", acao:"abrirPedido('" + idSeguro(p.id) + "')" },
+    { icone:"🗂️", texto:"Ir para meus serviços", acao:"trocarAba('servicos')" },
+  ];
+  let linhas = "";
+  acoes.forEach(function(a){
+    linhas += '<button class="item" onclick="' + a.acao + '">'
+      + '<div style="font-size:19px;width:26px;text-align:center">' + a.icone + '</div>'
+      + '<div class="txt"><b>' + esc(a.texto) + '</b></div>'
+      + '<div class="seta">›</div></button>';
+  });
+  return ''
+  + '<div class="corpo">'
+  +   '<div style="text-align:center;padding:14px 0 6px">'
+  +     '<div style="display:flex;justify-content:center;margin-bottom:10px">'
+  +       '<div class="circulo-ok" style="width:60px;height:60px;font-size:30px">✓</div></div>'
+  +     '<h2 class="titulo">' + (duas ? "Diaristas confirmadas! 🎉" : "Diarista confirmada! 🎉") + '</h2>'
+  +     '<p class="apoio" style="margin-bottom:8px">'
+  +       esc(quem) + (duas ? ' aceitaram seu pedido e chegam ' : ' aceitou seu pedido e chega ')
+  +       esc(dataPorExtenso(p.data).toLowerCase()) + ', no período da '
+  +       esc(nomePeriodo(p.periodo).split(" ")[0].toLowerCase()) + '.</p>'
+  +   '</div>'
+  +   '<div class="cartao destaque">' + pessoas + '</div>'
+  +   linhas
+  + '</div>'
+  + abas("inicio");
+}
 
 
 /* ==========================================================================
@@ -2254,7 +2306,17 @@ TELAS.detalhePedido = {
     const janelaDoPedido = janelaDoPedidoEmTexto(p);
 
     let blocoProfissional = "";
-    if(prof){
+    if(prof && !FONTE.ehMaquete){
+      /* no app (6a): quem vai, pelo nome curto do servidor. Sem nota, perfil
+         e favoritas, que ainda não existem de verdade */
+      blocoProfissional = '<div class="rotulo">' + (FONTE.ler.quemVai(p).length > 1 ? "Profissionais" : "Profissional")
+        + '</div><div class="cartao">'
+        + FONTE.ler.quemVai(p).map(function(nome, i){
+            return '<div class="pessoa"' + (i ? ' style="margin-top:12px"' : "") + '>' + avatar(nome, "", "")
+              + '<div class="info"><b>' + esc(nome) + '</b><span>Nova na Limpah</span></div></div>';
+          }).join("")
+        + '</div>';
+    } else if(prof){
       const ehFavorita = E.favoritos.indexOf(prof.id) >= 0;
       blocoProfissional = '<div class="rotulo">Profissional</div><div class="cartao">'
         + '<div class="pessoa">' + avatar(prof.nome, prof.cor)

@@ -662,6 +662,15 @@ function dataPorExtenso(iso){
   return DIAS_SEMANA[d.getDay()] + ", " + d.getDate() + " de " + MESES[d.getMonth()];
 }
 
+/* "14/10/2026 às 12h03": como o servidor escreve a hora de uma decisão da
+   equipe e de uma resposta dela (o em_texto). Só a maquete monta pelo
+   relógio do aparelho; no app, o texto vem pronto do servidor, no horário
+   de Brasília. */
+function dataEHoraEmTexto(d){
+  return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0")
+       + "/" + d.getFullYear() + " às " + d.getHours() + "h" + String(d.getMinutes()).padStart(2, "0");
+}
+
 /* --------------------------------------------------------------------------
    PRAZOS: o que ainda dá tempo de pedir
    -------------------------------------------------------------------------- */

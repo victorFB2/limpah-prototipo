@@ -1319,3 +1319,68 @@ function estadoDaDiarista(d, celularConfirmado, termosEmDia){
     pct: pct,
   };
 }
+
+/* O QUE A EQUIPE DECIDE SOBRE ELA, E O DIREITO DE RESPOSTA (antipadrões do
+   Bloco 7: conta desativada só com motivo escrito e direito de resposta;
+   ninguém é punido em silêncio).
+
+   A tabela é a mesma do servidor (um teste do app compara): de que estado
+   cada decisão pode ser tomada, e para qual estado ela leva. "manter" não
+   muda o estado: é a equipe respondendo, por escrito, à resposta dela. No
+   app quem decide é a equipe; na maquete, os simuladores do quadro "NA
+   MAQUETE" usam esta tabela. */
+const DECISOES_DA_EQUIPE = {
+  aprovar:   { acao:"aprovou",   de:["analise", "recusada", "suspensa"], para:"aprovada" },
+  recusar:   { acao:"recusou",   de:["analise"],                         para:"recusada" },
+  suspender: { acao:"suspendeu", de:["aprovada"],                        para:"suspensa" },
+  manter:    { acao:"manteve",   de:["recusada", "suspensa"],            para:null },
+};
+/* a que decisões ela pode responder: as que tiram ou negam o acesso */
+const ACOES_QUE_ELA_PODE_RESPONDER = ["recusou", "suspendeu", "manteve"];
+/* quantas respostas ela manda para a MESMA decisão (a equipe responde
+   mantendo, por escrito, ou mudando a decisão; aí ela pode responder de
+   novo), e o tamanho de cada uma */
+const RESPOSTAS_POR_DECISAO = 3;
+const RESPOSTA_MAXIMA = 2000;
+
+/* A situação dela a partir da trilha (a lista do que a equipe decidiu e do
+   que ela respondeu, da mais velha para a mais nova): a última decisão da
+   equipe, se ela pode responder, quantas respostas ainda cabem, e a
+   conversa inteira. É a mesma conta do servidor (analise.decisao_para_ela e
+   historico_para_ela; um teste do app compara). Quem decidiu nunca aparece:
+   quem responde é a Limpah.
+   O que aconteceu em cada linha fica em "tipo" ("recusou", "respondeu"...;
+   no servidor, "acao"): nas telas, "acao" é o nome do código pronto dos
+   botões (a checagem do onclick, no app, olha todo "acao:"). */
+function situacaoPelaTrilha(trilha){
+  const linhas = Array.isArray(trilha) ? trilha : [];
+  const daEquipe = Object.keys(DECISOES_DA_EQUIPE).map(function(n){ return DECISOES_DA_EQUIPE[n].acao; });
+  const decisoes = linhas.filter(function(l){ return daEquipe.indexOf(l.tipo) >= 0; });
+  const ultima = decisoes.length ? decisoes[decisoes.length - 1] : null;
+  let decisao = null;
+  if(ultima){
+    const pode = ACOES_QUE_ELA_PODE_RESPONDER.indexOf(ultima.tipo) >= 0;
+    const ja = linhas.filter(function(l){
+      return l.tipo === "respondeu" && l.emRespostaA === ultima.id;
+    }).length;
+    const restantes = pode ? Math.max(0, RESPOSTAS_POR_DECISAO - ja) : 0;
+    decisao = {
+      id: ultima.id,
+      tipo: ultima.tipo,
+      antes: ultima.situacaoAntes || "",
+      situacao: ultima.situacaoDepois || "",
+      motivo: ultima.texto || "",
+      emTexto: ultima.emTexto || "",
+      podeResponder: restantes > 0,
+      respostasRestantes: restantes,
+    };
+  }
+  return {
+    decisao: decisao,
+    historico: linhas.map(function(l){
+      return { tipo: l.tipo, quem: (l.tipo === "respondeu") ? "voce" : "equipe",
+               antes: l.situacaoAntes || "", depois: l.situacaoDepois || "",
+               texto: l.texto || "", emTexto: l.emTexto || "" };
+    }),
+  };
+}

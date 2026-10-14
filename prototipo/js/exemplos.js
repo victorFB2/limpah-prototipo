@@ -236,3 +236,22 @@ function exemplosDaConversa(ctx){
   return lista.filter(function(m){ return m.em >= desde && m.em < fecha; })
     .map(function(m){ return { de:ctx.deMentira, texto:m.texto, em:m.em, exemplo:true }; });
 }
+
+
+/* --------------------------------------------------------------------------
+   O QUE A EQUIPE ESCREVE, NA MAQUETE (entrega 5a)
+   -------------------------------------------------------------------------- */
+
+/* Os textos que os simuladores do quadro "NA MAQUETE" usam quando "a
+   equipe" decide (no app, quem escreve é uma pessoa da equipe, sempre com o
+   motivo). A primeira aprovação não tem texto: no app, a nota é opcional. */
+const TEXTOS_DA_EQUIPE_DE_EXEMPLO = {
+  recusar: "A foto do documento ficou escura, e não conseguimos ler o número do RG. "
+         + "Se quiser, responda aqui contando como prefere mandar uma foto nova.",
+  suspender: "Um cliente contou que você não foi a um serviço confirmado na terça, sem avisar. "
+           + "Antes de decidir qualquer coisa, queremos ouvir o seu lado.",
+  manter: "Lemos a sua resposta, obrigado por explicar. Por enquanto, a decisão continua. "
+        + "Se tiver mais alguma coisa para contar, pode responder de novo por aqui.",
+  aprovarDeNovo: "Lemos a sua resposta e conferimos tudo de novo. Está tudo certo: "
+               + "você já pode aceitar serviços.",
+};
