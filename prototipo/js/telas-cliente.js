@@ -16,6 +16,7 @@ TELAS.home = {
        fica vazia, e a tela se redesenha quando eles chegam) */
     const pedidos = FONTE.ler.pedidos() || [];
     const proximo = pedidos.find(function(p){ return p.situacao === "confirmado"; });
+    const naBusca = pedidos.find(pedidoNaBusca);
     const aPagar = proximoPedidoAPagar(pedidos);
     const lugar = lugarDoCliente(c);
 
@@ -29,20 +30,22 @@ TELAS.home = {
         + '<span>' + esc(dataPorExtenso(proximo.data)) + ' · '
         + esc(nomePeriodoComAJanela(proximo.periodo, janelaDoPedidoEmTexto(proximo))) + '</span></div>'
         + '<span class="selo verde">Confirmado</span></button>';
-    } else if(aPagar){
-      /* O pedido que acabou de nascer "Aguardando o pagamento" aparece aqui,
-         com o selo de "Meus serviços": sem ele, o início dizia "Nenhum
-         serviço agendado" logo depois do "Confirmar pedido", e a pessoa
-         podia achar que o pedido sumiu e pedir de novo. */
-      const cat = CATALOGO.find(function(x){ return x.id === aPagar.categoria; }) || { icone:"" };
-      blocoProximo = '<button class="item" onclick="abrirPedido(\'' + idSeguro(aPagar.id) + '\')">'
+    } else if(naBusca || aPagar){
+      /* O pedido que ainda procura profissional (2b) e o que acabou de nascer
+         "Aguardando o pagamento" aparecem aqui, com o selo de "Meus
+         serviços": sem eles, o início dizia "Nenhum serviço agendado" logo
+         depois do "Confirmar pedido", e a pessoa podia achar que o pedido
+         sumiu e pedir de novo. */
+      const p = naBusca || aPagar;
+      const cat = CATALOGO.find(function(x){ return x.id === p.categoria; }) || { icone:"" };
+      blocoProximo = '<button class="item" onclick="abrirPedido(\'' + idSeguro(p.id) + '\')">'
         + '<div style="color:var(--roxo);width:26px">' + icone(cat.icone, 21) + '</div>'
-        + '<div class="txt"><b>' + esc(aPagar.resumoTexto) + '</b>'
+        + '<div class="txt"><b>' + esc(p.resumoTexto) + '</b>'
         /* com a janela maior que a faixa (6 h à tarde), só "Tarde": a faixa
            padrão contradiria o detalhe ("das 12h às 18h") */
-        + '<span>' + esc(dataPorExtenso(aPagar.data)) + ' · '
-        + esc(nomePeriodoComAJanela(aPagar.periodo, janelaDoPedidoEmTexto(aPagar))) + '</span></div>'
-        + SELO_DA_SITUACAO.aguardando_pagamento + '</button>';
+        + '<span>' + esc(dataPorExtenso(p.data)) + ' · '
+        + esc(nomePeriodoComAJanela(p.periodo, janelaDoPedidoEmTexto(p))) + '</span></div>'
+        + (SELO_DA_SITUACAO[p.situacao] || "") + '</button>';
     } else {
       blocoProximo = '<div class="cartao" style="display:flex;gap:12px;align-items:center">'
         + '<div style="font-size:26px">📅</div>'
@@ -728,7 +731,11 @@ TELAS.dataHorario = {
     PERIODOS.forEach(function(p){
       const marcado = E.pedido.periodo === p.id;
       const cabeNoDia = (p.inicio + janelaHoras) <= FIM_DO_DIA;
-      const serve = periodoAindaServe(escolhida, p.id) && cabeNoDia;
+      /* "Mudar data ou período" (A25): o dia e o período do pedido de agora
+         não mudariam nada — ele seria cancelado para nascer um igual, pago
+         de novo, e a busca recomeçaria do zero */
+      const ehODeAgora = ehOHorarioDoPedidoDeAgora(escolhida, p.id);
+      const serve = periodoAindaServe(escolhida, p.id) && cabeNoDia && !ehODeAgora;
 
       /* EXCEÇÃO AUTORIZADA Nº 3: os ícones do período. */
       periodos += '<button class="opcao ' + (marcado && serve ? "marcada" : "") + '" '
@@ -738,7 +745,9 @@ TELAS.dataHorario = {
         + '<div class="txt"><b>' + esc(p.nome) + ' · das ' + p.inicio + 'h às '
         +   (p.inicio + janelaHoras) + 'h</b>'
         + (serve ? "" : '<span>'
-            + (!cabeNoDia
+            + (ehODeAgora
+               ? "é o dia e o período do seu pedido de agora"
+               : !cabeNoDia
                ? "uma janela de " + janelaHoras + "h começando aqui passaria das " + FIM_DO_DIA + "h"
                : "a diarista precisa de pelo menos " + ANTECEDENCIA_MINIMA_HORAS
                  + "h para se organizar e chegar até você")
@@ -747,8 +756,11 @@ TELAS.dataHorario = {
         + (marcado && serve ? '<div class="seta">✓</div>' : "") + '</button>';
     });
 
-    /* Se o período escolhido deixou de servir, desmarca. */
-    if(E.pedido.periodo && !periodoAindaServe(escolhida, E.pedido.periodo)) E.pedido.periodo = null;
+    /* Se o período escolhido deixou de servir (ou virou o do pedido de
+       agora, ao trocar o dia), desmarca. */
+    if(E.pedido.periodo && (!periodoAindaServe(escolhida, E.pedido.periodo)
+                            || ehOHorarioDoPedidoDeAgora(escolhida, E.pedido.periodo)))
+      E.pedido.periodo = null;
 
     const pronto = !!(E.pedido.data && E.pedido.periodo);
 
@@ -1421,6 +1433,7 @@ TELAS.pagamento = {
     +   avisoDaTrava(s)
     /* a frase do servidor sobre a casa, ou (sem ela) a casa que sumiu */
     +   (avisoDoPedido("casa") || (casaDoPedidoSumiu() ? avisoDaCasaQueSumiu() : ""))
+    +   avisoDoSubstituido()
     +   soNaMaquete(function(){
           return '<div class="aviso roxo">🧪<div><b>Protótipo</b>'
             + 'Nenhuma cobrança de verdade acontece aqui.</div></div>'
@@ -1469,6 +1482,46 @@ function avisoDoPedido(campo){
 }
 
 function escolherPagamento(id){ E.pedido.pagamento = id; salvar(); desenhar(); }
+
+/* "MUDAR DATA OU PERÍODO" (A25): o pedido que este substitui, enquanto ele
+   ainda vale (o que já caiu, aos 30 minutos, não conta). */
+function pedidoQueEsteSubstitui(){
+  const id = E.pedido && E.pedido.substitui;
+  if(!id) return null;
+  const antes = (FONTE.ler.pedidos() || []).find(function(p){ return String(p.id) === String(id); });
+  return (antes && antes.situacao !== "cancelado" && antes.situacao !== "concluido") ? antes : null;
+}
+
+/* O mesmo dia, período e casa do pedido que este substitui: "mudar" para
+   ele não muda nada (segunda revisão da 2b). O de antes seria cancelado
+   para nascer um igual — no app, pago de novo —, e a busca recomeçaria do
+   zero, passando dos 30 minutos da R1 sem a tela dizer. O servidor recusa
+   o mesmo (409 mesmo_horario_do_anterior); a tela nem deixa escolher. */
+function ehOHorarioDoPedidoDeAgora(data, periodo){
+  const antes = pedidoQueEsteSubstitui();
+  return !!(antes && antes.data === data && antes.periodo === periodo
+            && String(antes.casaId) === String(E.pedido.casaId));
+}
+
+/* "MUDAR DATA OU PERÍODO" (A25): este pedido fica no lugar de outro, que
+   ainda vale e só cai quando este for confirmado. A pessoa lê isso antes do
+   botão. O de antes que já caiu (30 minutos) não tem o que avisar. */
+function avisoDoSubstituido(){
+  const id = E.pedido && E.pedido.substitui;
+  if(!id) return "";
+  const antes = (FONTE.ler.pedidos() || []).find(function(p){ return String(p.id) === String(id); });
+  if(antes && antes.situacao === "cancelado") return "";
+  const periodo = antes && PERIODOS.find(function(x){ return x.id === antes.periodo; });
+  const qual = antes
+    ? "o seu pedido de " + dataPorExtenso(antes.data)
+      + (periodo ? " (" + periodo.nome + ", " + periodo.faixa + ")" : "")
+    : "o seu pedido anterior";
+  return '<div class="aviso ambar">🔁<div><b>Este pedido fica no lugar do anterior</b>'
+    + 'Ao confirmar, ' + esc(qual) + ' é cancelado sem custo. Até lá, ele continua valendo.'
+    /* no app o pagamento vem antes da busca (R20): o novo é pago de novo */
+    + (FONTE.ehMaquete ? "" : " Este novo precisa ser pago para a busca começar.")
+    + '</div></div>';
+}
 
 /* CONFIRMAR O PEDIDO. Na maquete, o pedido nasce "buscando" e a busca
    começa; no app, ele nasce "aguardando o pagamento" e a pessoa vê o
@@ -1525,8 +1578,12 @@ function verPedidoEsperandoPagamento(){
 
    O preço NUNCA sobe sozinho para atrair profissional.
 
-   No protótipo o relógio anda acelerado: cada meio segundo vale 1 minuto,
-   senão ninguém esperaria meia hora para ver a tela do fim.               */
+   QUEM CONTA O TEMPO. Na maquete, o relógio daqui, acelerado: cada meio
+   segundo vale 1 minuto, senão ninguém esperaria meia hora para ver a tela
+   do fim. No app, o SERVIDOR: a tela pergunta a ele de tempos em tempos e
+   só mostra o passo que ele diz (FONTE.ler.busca). O relógio do celular,
+   que pode estar errado, não decide nada. Os números abaixo são os mesmos
+   do servidor (um teste do app compara os dois lados).                    */
 const REGUA_DA_BUSCA = {
   ampliaRaioAos: 5,
   avisaClienteAos: 15,
@@ -1534,18 +1591,53 @@ const REGUA_DA_BUSCA = {
   msPorMinutoSimulado: 500,
 };
 
+/* No app, de quanto em quanto tempo a tela pergunta ao servidor como está
+   a busca. Nunca a cada 1 ou 2 segundos: seria dez vezes mais trabalho para
+   o servidor, para nada. */
+const SEGUNDOS_ENTRE_PERGUNTAS_DA_BUSCA = 15;
+
+/* As situações de um pedido que ainda procura profissional. A segunda é o
+   pedido de duas com uma já aceita (A16): a busca continua, com a mesma
+   régua. */
+const SITUACOES_DA_BUSCA = ["buscando", "aguardando_segunda"];
+
+function pedidoNaBusca(p){
+  return !!p && SITUACOES_DA_BUSCA.indexOf(p.situacao) >= 0;
+}
+
+/* A frase de cada passo da régua, embaixo do relógio. */
+const FASE_DO_PASSO = {
+  oferecer_as_mais_proximas: "Procurando profissionais perto de você",
+  ampliar_o_raio:            "Ampliando a área de busca",
+  perguntar_ao_cliente:      "Continuamos procurando numa área maior",
+  cancelar_sem_custo:        "Continuamos procurando numa área maior",
+};
+
+function faseDoPasso(passo){
+  return FASE_DO_PASSO[passo] || FASE_DO_PASSO.oferecer_as_mais_proximas;
+}
+
+/* Em que passo da régua estão estes minutos. Só a maquete usa: ela conta o
+   tempo sozinha. No app, quem diz o passo é o servidor. */
+function passoDaReguaNaMaquete(minutos){
+  if(minutos >= REGUA_DA_BUSCA.cancelaAos)      return "cancelar_sem_custo";
+  if(minutos >= REGUA_DA_BUSCA.avisaClienteAos) return "perguntar_ao_cliente";
+  if(minutos >= REGUA_DA_BUSCA.ampliaRaioAos)   return "ampliar_o_raio";
+  return "oferecer_as_mais_proximas";
+}
+
 function faseDaBusca(minutos){
-  if(minutos < REGUA_DA_BUSCA.ampliaRaioAos)  return "Procurando profissionais perto de você";
-  if(minutos < REGUA_DA_BUSCA.avisaClienteAos) return "Ampliando a área de busca";
-  return "Continuamos procurando numa área maior";
+  return faseDoPasso(passoDaReguaNaMaquete(minutos));
 }
 
 TELAS.buscando = {
   html: function(){
     if(semPedidoEmAndamento()) return htmlDaTela("meusServicos");
     const p = pedidoAtual();
-    const cat = CATALOGO.find(function(c){ return c.id === p.categoria; });
-    const b = E.busca || (E.busca = { minutos:0, modo:"normal" });
+    const cat = CATALOGO.find(function(c){ return c.id === p.categoria; })
+             || { comoChamamosPlural:"profissionais" };
+    const b = FONTE.ler.busca(p);
+    const simulando = !!(E.busca && E.busca.modo !== "normal");
 
     return ''
     + '<div class="centro">'
@@ -1553,61 +1645,74 @@ TELAS.buscando = {
     +   '<h2 class="titulo">Estamos buscando ' + esc(cat.comoChamamosPlural) + ' para você!</h2>'
     +   '<p class="apoio">Enviamos sua solicitação para profissionais bem avaliadas na sua região. '
     +     'Você recebe a resposta em instantes.</p>'
+    /* o pedido de duas com uma já aceita (A16): ainda não está confirmado */
+    +   (p.situacao === "aguardando_segunda"
+         ? '<div class="aviso verde" style="text-align:left;margin:4px 0 14px">✓<div>'
+           + '<b>Uma diarista já aceitou!</b>Falta a segunda. O pedido se confirma quando as '
+           + 'duas aceitarem.</div></div>'
+         : "")
     +   '<div class="girando roxo"></div>'
     +   '<p id="busca-fase" style="font-size:13px;font-weight:600;color:var(--roxo);margin:10px 0 0">'
-    +     esc(faseDaBusca(b.minutos)) + '</p>'
+    +     esc(faseDoPasso(b.passo)) + '</p>'
+    /* o "tempo médio" é número de exemplo: só na maquete */
     +   '<p class="ajuda" style="margin-top:2px">Esperando há <span id="busca-minutos">'
-    +     b.minutos + '</span> min · tempo médio: 2 a 5 minutos</p>'
+    +     Number(b.minutos) + '</span> min' + soNaMaquete(' · tempo médio: 2 a 5 minutos') + '</p>'
+    /* no app: a pergunta ao servidor que não teve resposta (a próxima tenta de novo) */
+    +   '<p class="ajuda" id="busca-aviso" style="margin-top:6px"></p>'
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-contorno" onclick="trocarAba(\'servicos\')">Acompanhar depois</button>'
-    +   (b.modo === "normal"
+    +   soNaMaquete(simulando
       ? '<p class="ajuda" style="text-align:center;margin-top:10px">'
-      +   '⚙ <a href="#" onclick="simularNinguemAceita();return false;" style="color:var(--suave)">'
-      +   'simular: ninguém aceita</a></p>'
+      +   'Simulação em curso · cada meio segundo vale 1 minuto</p>'
       : '<p class="ajuda" style="text-align:center;margin-top:10px">'
-      +   'Simulação em curso · cada meio segundo vale 1 minuto</p>')
+      +   '⚙ <a href="#" onclick="simularNinguemAceita();return false;" style="color:var(--suave)">'
+      +   'simular: ninguém aceita</a></p>')
     + '</div>';
   },
 
   aoEntrar: function(){
-    const b = E.busca;
-
-    /* Caminho normal do protótipo: alguém aceita em 3,5 segundos.
-       No app real é aqui que a oportunidade é distribuída às elegíveis. */
-    if(b.modo === "normal"){
-      agendar(function(){
-        if(E.tela === "buscando" && E.busca.modo === "normal"){
-          /* Ela aceitou. Pela decisão R3 o aceite já vale pelos dois lados,
-             então o serviço nasce confirmado — não há mais o que o cliente
-             confirmar depois. */
-          const p = pedidoAtual();
-          const escolhida = escolherProfissional(p);
-          if(escolhida) confirmarProfissional(escolhida.id);
-        }
-      }, 3500);
-    }
-
-    /* O relógio da régua, andando acelerado. */
-    repetir(function(){
-      if(E.tela !== "buscando") return;
-      E.busca.minutos++;
-      const m = E.busca.minutos;
-
-      const alvoMin  = document.getElementById("busca-minutos");
-      const alvoFase = document.getElementById("busca-fase");
-      if(alvoMin)  alvoMin.textContent = m;
-      if(alvoFase) alvoFase.textContent = faseDaBusca(m);
-
-      if(m >= REGUA_DA_BUSCA.cancelaAos){ salvar(); cancelarPorFaltaDeProfissional(); return; }
-      if(m >= REGUA_DA_BUSCA.avisaClienteAos && !E.busca.jaAvisou){
-        E.busca.jaAvisou = true;
-        salvar();
-        ir("buscaDemorando", { limparHistorico:true });
-      }
-    }, REGUA_DA_BUSCA.msPorMinutoSimulado);
+    if(FONTE.ehMaquete) simularABuscaNaMaquete();
+    else acompanharABusca();
   }
 };
+
+/* NA MAQUETE, a busca de mentira. Caminho normal: alguém aceita em 3,5
+   segundos. No "simular: ninguém aceita", o relógio da régua anda acelerado
+   até os 15 minutos (a pergunta) e os 30 (cancela). */
+function simularABuscaNaMaquete(){
+  const b = E.busca || (E.busca = { minutos:0, modo:"normal", jaAvisou:false });
+
+  if(b.modo === "normal"){
+    agendar(function(){
+      if(E.tela === "buscando" && E.busca.modo === "normal"){
+        /* Ela aceitou. Pela decisão R3 o aceite já vale pelos dois lados,
+           então o serviço nasce confirmado — não há mais o que o cliente
+           confirmar depois. */
+        const p = pedidoAtual();
+        const escolhida = escolherProfissional(p);
+        if(escolhida) confirmarProfissional(escolhida.id);
+      }
+    }, 3500);
+  }
+
+  /* O relógio da régua, andando acelerado. */
+  repetir(function(){
+    if(E.tela !== "buscando") return;
+    E.busca.minutos++;
+    const m = E.busca.minutos;
+
+    escreverNaTela("busca-minutos", String(m));
+    escreverNaTela("busca-fase", faseDaBusca(m));
+
+    if(m >= REGUA_DA_BUSCA.cancelaAos){ salvar(); cancelarPorFaltaDeProfissional(); return; }
+    if(m >= REGUA_DA_BUSCA.avisaClienteAos && !E.busca.jaAvisou){
+      E.busca.jaAvisou = true;
+      salvar();
+      ir("buscaDemorando", { limparHistorico:true });
+    }
+  }, REGUA_DA_BUSCA.msPorMinutoSimulado);
+}
 
 function simularNinguemAceita(){
   E.busca.modo = "lento";
@@ -1615,65 +1720,193 @@ function simularNinguemAceita(){
   desenhar();
 }
 
+/* Escreve um texto no lugar dele, se o lugar estiver na tela (o relógio da
+   busca muda sem redesenhar a tela inteira). */
+function escreverNaTela(id, texto){
+  const lugar = document.getElementById(id);
+  if(lugar) lugar.textContent = texto;
+}
+
+/* NO APP: a tela pergunta ao servidor como está a busca — uma vez ao abrir e
+   depois a cada SEGUNDOS_ENTRE_PERGUNTAS_DA_BUSCA, enquanto a tela estiver
+   aberta e à vista. O relógio morre junto com a tela (repetir). */
+let BUSCA_PERGUNTADA_NA_NAVEGACAO = -1;
+
+function acompanharABusca(){
+  const id = E.pedidoAtual;
+  if(!id) return;
+  if(BUSCA_PERGUNTADA_NA_NAVEGACAO !== NAVEGACAO){
+    BUSCA_PERGUNTADA_NA_NAVEGACAO = NAVEGACAO;
+    perguntarComoEstaABusca(id);
+  }
+  repetir(function(){
+    /* com o app escondido (outra aba, tela apagada), não pergunta */
+    if(document.hidden) return;
+    perguntarComoEstaABusca(id);
+  }, SEGUNDOS_ENTRE_PERGUNTAS_DA_BUSCA * 1000);
+}
+
+function perguntarComoEstaABusca(id){
+  FONTE.carregarPedido(id, seguirARegua);
+}
+
+/* O que o servidor disse: o pedido caiu (30 minutos, ou cancelado em outro
+   lugar), foi confirmado, chegou aos 15 minutos — ou só o tempo andou. */
+function seguirARegua(r){
+  if(r.destino) return seguirPeloErro(r);
+  /* sem resposta: a tela continua como está, e a próxima pergunta tenta de novo */
+  if(!r.ok) return escreverNaTela("busca-aviso", r.erro || "");
+  escreverNaTela("busca-aviso", "");
+  const p = pedidoAtual();
+  if(!p) return desenhar();
+  if(p.situacao === "cancelado") return ir("buscaCancelada", { limparHistorico:true });
+  if(!pedidoNaBusca(p)) return ir("detalhePedido", { limparHistorico:true });
+  const b = FONTE.ler.busca(p);
+  if(E.tela === "buscando" && b.passo === "perguntar_ao_cliente" && !jaPerguntouAos15(p.id)){
+    marcarQuePerguntouAos15(p.id);
+    return ir("buscaDemorando", { limparHistorico:true });
+  }
+  /* o mesmo passo: só o tempo e a frase mudam, sem redesenhar a tela */
+  escreverNaTela("busca-minutos", String(Number(b.minutos)));
+  escreverNaTela("busca-fase", faseDoPasso(b.passo));
+}
+
+/* A pergunta dos 15 minutos aparece uma vez por pedido (no app; na maquete,
+   E.busca.jaAvisou). Fica no aparelho: é só o que a tela já mostrou. */
+function jaPerguntouAos15(id){
+  return (Array.isArray(E.buscasPerguntadas) ? E.buscasPerguntadas : []).indexOf(String(id)) >= 0;
+}
+
+function marcarQuePerguntouAos15(id){
+  const lista = Array.isArray(E.buscasPerguntadas) ? E.buscasPerguntadas : [];
+  if(lista.indexOf(String(id)) < 0) lista.push(String(id));
+  E.buscasPerguntadas = lista.slice(-20);
+  salvar();
+}
+
 /* Aos 15 minutos: o cliente decide. */
 TELAS.buscaDemorando = {
   html: function(){
     if(semPedidoEmAndamento()) return htmlDaTela("meusServicos");
     const p = pedidoAtual();
+    const b = FONTE.ler.busca(p);
+    const minutos = Math.max(Number(b.minutos) || 0, REGUA_DA_BUSCA.avisaClienteAos);
+    const daSegunda = p.situacao === "aguardando_segunda";
     return ''
     + '<div class="corpo">'
     +   '<div class="centro" style="flex:none;padding:24px 6px 6px">'
     +     '<div class="emojao">⏳</div>'
     +     '<h2 class="titulo">Está demorando mais que o normal</h2>'
-    +     '<p class="apoio">Já são ' + REGUA_DA_BUSCA.avisaClienteAos + ' minutos procurando e ninguém aceitou ainda. '
+    +     '<p class="apoio">Já são <span id="busca-minutos">' + minutos + '</span> minutos procurando'
+    +       (daSegunda ? ', e a segunda diarista ainda não aceitou. ' : ' e ninguém aceitou ainda. ')
     +       'Ampliamos a área de busca, mas quem decide é você.</p>'
     +   '</div>'
     +   '<div class="cartao">'
     +     '<div class="linha"><span class="rot">Serviço</span><span class="val">' + esc(p.resumoTexto) + '</span></div>'
     +     '<div class="linha"><span class="rot">Data</span><span class="val">' + esc(dataPorExtenso(p.data)) + '</span></div>'
-    +     '<div class="linha"><span class="rot">Período</span><span class="val">' + esc(nomePeriodo(p.periodo)) + '</span></div>'
+    +     '<div class="linha"><span class="rot">Período</span><span class="val">'
+    +       esc(nomePeriodoComAJanela(p.periodo, janelaDoPedidoEmTexto(p))) + '</span></div>'
     +   '</div>'
-    +   '<div class="aviso verde">💚<div><b>Você não paga nada por isso</b>'
-    +     'Nenhuma cobrança acontece enquanto não houver uma profissional confirmada. '
-    +     'E o preço combinado não sobe.</div></div>'
+    /* No app o pagamento vem antes da busca (R20): "nenhuma cobrança
+       acontece" não vale lá. O que vale nos dois: cancelar é sem custo, e o
+       preço não sobe (R1). */
+    +   (FONTE.ehMaquete
+         ? '<div class="aviso verde">💚<div><b>Você não paga nada por isso</b>'
+           + 'Nenhuma cobrança acontece enquanto não houver uma profissional confirmada. '
+           + 'E o preço combinado não sobe.</div></div>'
+         : '<div class="aviso verde">💚<div><b>Cancelar é sem custo</b>'
+           + 'Se preferir cancelar agora, não tem custo nenhum. E o preço combinado não sobe.'
+           + '</div></div>')
+    +   '<p class="ajuda" id="busca-aviso" style="margin-top:6px"></p>'
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="continuarAguardando()">Continuar aguardando</button>'
-    +   '<button class="btn btn-claro" onclick="ir(\'dataHorario\')">Mudar data ou período</button>'
-    +   '<button class="btn btn-perigo" onclick="cancelarPorEscolhaDoCliente()">Cancelar sem custo</button>'
+    +   '<button class="btn btn-claro" onclick="mudarDataDaBusca()">Mudar data ou período</button>'
+    +   '<button class="btn btn-perigo" onclick="cancelarPorEscolhaDoCliente(this)">Cancelar sem custo</button>'
+    +   '<div class="erro-do-campo" id="busca-erro"></div>'
     + '</div>';
-  }
+  },
+  /* no app, a régua continua: aos 30 minutos o pedido cai, e a tela vai junto */
+  aoEntrar: function(){ if(!FONTE.ehMaquete) acompanharABusca(); }
 };
 
 function continuarAguardando(){
-  E.busca.modo = "lento";
+  /* na maquete: a simulação segue, sem ninguém aceitar */
+  if(E.busca) E.busca.modo = "lento";
   salvar();
   ir("buscando", { limparHistorico:true });
 }
 
-function cancelarPorEscolhaDoCliente(){
+/* "Cancelar sem custo" (R1). O botão fica desligado enquanto o pedido vai. */
+function cancelarPorEscolhaDoCliente(botao){
+  const p = pedidoAtual();
+  if(!p) return;
+  mostrarErro("busca-erro", "");
+  FONTE.cancelarPedido(p.id, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("busca-erro", r.erro);
+    ir("buscaCancelada", { limparHistorico:true });
+  }, { botao: botao || null });
+}
+
+/* "Mudar data ou período" (PROVISÓRIA, DECISOES A25): um pedido novo começa
+   já preenchido — o mesmo serviço, a mesma casa, os mesmos adicionais.
+   Falta só o dia e o período. ESTE PEDIDO SÓ É CANCELADO QUANDO O NOVO FOR
+   CONFIRMADO (no app, pelo servidor, na mesma gravação): quem volta, desiste
+   ou tem o dia novo recusado continua com ele, buscando. (Antes, o toque
+   no botão já cancelava, e a pessoa podia ficar sem pedido nenhum.) */
+function mudarDataDaBusca(){
+  const p = pedidoAtual();
+  if(!p) return;
+  refazerOPedido(p, { noLugarDele:true });
+  ir("dataHorario", { limparHistorico:true });
+}
+
+/* O pedido em montagem, a partir de outro: as mesmas escolhas, sem o dia e
+   o período. O tamanho é o do pedido (o que foi cotado); se ele não é mais
+   o da casa, fica como "ajustado só desta vez". noLugarDele: o novo
+   substitui este (que ainda vale), e o "Confirmar pedido" o cancela. */
+function refazerOPedido(p, opcoes){
+  const novo = pedidoNovo();
+  if(opcoes && opcoes.noLugarDele) novo.substitui = p.id;
+  novo.categoria = p.categoria;
+  novo.casaId = p.casaId;
+  novo.respostas = Object.assign({}, p.respostas || {});
+  novo.adicionais = (p.adicionais || []).slice();
+  novo.duasProfissionais = !!(p.duasProfissionais || Number(p.quantidade) > 1);
+  const casa = casaDoPedido(novo);
+  novo.ajustadoDestaVez = !casa || ["comodos", "banheiros"].some(function(k){
+    return novo.respostas[k] !== undefined && Number(novo.respostas[k]) !== Number(casa[k]);
+  });
+  E.pedido = novo;
+  salvar();
+}
+
+/* Aos 30 minutos: o sistema desiste sozinho (na maquete; no app, quem
+   decide é o servidor, e a tela só vai junto). */
+function cancelarPorFaltaDeProfissional(){
   const p = pedidoAtual();
   p.situacao = "cancelado";
-  p.motivoCancelamento = "O cliente desistiu durante a busca";
+  p.motivoDoCancelamento = "busca_sem_profissional";
+  p.chamadoAberto = true;
   salvar();
   ir("buscaCancelada", { limparHistorico:true });
 }
 
-/* Aos 30 minutos: o sistema desiste sozinho. */
-function cancelarPorFaltaDeProfissional(){
+/* "Tentar outro horário": o mesmo pedido, de novo, a partir do dia. */
+function tentarOutroHorario(){
   const p = pedidoAtual();
-  p.situacao = "cancelado";
-  p.motivoCancelamento = "Ninguém aceitou em " + REGUA_DA_BUSCA.cancelaAos + " minutos";
-  p.chamadoAberto = true;
-  salvar();
-  ir("buscaCancelada", { limparHistorico:true });
+  if(!p) return comecarPedido();
+  refazerOPedido(p);
+  ir("dataHorario", { limparHistorico:true });
 }
 
 TELAS.buscaCancelada = {
   html: function(){
     if(semPedidoEmAndamento()) return htmlDaTela("meusServicos");
     const p = pedidoAtual();
-    const automatico = !!p.chamadoAberto;
+    /* a régua cancelou (30 minutos): no app, o servidor diz o motivo */
+    const automatico = p.motivoDoCancelamento === "busca_sem_profissional" || !!p.chamadoAberto;
     return ''
     + '<div class="corpo">'
     +   '<div class="centro" style="flex:none;padding:24px 6px 6px">'
@@ -1684,17 +1917,22 @@ TELAS.buscaCancelada = {
         + "Cancelamos seu pedido automaticamente."
         : "Tudo certo, cancelamos seu pedido.") + '</p>'
     +   '</div>'
-    +   '<div class="aviso verde">💚<div><b>Você não pagou nada</b>'
-    +     'Nenhum valor foi cobrado e nenhuma taxa foi gerada.</div></div>'
+    /* no app o pagamento vem antes da busca (R20): o que vale é "sem custo" */
+    +   (FONTE.ehMaquete
+         ? '<div class="aviso verde">💚<div><b>Você não pagou nada</b>'
+           + 'Nenhum valor foi cobrado e nenhuma taxa foi gerada.</div></div>'
+         : '<div class="aviso verde">💚<div><b>Sem custo nenhum</b>'
+           + 'Este cancelamento não gera taxa nenhuma.</div></div>')
+    /* o chamado no suporte (R1) chega com o suporte dentro do app */
     +   (automatico
-      ? '<div class="aviso roxo">🛟<div><b>Já avisamos nosso time</b>'
+      ? soNaMaquete('<div class="aviso roxo">🛟<div><b>Já avisamos nosso time</b>'
       +   'Abrimos um chamado no suporte. Uma pessoa vai procurar uma profissional na mão '
-      +   'e entrar em contato com você.</div></div>'
+      +   'e entrar em contato com você.</div></div>')
       : "")
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="comecarPedido()">Tentar outro horário</button>'
-    +   (automatico ? '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>' : "")
+    +   '<button class="btn btn-principal" onclick="tentarOutroHorario()">Tentar outro horário</button>'
+    +   (automatico ? soNaMaquete('<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>') : "")
     +   '<button class="btn btn-texto" onclick="trocarAba(\'inicio\')">Voltar ao início</button>'
     + '</div>';
   }
@@ -1983,6 +2221,7 @@ TELAS.meusServicos = {
 const SELO_DA_SITUACAO = {
   aguardando_pagamento: '<span class="selo ambar">A pagar</span>',
   buscando:   '<span class="selo ambar">Buscando</span>',
+  aguardando_segunda: '<span class="selo ambar">Buscando</span>',
   confirmado: '<span class="selo verde">Confirmado</span>',
   concluido:  '<span class="selo cinza">Concluído</span>',
   cancelado:  '<span class="selo cinza">Cancelado</span>',
@@ -2030,8 +2269,10 @@ TELAS.detalhePedido = {
     /* esperando o pagamento: ninguém foi chamado ainda, e a pessoa sabe */
     let avisoDaSituacao = "";
     if(p.situacao === "aguardando_pagamento"){
+      /* no computador, com o pagamento de teste logo abaixo, "o pagamento
+         chega em breve" se contradiria na mesma tela */
       avisoDaSituacao = '<div class="aviso ambar">⏳<div><b>Aguardando o pagamento</b>'
-        + (FONTE.ehMaquete
+        + (FONTE.ehMaquete || FONTE.ler.podePagar(p)
            ? 'A busca pela diarista começa assim que o pagamento entrar.'
            : 'O pagamento pelo app chega em breve. Enquanto isso, ninguém é chamado e nada é '
              + 'cobrado. Se mudar de ideia, cancele sem custo.')
@@ -2047,9 +2288,13 @@ TELAS.detalhePedido = {
       acoes = '<button class="btn btn-principal" onclick="abrirConversaDoPedido(\'' + idSeguro(p.id) + '\')">Conversar com a profissional</button>'
         + '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
         + '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar serviço</button>';
-    } else if(p.situacao === "buscando"){
-      acoes = '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
-        + '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar pedido</button>';
+    } else if(pedidoNaBusca(p)){
+      /* a busca continua andando: a tela dela mostra o passo da régua */
+      acoes = '<button class="btn btn-principal" onclick="ir(\'buscando\')">Acompanhar a busca</button>'
+        /* o suporte dentro do app é a entrega 9: no app, sem o botão (A25) */
+        + soNaMaquete('<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>')
+        + (FONTE.ler.podeCancelar(p)
+           ? '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar pedido</button>' : "");
     } else if(p.situacao === "aguardando_pagamento"){
       acoes = FONTE.ler.podeCancelar(p)
         ? '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar pedido</button>'
@@ -2062,6 +2307,7 @@ TELAS.detalhePedido = {
     + cabecalho("Detalhes do pedido")
     + '<div class="corpo">'
     +   avisoDaSituacao
+    +   pagamentoDeTeste(p)
     +   '<div class="cartao">'
     +     '<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">'
     +       '<div style="color:var(--roxo)">' + icone(cat.icone, 26) + '</div>'
@@ -2105,6 +2351,31 @@ TELAS.detalhePedido = {
   aoEntrar: function(){ pedirPedidosSeFaltar(); }
 };
 
+/* O PAGAMENTO DE TESTE, só no computador de quem está construindo o app:
+   o servidor diz quando ele existe (pode_pagar). Nada é cobrado; o pedido
+   vai para a busca, como vai acontecer quando o pagamento de verdade entrar.
+   Na maquete nunca aparece (lá, o pagamento é a tela de Pix e cartão). */
+function pagamentoDeTeste(p){
+  if(!FONTE.ler.podePagar(p)) return "";
+  return '<div class="cartao maquete"><b>🧪 SÓ NESTE COMPUTADOR</b>'
+    + '<div>Pagamento de teste: nada é cobrado. O pedido vai para a busca, como vai acontecer '
+    + 'quando o pagamento de verdade entrar.</div>'
+    + '<button class="btn btn-contorno" onclick="pagarPedido(this)">Pagar (teste)</button>'
+    + '<div class="erro-do-campo" id="pagar-erro"></div></div>';
+}
+
+/* Pagar: o pedido vai para a busca. O botão fica desligado enquanto vai. */
+function pagarPedido(botao){
+  const p = pedidoAtual();
+  if(!p) return;
+  mostrarErro("pagar-erro", "");
+  FONTE.pagarPedido(p.id, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("pagar-erro", r.erro);
+    ir("buscando", { limparHistorico:true });
+  }, { botao: botao || null });
+}
+
 function alternarFavorita(id){
   const i = E.favoritos.indexOf(id);
   if(i >= 0) E.favoritos.splice(i, 1); else E.favoritos.push(id);
@@ -2114,6 +2385,30 @@ function alternarFavorita(id){
 TELAS.cancelarPedido = {
   html: function(){
     const p = pedidoAtual();
+    /* durante a busca (R1): ninguém confirmou ainda, e cancelar é sem custo */
+    if(pedidoNaBusca(p)){
+      return ''
+      + cabecalho("Cancelar pedido")
+      + '<div class="corpo">'
+      +   '<div class="centro" style="flex:none;padding:20px 0">'
+      +     '<div class="emojao">🤔</div>'
+      +     '<h2 class="titulo">Tem certeza que quer cancelar?</h2>'
+      +     '<p class="apoio">' + (p.situacao === "aguardando_segunda"
+             ? "Uma diarista já aceitou, e a segunda ainda não. Cancelando agora, ela fica livre "
+               + "para outros serviços."
+             : "Ainda estamos procurando uma profissional para você.") + '</p>'
+      +   '</div>'
+      +   '<div class="aviso verde">✓<div><b>Sem custo</b>'
+      +     'Cancelar enquanto a busca acontece não tem custo nenhum.</div></div>'
+      + '</div>'
+      /* "Manter" por último, como abaixo: o toque duplo não cancela */
+      + '<div class="rodape">'
+      +   (FONTE.ler.podeCancelar(p)
+           ? '<button class="btn btn-perigo" onclick="confirmarCancelamento(this)">Sim, cancelar</button>' : "")
+      +   '<div class="erro-do-campo" id="cancelar-erro"></div>'
+      +   '<button class="btn btn-contorno" onclick="voltar()">Manter o pedido</button>'
+      + '</div>';
+    }
     /* esperando o pagamento: ninguém reservou nada, e nada foi cobrado */
     if(p && p.situacao === "aguardando_pagamento"){
       return ''
@@ -2164,15 +2459,18 @@ TELAS.cancelarPedido = {
 };
 
 /* Cancelar: na maquete, sempre sem custo; no app, só o pedido que ainda
-   espera o pagamento (quem confere é o servidor). O botão fica desligado
-   enquanto o pedido vai. */
+   espera o pagamento ou que ainda procura profissional (quem confere é o
+   servidor). Da busca, a tela de "pedido cancelado" (a mesma dos 15
+   minutos). O botão fica desligado enquanto o pedido vai. */
 function confirmarCancelamento(botao){
   const p = pedidoAtual();
   if(!p) return;
+  const naBusca = pedidoNaBusca(p);
   mostrarErro("cancelar-erro", "");
   FONTE.cancelarPedido(p.id, function(r){
     if(r.destino) return seguirPeloErro(r);
     if(!r.ok) return mostrarErro("cancelar-erro", r.erro);
+    if(naBusca) return ir("buscaCancelada", { limparHistorico:true });
     trocarAba("servicos");
   }, { botao: botao || null });
 }

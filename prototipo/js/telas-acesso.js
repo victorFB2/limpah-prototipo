@@ -249,6 +249,26 @@ const ERRO_DO_CAMPO_DO_CADASTRO = {
   nome: "cc-nome-erro", email: "cc-email-erro", telefone: "cc-tel-erro", senha: "cc-senha-erro",
 };
 
+/* Os dois cadastros (o do cliente e o da diarista) seguem o mesmo caminho:
+   o passo 1 guarda o que foi digitado, o fim cria a conta, e um campo do
+   passo 1 recusado no fim volta ao passo 1, com a frase embaixo dele.
+   Aqui, as telas e os lugares de erro de cada um. */
+const CADASTRO_DO_PAPEL = {
+  cliente:  { passo1:"cadastroCliente", erros:ERRO_DO_CAMPO_DO_CADASTRO, geral:"cc-erro", fim:"ct-erro",
+              telas:["cadastroCliente", "cadastroClienteEndereco", "cadastroClienteTermos"] },
+  diarista: { passo1:"cadastroDiarista",
+              erros:{ nome:"dia-nome-erro", email:"dia-email-erro", telefone:"dia-tel-erro",
+                      senha:"dia-senha-erro" },
+              geral:"dia-erro", fim:"dt-erro",
+              telas:["cadastroDiarista", "cadastroDiaristaTermos"] },
+};
+
+/* O cadastro da tela aberta agora (o do cliente, fora das telas dela). */
+function cadastroDaTela(){
+  return (CADASTRO_DO_PAPEL.diarista.telas.indexOf(E.tela) >= 0)
+    ? CADASTRO_DO_PAPEL.diarista : CADASTRO_DO_PAPEL.cliente;
+}
+
 function valorJaDigitado(valor){
   return valor ? ' value="' + esc(valor) + '"' : "";
 }
@@ -262,7 +282,7 @@ function soParaLer(sim){
 TELAS.cadastroCliente = {
   html: function(){
     /* no app, o que a pessoa já tinha digitado (vazio na maquete) */
-    const r = FONTE.ler.rascunhoDoCadastro() || {};
+    const r = FONTE.ler.rascunhoDoCadastro("cliente") || {};
     const aviso = AVISO_PARA_A_TELA;
     const pedeASenha = !!(aviso && aviso.tela === "cadastroCliente" && aviso.senhaDeNovo);
     const fraseDaSenha = avisoDoCampo("cadastroCliente", "senha") || (pedeASenha ? FRASE_SENHA_DE_NOVO : "");
@@ -551,11 +571,16 @@ TELAS.cadastroClienteTermos = {
 };
 
 /* As duas chaves dos documentos: no fim do cadastro e na tela "os termos
-   mudaram". */
-function chaveDosTermos(){
+   mudaram". Para a diarista, a chave não cita a política de cancelamento:
+   ela é do cliente (R20, ainda a decidir), e o documento dela — um só com
+   cláusulas das duas partes, ou um termo próprio da profissional — é
+   decisão pendente (DECISOES, A26). */
+function chaveDosTermos(papel){
+  const doQue = (papel === "diarista") ? "Regras de uso da plataforma."
+                                       : "Regras de uso da plataforma e política de cancelamento.";
   return ''
   + '<div class="chave" id="chave-termos" onclick="alternarChaveVisual(this)">'
-  +   '<div class="txt"><b>Aceito os termos de uso</b><span>Regras de uso da plataforma e política de cancelamento.</span></div>'
+  +   '<div class="txt"><b>Aceito os termos de uso</b><span>' + doQue + '</span></div>'
   +   '<div class="botao"></div></div>'
 
   + '<div class="chave" id="chave-privacidade" onclick="alternarChaveVisual(this)">'
@@ -589,19 +614,21 @@ function criarContaCliente(botao){
    tinha digitado e a frase embaixo do campo. A senha, ela digita de novo. */
 function mostrarErroDoCadastro(r){
   if(r.destino) return seguirPeloErro(r);
-  const lugar = ERRO_DO_CAMPO_DO_CADASTRO[r.campo];
-  if(!lugar) return mostrarErro(E.tela === "cadastroCliente" ? "cc-erro" : "ct-erro", r.erro);
-  if(E.tela === "cadastroCliente") return mostrarErro(lugar, r.erro);
-  voltarAoPasso1DoCadastro(r);
+  const c = cadastroDaTela();
+  const lugar = c.erros[r.campo];
+  if(!lugar) return mostrarErro(E.tela === c.passo1 ? c.geral : c.fim, r.erro);
+  if(E.tela === c.passo1) return mostrarErro(lugar, r.erro);
+  voltarAoPasso1DoCadastro(r, c.passo1);
 }
 
-function voltarAoPasso1DoCadastro(r){
+function voltarAoPasso1DoCadastro(r, passo1){
+  passo1 = passo1 || "cadastroCliente";
   /* o "‹" do passo 1 volta para onde estava antes do cadastro, e não para
-     o passo 3 */
-  const i = E.historico.lastIndexOf("cadastroCliente");
+     o fim dele */
+  const i = E.historico.lastIndexOf(passo1);
   if(i >= 0) E.historico = E.historico.slice(0, i);
-  avisarNaTela({ tela:"cadastroCliente", campo:r.campo, erro:r.erro, senhaDeNovo:r.campo !== "senha" });
-  ir("cadastroCliente", { semHistorico:true });
+  avisarNaTela({ tela:passo1, campo:r.campo, erro:r.erro, senhaDeNovo:r.campo !== "senha" });
+  ir(passo1, { semHistorico:true });
 }
 
 /* Depois do "Conta criada!", a tomada diz para onde: na maquete, o início,
@@ -778,7 +805,7 @@ TELAS.termosNovos = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Atualizamos nossos termos 📄</h2>'
     +   '<p class="apoio">Para continuar usando o Limpah, confirme que você aceita a versão nova.</p>'
-    +   chaveDosTermos()
+    +   chaveDosTermos(E.perfil)
     +   erroDoCampo("tn-erro", "termosNovos", "")
     + '</div>'
     + '<div class="rodape">'
@@ -813,40 +840,111 @@ function aceitarTermosNovos(botao){
 
 
 /* --------------------------------------------------------------------------
-   04B. CADASTRO DA DIARISTA — primeira etapa + o mapa do que vem depois
+   04B. CADASTRO DA DIARISTA — o Portão 1 (decisão R18)
 
-   O fluxo completo da profissional (10 etapas: documentos, selfie,
-   antecedentes, aprovação) é o próximo passo do projeto. Esta tela existe
-   para o caminho não morrer e para o time de TI já ver o desenho da etapa.
+   Como o do cliente: o passo 1 guarda o que foi digitado (a senha, no app,
+   só na memória), a tela dos termos cria a conta, e o código do celular
+   vem depois. Em seguida ela escolhe os bairros (telas-diarista.js). O
+   e-mail está na tela, como na imagem (04B), e é OPCIONAL: sem ele, ela
+   entra pelo telefone (R28; DECISOES, A23).
    -------------------------------------------------------------------------- */
 TELAS.cadastroDiarista = {
   html: function(){
+    /* no app, o que ela já tinha digitado; na maquete, só quem voltou da
+       tela do código para corrigir o número */
+    const r = FONTE.ler.rascunhoDoCadastro("diarista") || {};
+    const aviso = AVISO_PARA_A_TELA;
+    const pedeASenha = !!(aviso && aviso.tela === "cadastroDiarista" && aviso.senhaDeNovo);
+    const fraseDaSenha = avisoDoCampo("cadastroDiarista", "senha") || (pedeASenha ? FRASE_SENHA_DE_NOVO : "");
     return ''
     + cabecalho("", { passos:[1,5] })
     + '<div class="corpo">'
     +   '<h2 class="titulo">Vamos começar! 🧹</h2>'
     +   '<p class="apoio">Crie sua conta para receber oportunidades de trabalho.</p>'
     +   '<div class="campo"><label>Nome completo</label>'
-    +     '<input id="dia-nome" type="text" placeholder="Digite seu nome completo"></div>'
+    +     '<input id="dia-nome" type="text" placeholder="Digite seu nome completo" autocomplete="name"'
+    +       valorJaDigitado(r.nome) + soParaLer(r.soONumero) + '>'
+    +     erroDoCampo("dia-nome-erro", "cadastroDiarista", "nome") + '</div>'
+    /* o e-mail da imagem (04B), opcional: a regra do e-mail obrigatório é
+       só do cliente (R28) */
+    +   '<div class="campo"><label>E-mail</label>'
+    +     '<input id="dia-email" type="email" placeholder="Digite seu e-mail" autocomplete="email" '
+    +       'autocapitalize="none" spellcheck="false"' + valorJaDigitado(r.email)
+    +       soParaLer(r.soONumero) + '>'
+    +     erroDoCampo("dia-email-erro", "cadastroDiarista", "email") + '</div>'
     +   '<div class="campo"><label>Telefone</label>'
-    +     '<input id="dia-tel" type="tel" placeholder="(11) 99999-9999"></div>'
+    +     '<input id="dia-tel" type="tel" placeholder="(11) 99999-9999" autocomplete="tel"'
+    +       valorJaDigitado(r.telefone) + '>'
+    +     erroDoCampo("dia-tel-erro", "cadastroDiarista", "telefone") + '</div>'
+    /* o olhinho da senha, como na imagem (04B) */
     +   '<div class="campo"><label>Senha</label>'
-    +     '<input type="password" placeholder="Crie uma senha"></div>'
-    +   '<div id="dia-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
+    +     '<div style="position:relative">'
+    +       '<input id="dia-senha" type="password" placeholder="Crie uma senha" '
+    +         'autocomplete="new-password" style="padding-right:46px">'
+    +       '<button onclick="verSenha(\'dia-senha\')" aria-label="Mostrar senha" class="olho">'
+    +         '👁</button>'
+    +     '</div>'
+    +     '<div class="erro-do-campo" id="dia-senha-erro">' + esc(fraseDaSenha) + '</div></div>'
+    +   erroDoCampo("dia-erro", "cadastroDiarista", "")
 
     /* PORTÃO 1 (decisão R18): aqui não se pede documento nenhum.
        São dois minutos até ela ver oportunidades reais com valores reais.
        O documento vem depois, quando ela já sabe o que tem a ganhar. */
-    +   '<div class="aviso roxo">⏱️<div><b>Dois minutos e você já vê as oportunidades</b>'
+    /* no app, até a 3b, as oportunidades ainda não chegam (revisão da 3a) */
+    +   '<div class="aviso roxo">⏱️<div><b>' + (oportunidadesLigadas()
+          ? "Dois minutos e você já vê as oportunidades" : "Dois minutos e sua conta fica pronta")
+    +     '</b>'
     +     'Documento só depois, quando você decidir que vale a pena.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="salvarDadosDaDiarista()">Continuar</button>'
+    +   '<button class="btn btn-principal" onclick="salvarDadosDaDiarista(this)">Continuar</button>'
     +   '<p class="apoio" style="text-align:center;margin:12px 0 0">Já tem uma conta? '
     +     '<a href="#" onclick="ir(\'login\');return false;" style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
     + '</div>';
   }
 };
+
+function limparErrosDoCadastroDaDiarista(){
+  avisarNaTela(null);
+  ["dia-nome-erro", "dia-email-erro", "dia-tel-erro", "dia-senha-erro", "dia-erro"].forEach(function(id){
+    mostrarErro(id, "");
+  });
+}
+
+/* OS TERMOS DELA (tela nova, do app de verdade): as duas chaves do cliente
+   (os Termos de Uso e a Política de Privacidade), numa tela própria — a
+   tela da imagem (04B) fica como está. É aqui que a conta nasce. As regras
+   de conduta dela ("Termos e regras", Portão 2) são outro documento, mais
+   adiante no cadastro. */
+TELAS.cadastroDiaristaTermos = {
+  html: function(){
+    return ''
+    + cabecalho("", { passos:[1,5] })
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Quase lá! ✅</h2>'
+    +   '<p class="apoio">Confirme os termos para criar sua conta.</p>'
+    +   chaveDosTermos("diarista")
+    +   erroDoCampo("dt-erro", "cadastroDiaristaTermos", "")
+    + '</div>'
+    + '<div class="rodape"><button class="btn btn-principal" onclick="criarContaDaDiarista(this)">Criar minha conta</button></div>';
+  }
+};
+
+/* Cria a conta dela. Na maquete, na hora. No app, o servidor confere tudo
+   de novo e manda o código pelo WhatsApp; a próxima tela é a do código. */
+function criarContaDaDiarista(botao){
+  const t = chaveLigada("chave-termos");
+  const p = chaveLigada("chave-privacidade");
+  mostrarErro("dt-erro", "");
+  if(!t || !p){
+    mostrarErro("dt-erro", "Para continuar, aceite os termos de uso e a política de privacidade.");
+    return;
+  }
+  FONTE.criarConta({ papel:"diarista", aceitoOsTermos:t, aceitoAPrivacidade:p }, function(r){
+    if(!r.ok) return mostrarErroDoCadastro(r);
+    ir(r.destino, { limparHistorico:true });
+  }, { botao: botao });
+}
 
 /* Botão do lado dela sem tela própria não pode dar em nada: esta tela diz
    que está sendo construído e devolve a pessoa para a home (regra: sem becos).

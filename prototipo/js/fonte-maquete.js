@@ -33,6 +33,11 @@ let CONTA_DA_MAQUETE_ACABOU_DE_NASCER = false;
    digitado. Só na memória, e só até o próximo "Continuar". */
 let RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
 
+/* "Mudar data ou período" para o mesmo dia e período do pedido de agora:
+   a mesma frase do servidor (rotas/pedidos.py; um teste compara). */
+const FRASE_MESMO_HORARIO_DO_ANTERIOR_NA_MAQUETE =
+  "Este é o dia e o período do seu pedido de agora. Escolha outro dia ou outro período.";
+
 const FONTE = {
   ehMaquete: true,
 
@@ -62,10 +67,24 @@ const FONTE = {
     FONTE.entrar({}, pronto);
   },
 
-  /* CADASTRO DO CLIENTE, passo 1: a cliente de exemplo, com o que foi
-     digitado por cima. A senha não é usada. */
+  /* CADASTRO, passo 1. Do cliente: a cliente de exemplo, com o que foi
+     digitado por cima. Da diarista: uma diarista NOVA, com o que ela
+     digitou — como o cliente, cada cadastro começa do zero. Antes, a conta
+     nova herdava a diarista que já tinha usado este aparelho (aprovada, com
+     os bairros e a chave "Disponível") e pulava "Onde você quer
+     trabalhar?" (segunda revisão da 3a). A senha não é usada. */
   comecarCadastro: function(d, pronto){
     RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
+    if(d.papel === "diarista"){
+      E.diarista = Object.assign(diaristaNova(), {
+        nome: d.nome,
+        email: d.email || "",
+        telefone: d.telefone,
+      });
+      salvar();
+      pronto({ ok:true });
+      return;
+    }
     E.cliente = Object.assign({}, CLIENTE_EXEMPLO, {
       nome: d.nome,
       primeiroNome: String(d.nome || "").split(/\s+/)[0],
@@ -91,20 +110,25 @@ const FONTE = {
     pronto({ ok:true });
   },
 
-  /* passo 3: a conta "nasce" e o "código" sai na hora */
+  /* o fim do cadastro: a conta "nasce" e o "código" sai na hora. A da
+     diarista fecha a primeira metade do Portão 1 (os dados). */
   criarConta: function(d, pronto){
     E.logado = true;
-    E.perfil = "cliente";
+    E.perfil = (d.papel === "diarista") ? "diarista" : "cliente";
+    if(E.perfil === "diarista") euSouDiarista().feito.dados = true;
     salvar();
     CONTA_DA_MAQUETE_ACABOU_DE_NASCER = true;
     CODIGO_DA_MAQUETE_PODE_MANDAR_EM = Date.now() + ESPERA_PARA_MANDAR_DE_NOVO_NA_MAQUETE_MS;
     pronto({ ok:true, destino:"codigoCelular" });
   },
 
-  /* O código do celular: qualquer código de 6 números serve. */
+  /* O código do celular: qualquer código de 6 números serve. A diarista
+     que ainda não escolheu os bairros segue para eles (o fim do Portão 1);
+     o cliente que acabou de nascer vê "Conta criada!". */
   confirmarCelular: function(d, pronto){
-    const destino = CONTA_DA_MAQUETE_ACABOU_DE_NASCER ? "boasVindas"
-                  : (E.perfil === "diarista" ? "diaristaHome" : "home");
+    let destino;
+    if(E.perfil === "diarista") destino = euSouDiarista().feito.regiao ? "diaristaHome" : "diaristaRegiao";
+    else destino = CONTA_DA_MAQUETE_ACABOU_DE_NASCER ? "boasVindas" : "home";
     CONTA_DA_MAQUETE_ACABOU_DE_NASCER = false;
     pronto({ ok:true, destino:destino });
   },
@@ -133,11 +157,13 @@ const FONTE = {
      passo 1, com o que foi digitado, para corrigir o número (só ele: o
      nome e o e-mail aparecem sem deixar mexer, como no app). */
   corrigirNumero: function(d, pronto){
-    const c = E.cliente || {};
-    RASCUNHO_DA_CORRECAO_NA_MAQUETE = { nome:c.nome || "", email:c.email || "",
+    const papel = (E.perfil === "diarista") ? "diarista" : "cliente";
+    const c = (papel === "diarista" ? E.diarista : E.cliente) || {};
+    const passo1 = (papel === "diarista") ? "cadastroDiarista" : "cadastroCliente";
+    RASCUNHO_DA_CORRECAO_NA_MAQUETE = { papel:papel, nome:c.nome || "", email:c.email || "",
                                         telefone:c.telefone || "", soONumero:true };
-    pronto({ ok:true, destino:"cadastroCliente",
-             aviso:{ tela:"cadastroCliente", campo:"telefone",
+    pronto({ ok:true, destino:passo1,
+             aviso:{ tela:passo1, campo:"telefone",
                      erro:"Confira o número e corrija. O código vai para o celular que estiver aqui.",
                      senhaDeNovo:true } });
   },
@@ -146,7 +172,17 @@ const FONTE = {
      guardado como sempre ficou; só a correção do número é esquecida quando
      ela sai do passo 1. */
   mudouDeTela: function(de){
-    if(de === "cadastroCliente") RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
+    if(de === "cadastroCliente" || de === "cadastroDiarista") RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
+  },
+
+  /* OS BAIRROS DELA (o fim do Portão 1): na maquete, nela mesma, na hora. */
+  salvarBairros: function(d, pronto){
+    const dela = euSouDiarista();
+    dela.bairros = d.bairros.slice();
+    dela.regiao = dela.bairros.join(", ");
+    dela.feito.regiao = true;
+    salvar();
+    pronto({ ok:true });
   },
 
   /* AS CASAS. Na maquete elas moram na cliente, neste aparelho, e já estão
@@ -209,6 +245,25 @@ const FONTE = {
      hora: o pedido nasce "buscando", e a busca começa. A conta fica
      congelada dentro do pedido. */
   enviarPedido: function(d, pronto){
+    /* "Mudar data ou período" (A25): o pedido de antes cai agora, junto
+       com o nascimento deste — como o servidor faz no app. Se uma
+       profissional já o confirmou, ele fica, e este não nasce. */
+    if(d.substitui){
+      const antes = (E.pedidos || []).find(function(x){ return x.id === d.substitui; });
+      if(antes && antes.situacao === "confirmado")
+        return pronto({ ok:false, erro:"Uma profissional aceitou o seu pedido anterior enquanto "
+                                       + "você escolhia: ele continua de pé. Veja em Meus serviços." });
+      /* o mesmo dia, período e casa do de antes não muda nada (a tela já
+         não deixa escolher; o servidor recusa igual) */
+      if(antes && antes.situacao !== "cancelado" && antes.situacao !== "concluido"
+         && antes.data === d.data && antes.periodo === d.periodo
+         && String(antes.casaId) === String(d.casaId))
+        return pronto({ ok:false, campo:"quando", erro:FRASE_MESMO_HORARIO_DO_ANTERIOR_NA_MAQUETE });
+      if(antes && antes.situacao !== "cancelado" && antes.situacao !== "concluido"){
+        antes.situacao = "cancelado";
+        antes.motivoDoCancelamento = "cliente";
+      }
+    }
     const pedido = pedidoDaMaquete(d, "buscando");
     E.pedidos.unshift(pedido);
     E.pedidoAtual = pedido.id;
@@ -220,7 +275,29 @@ const FONTE = {
   /* Cancelar: na maquete, sempre sem custo. */
   cancelarPedido: function(id, pronto){
     const p = (E.pedidos || []).find(function(x){ return x.id === id; });
-    if(p) p.situacao = "cancelado";
+    if(p){
+      p.situacao = "cancelado";
+      p.motivoDoCancelamento = "cliente";
+    }
+    salvar();
+    pronto({ ok:true });
+  },
+
+  /* Um pedido, de novo: na maquete ele mora no aparelho, sempre em dia. */
+  carregarPedido: function(id, pronto){
+    pronto({ ok:true });
+  },
+
+  /* Pagar um pedido que espera o pagamento. Na maquete o pagamento é a tela
+     de Pix e cartão, e o botão deste caminho nem aparece (ler.podePagar);
+     se for chamado, o pedido vai para a busca, como no app. */
+  pagarPedido: function(id, pronto){
+    const p = (E.pedidos || []).find(function(x){ return x.id === id; });
+    if(p && p.situacao === "aguardando_pagamento"){
+      p.situacao = "buscando";
+      E.busca = { minutos:0, modo:"normal", jaAvisou:false };   // relógio da régua zerado
+    }
+    E.pedidoAtual = id;
     salvar();
     pronto({ ok:true });
   },
@@ -239,6 +316,35 @@ const FONTE = {
     /* Os bairros que a diarista pode escolher. */
     bairros: function(){
       return BAIRROS_DE_EXEMPLO.slice();
+    },
+
+    /* A diarista que está usando: a deste aparelho (criada na primeira vez). */
+    diarista: function(){
+      if(!E.diarista) E.diarista = diaristaNova();
+      return E.diarista;
+    },
+
+    /* O estado dela (R24): a regra pura do dados.js, a mesma do servidor.
+       Na maquete o celular está confirmado e os termos em dia — a não ser
+       que um teste diga o contrário (celularConfirmado / termosEmDia). */
+    estadoDaDiarista: function(){
+      const d = FONTE.ler.diarista();
+      const celular = d.celularConfirmado !== false;
+      const termos = d.termosEmDia !== false;
+      return Object.assign(estadoDaDiarista(d, celular, termos),
+                           { celularConfirmado:celular, termosEmDia:termos });
+    },
+
+    /* O motivo escrito pela equipe, para a recusada ou a suspensa: na
+       maquete não há equipe. */
+    decisaoDaEquipe: function(){
+      return null;
+    },
+
+    /* As oportunidades da região dela: as de exemplo, com o valor dela e o
+       veredito da agenda (todasAsOportunidades, telas-diarista.js). */
+    oportunidades: function(){
+      return todasAsOportunidades();
     },
 
     /* Onde o app atende (a tela "Onde atendemos" e a lista de bairros do
@@ -307,6 +413,19 @@ const FONTE = {
       return !!p && p.situacao !== "cancelado" && p.situacao !== "concluido";
     },
 
+    /* O botão de pagar um pedido parado esperando o pagamento: na maquete,
+       não (o pagamento de mentira é a tela de Pix e cartão). */
+    podePagar: function(){
+      return false;
+    },
+
+    /* Em que ponto da busca o pedido está: na maquete, o relógio acelerado
+       da tela de busca (E.busca) e o passo da régua por ele. */
+    busca: function(){
+      const minutos = (E.busca && Number(E.busca.minutos)) || 0;
+      return { minutos: minutos, passo: passoDaReguaNaMaquete(minutos) };
+    },
+
     /* A conta que o resumo e o pagamento mostram. Na maquete, a do motor
        da maquete, na hora; a janela, pelo período escolhido. null = não há
        pedido montado. */
@@ -326,8 +445,9 @@ const FONTE = {
     /* O que foi digitado no passo 1 do cadastro, para preencher a tela de
        novo. Na maquete, nada (a tela sempre abriu vazia) — menos para quem
        voltou da tela do código para corrigir o número. */
-    rascunhoDoCadastro: function(){
-      return RASCUNHO_DA_CORRECAO_NA_MAQUETE;
+    rascunhoDoCadastro: function(papel){
+      const r = RASCUNHO_DA_CORRECAO_NA_MAQUETE;
+      return (r && (r.papel || "cliente") === (papel || "cliente")) ? r : null;
     },
 
     /* O endereço do passo 2: o que foi digitado, ou o de exemplo. */
@@ -339,11 +459,12 @@ const FONTE = {
        pedir outro. */
     confirmacao: function(){
       const falta = Math.ceil((CODIGO_DA_MAQUETE_PODE_MANDAR_EM - Date.now()) / 1000);
+      const quem = (E.perfil === "diarista") ? E.diarista : E.cliente;
       return {
-        telefone: (E.cliente && E.cliente.telefone) || "",
+        telefone: (quem && quem.telefone) || "",
         aviso: "",
         segundosParaMandarDeNovo: Math.max(0, falta),
-        podeCorrigirONumero: E.perfil !== "diarista",
+        podeCorrigirONumero: true,
       };
     },
   },

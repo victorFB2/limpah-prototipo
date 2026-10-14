@@ -62,19 +62,27 @@ function diaristaNova(){
       documentos: false, selfie: false, antecedentes: false, termos: false,
       recebimento: false, experiencia: false,
     },
+
+    /* Na maquete o celular está sempre confirmado e os termos sempre em dia.
+       Os testes desligam um ou outro para ver as frases desses estados, que
+       no app de verdade existem (o servidor diz). */
+    celularConfirmado: true,
+    termosEmDia: true,
   };
 }
 
+/* Quem ela é e o que já fez. Quem responde é a tomada: na maquete, o que
+   ficou neste aparelho (E.diarista); no app, o que o servidor mandou. */
 function euSouDiarista(){
-  if(!E.diarista) E.diarista = diaristaNova();
-  return E.diarista;
+  return FONTE.ler.diarista();
 }
 
-/* O estado dela vem de estadoDaDiarista() (dados.js), a mesma regra que o
-   servidor segue. Na maquete o celular está sempre confirmado e os termos
-   sempre em dia: as telas desses dois estados ainda não existem aqui. */
+/* O estado dela — a chave, o "pode aceitar" e a porcentagem — também vem
+   da tomada (R24): na maquete, de estadoDaDiarista() (dados.js), a mesma
+   regra que o servidor segue; no app, pronto do servidor. As telas não
+   fazem conta nenhuma: só escolhem a frase (situacaoDaDiarista). */
 function estadoDela(){
-  return estadoDaDiarista(euSouDiarista(), true, true);
+  return FONTE.ler.estadoDaDiarista();
 }
 
 /* Ela pode aceitar serviço? Só depois do Portão 2 inteiro. */
@@ -82,26 +90,24 @@ function podeAceitarServico(){
   return estadoDela().podeAceitar;
 }
 
-/* Quanto do cadastro está feito, e o que falta agora. */
+/* Quanto do cadastro está feito, e o que falta agora. A porcentagem é a do
+   estado (o Portão 1 vale 20%, o 2 vale 60%, o 3 vale 20%: a conta mora no
+   dados.js e, no app, no servidor). */
 function progressoDoCadastro(){
   const d = euSouDiarista();
-  const portao2 = ETAPAS_DO_PORTAO_2;
-  const feitos2 = portao2.filter(function(x){ return d.feito[x]; }).length;
-
-  /* o Portão 1 vale 20%, o 2 vale 60%, o 3 vale 20% (a conta mora no dados.js) */
-  const pct = estadoDela().pct;
+  const estado = estadoDela();
 
   let falta = "";
-  if(d.situacao === "novo" && feitos2 < portao2.length){
+  if(estado.chave === "incompleto"){
     falta = "faltam os documentos para você aceitar serviços";
-  } else if(d.situacao === "analise"){
+  } else if(estado.chave === "analise"){
     falta = "seu cadastro está em análise";
   } else if(!d.feito.recebimento){
     falta = "falta informar onde você quer receber";
   } else if(!d.feito.experiencia){
     falta = "conte sua experiência para receber mais oportunidades";
   }
-  return { pct: pct, falta: falta };
+  return { pct: estado.pct, falta: falta };
 }
 
 
@@ -123,10 +129,15 @@ function progressoDoCadastro(){
 function situacaoDaDiarista(){
   const d = euSouDiarista();
   const p = progressoDoCadastro();
-  /* a chave vem da regra pura (dados.js); daqui para baixo, só as frases.
-     Recusada e suspensa ainda não têm frases na maquete: caem no último
-     caso, sem poder aceitar. */
+  /* a chave vem da tomada (estadoDela: na maquete, a regra pura do
+     dados.js; no app, o servidor); daqui para baixo, só as frases. */
   const estado = estadoDela();
+  /* O que o app de verdade ainda não tem (a maquete tem tudo): o envio dos
+     documentos do Portão 2 (decisão 43) e a chave Pix do Portão 3 (chega
+     com o pagamento). Sem eles, a tabela não promete o que leva a "chega em
+     breve" (revisão da 3a; DECISOES A26, provisória). */
+  const envioDosDocumentos = FONTE.ehMaquete;
+  const chavePix = FONTE.ehMaquete;
 
   /* O PIX, nos três estados (R26). Antes só a aprovada sabia se tinha chave:
      o extrato de quem estava em análise prometia "cai em até 1 dia útil" a
@@ -155,6 +166,128 @@ function situacaoDaDiarista(){
                   + "cada serviço cai " + prazoDoPix() + " depois de terminar.",
   };
 
+  /* OS QUATRO ESTADOS QUE NASCERAM COM O APP DE VERDADE (entrega 3a). Na
+     maquete eles só aparecem nos testes; no app, o servidor diz. Sem uma
+     linha própria, cada um caía no "incompleto" ou no "aprovada": uma
+     aprovada com os termos novos pendentes leria "Você já pode aceitar
+     serviços" e o servidor recusaria o aceite (o tropeço de 22/08, R24).
+     A ordem importa: o celular sem confirmar trava tudo; recusada e
+     suspensa vêm antes dos termos (responder à equipe não depende deles). */
+
+  /* CELULAR NÃO CONFIRMADO — falta o código */
+  if(estado.celularConfirmado === false){
+    return Object.assign({
+      chave: "celular",
+      podeAceitar: false,
+      faixaTitulo: "Falta confirmar seu celular",
+      faixaFrase:  "digite o código que mandamos",
+      faixaDestino: "codigoCelular",
+      faixaSelo: "!",
+      interruptorTravado: true,
+      interruptorFrase: "Liga depois que você confirmar seu celular e o cadastro for aprovado.",
+      botaoTexto: "Confirmar meu celular",
+      botaoDestino: "codigoCelular",
+      noCartao: "Confirme seu celular para continuar",
+      mapaFrase: "Falta confirmar seu celular. Depois dele, o cadastro segue.",
+      oportunidadeTitulo: "Falta confirmar seu celular",
+      oportunidadeFrase: "Digite o código que mandamos para o seu celular. Depois, é só seguir o cadastro.",
+      trabalhoTitulo: "Falta confirmar seu celular",
+      trabalhoFrase: "Digite o código que mandamos para o seu celular. Depois da aprovação, cada "
+                   + "serviço que você aceitar aparece aqui.",
+      ganhosTitulo: "Falta confirmar seu celular",
+      ganhosFrase: "Digite o código que mandamos para o seu celular. Depois da aprovação, cada "
+                 + "serviço que você fizer aparece aqui, com quanto você recebe.",
+      trabalhoBotao: "Confirmar meu celular",
+      trabalhoDestino: "codigoCelular",
+      pct: p.pct,
+    }, pix, pixAntesDeAprovar);
+  }
+
+  /* RECUSADA — a equipe não aprovou, com o motivo escrito (nada de punição
+     silenciosa: o motivo aparece no mapa do cadastro; responder, na 5a) */
+  if(estado.chave === "recusada"){
+    return Object.assign({
+      chave: "recusada",
+      podeAceitar: false,
+      faixaTitulo: "Cadastro não aprovado",
+      faixaFrase:  "veja o que a nossa equipe escreveu",
+      faixaDestino: "diaristaCadastro",
+      faixaSelo: "!",
+      interruptorTravado: true,
+      interruptorFrase: "Seu cadastro não foi aprovado. Veja o motivo no seu cadastro.",
+      botaoTexto: "Ver o motivo",
+      botaoDestino: "diaristaCadastro",
+      botaoContorno: true,
+      noCartao: "Seu cadastro não foi aprovado",
+      mapaFrase: "Seu cadastro não foi aprovado, e por isso você não aceita serviços.",
+      oportunidadeTitulo: "Seu cadastro não foi aprovado",
+      oportunidadeFrase: "Por isso você não pode aceitar serviços. O motivo está no seu cadastro.",
+      trabalhoTitulo: "Seu cadastro não foi aprovado",
+      trabalhoFrase: "Sem a aprovação, não há serviços na sua agenda. O motivo está no seu cadastro.",
+      ganhosTitulo: "Seu cadastro não foi aprovado",
+      ganhosFrase: "Sem a aprovação, ainda não há ganhos. O motivo está no seu cadastro.",
+      trabalhoBotao: "Ver o motivo",
+      trabalhoDestino: "diaristaCadastro",
+      pct: p.pct,
+    }, pix, pixAntesDeAprovar);
+  }
+
+  /* SUSPENSA — já foi aprovada, e a equipe suspendeu, com o motivo escrito */
+  if(estado.chave === "suspensa"){
+    return Object.assign({
+      chave: "suspensa",
+      podeAceitar: false,
+      faixaTitulo: "Acesso suspenso",
+      faixaFrase:  "veja o que a nossa equipe escreveu",
+      faixaDestino: "diaristaCadastro",
+      faixaSelo: "!",
+      interruptorTravado: true,
+      interruptorFrase: "Seu acesso a novos serviços está suspenso. Veja o motivo no seu cadastro.",
+      botaoTexto: "Ver o motivo",
+      botaoDestino: "diaristaCadastro",
+      botaoContorno: true,
+      noCartao: "Seu acesso a novos serviços está suspenso",
+      mapaFrase: "Seu acesso a novos serviços está suspenso.",
+      oportunidadeTitulo: "Seu acesso está suspenso",
+      oportunidadeFrase: "Por isso você não pode aceitar serviços novos. O motivo está no seu cadastro.",
+      trabalhoTitulo: "Seu acesso a novos serviços está suspenso",
+      trabalhoFrase: "Enquanto isso, nenhum serviço novo entra na sua agenda. O motivo está no seu cadastro.",
+      ganhosTitulo: "Seu acesso a novos serviços está suspenso",
+      ganhosFrase: "Enquanto isso, nenhum serviço novo entra nos seus ganhos. O motivo está no seu cadastro.",
+      trabalhoBotao: "Ver o motivo",
+      trabalhoDestino: "diaristaCadastro",
+      pct: p.pct,
+    }, pix);
+  }
+
+  /* APROVADA, MAS FALTA ACEITAR OS TERMOS NOVOS — o texto mudou depois do
+     aceite dela: continua aprovada, mas não aceita até ler a versão nova */
+  if(estado.chave === "aprovada" && estado.termosEmDia === false){
+    return Object.assign({
+      chave: "termos",
+      podeAceitar: false,
+      faixaTitulo: "Falta aceitar os termos novos",
+      faixaFrase:  "sem isso você não aceita serviços",
+      faixaDestino: "termosNovos",
+      faixaSelo: "!",
+      interruptorTravado: true,
+      interruptorFrase: "Liga depois que você aceitar os termos novos.",
+      botaoTexto: "Ler os termos novos",
+      botaoDestino: "termosNovos",
+      noCartao: "Aceite os termos novos para aceitar",
+      mapaFrase: "Você está aprovada. Falta só aceitar a versão nova dos termos.",
+      oportunidadeTitulo: "Falta aceitar os termos novos",
+      oportunidadeFrase: "Atualizamos nossos termos. Aceite a versão nova e este botão libera.",
+      trabalhoTitulo: "Falta aceitar os termos novos",
+      trabalhoFrase: "Atualizamos nossos termos. Aceite a versão nova para continuar aceitando serviços.",
+      ganhosTitulo: "Falta aceitar os termos novos",
+      ganhosFrase: "Atualizamos nossos termos. Aceite a versão nova para continuar aceitando serviços.",
+      trabalhoBotao: "Ler os termos novos",
+      trabalhoDestino: "termosNovos",
+      pct: p.pct,
+    }, pix);
+  }
+
   /* APROVADA — pode trabalhar */
   if(estado.chave === "aprovada"){
     const faltaReceber = !temPix;
@@ -162,8 +295,10 @@ function situacaoDaDiarista(){
       chave: "aprovada",
       podeAceitar: estado.podeAceitar,
       /* na faixa do topo */
-      faixaTitulo: faltaReceber ? "Falta onde você recebe" : "",
-      faixaFrase:  faltaReceber ? "sem isso o dinheiro não tem para onde ir" : "",
+      /* no app, onde ela cadastra a chave Pix é um "chega em breve" (o mapa
+         diz que ela é pedida depois da aprovação): sem faixa que leve lá */
+      faixaTitulo: (faltaReceber && chavePix) ? "Falta onde você recebe" : "",
+      faixaFrase:  (faltaReceber && chavePix) ? "sem isso o dinheiro não tem para onde ir" : "",
       faixaDestino: "diaristaRecebimento",
       /* no interruptor */
       interruptorTravado: false,
@@ -210,6 +345,10 @@ function situacaoDaDiarista(){
       faixaTrilho: 100,
       interruptorTravado: true,
       interruptorFrase: "Liga assim que a gente aprovar. Já estamos conferindo.",
+      /* o botão embaixo do interruptor e o da oportunidade */
+      botaoTexto: "Ver como está meu cadastro",
+      botaoDestino: "diaristaAnalise",
+      botaoContorno: true,
       noCartao: "Você poderá aceitar assim que aprovarmos",
       mapaFrase: "Está tudo enviado. Agora é com a gente — e a gente avisa você.",
       oportunidadeTitulo: "Seu cadastro está em análise",
@@ -242,6 +381,11 @@ function situacaoDaDiarista(){
     faixaDestino: "diaristaCadastro",
     interruptorTravado: true,
     interruptorFrase: "Liga quando seu cadastro for aprovado.",
+    /* no app o segundo passo ainda não tem o que fazer: o mapa só diz o que
+       vem (e que a equipe fala com ela) */
+    botaoTexto: envioDosDocumentos ? "Continuar meu cadastro" : "Ver meu cadastro",
+    botaoDestino: "diaristaCadastro",
+    oportunidadeBotao: "Completar meu cadastro",
     noCartao: "Complete seu cadastro para aceitar",
     mapaFrase: "Complete o segundo passo para começar a aceitar serviços.",
     oportunidadeTitulo: "Falta pouco para você aceitar",
@@ -255,7 +399,7 @@ function situacaoDaDiarista(){
     ganhosTitulo: "Falta pouco para você começar a ganhar",
     ganhosFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
                + "fizer aparece aqui, com quanto você recebe e quando cai no seu Pix.",
-    trabalhoBotao: "Continuar meu cadastro",
+    trabalhoBotao: envioDosDocumentos ? "Continuar meu cadastro" : "Ver meu cadastro",
     trabalhoDestino: "diaristaCadastro",
     pct: p.pct,
   }, pix, pixAntesDeAprovar);
@@ -268,7 +412,8 @@ function situacaoDaDiarista(){
    Quem saísse dali nunca mais voltava, e o dono ficou preso com o cadastro
    completo e nenhum caminho adiante. */
 function atalhoDeAprovacao(){
-  if(situacaoDaDiarista().chave !== "analise") return "";
+  /* no app de verdade quem aprova é a equipe: o atalho nem existe lá */
+  if(!FONTE.ehMaquete || situacaoDaDiarista().chave !== "analise") return "";
   return '<div class="cartao" style="border:1.5px dashed var(--ambar);background:#FFF8EC">'
     + '<b style="font-size:13px;color:var(--ambar)">⚙ ATALHO DO PROTÓTIPO</b>'
     + '<div style="font-size:12.5px;color:var(--texto);margin-top:6px;line-height:1.55">'
@@ -330,16 +475,17 @@ function barraDoCadastro(){ return faixaDoCadastro(); }
    oportunidades: mostrar o que existe e dizer o que falta, em vez de sumir. */
 function interruptorTravado(){
   const e = situacaoDaDiarista();
+  /* o botão embaixo dele também vem da tabela: quem espera a equipe não
+     pode ler "Continuar meu cadastro" (R24), e quem foi recusada, nem isso
+     nem "Ver como está" */
   return '<div class="chave travada">'
     +   '<div class="txt"><b>🔒 Disponível para trabalhar</b>'
     +     '<span>' + esc(e.interruptorFrase) + '</span></div>'
     +   '<div class="botao"></div>'
     + '</div>'
-    + (e.chave === "analise"
-      ? '<button class="btn btn-contorno" style="margin-bottom:14px" '
-        + 'onclick="ir(\'diaristaAnalise\')">Ver como está meu cadastro</button>'
-      : '<button class="btn btn-principal" style="margin-bottom:14px" '
-        + 'onclick="ir(\'diaristaCadastro\')">Continuar meu cadastro</button>');
+    + '<button class="btn ' + (e.botaoContorno ? "btn-contorno" : "btn-principal") + '" '
+    +   'style="margin-bottom:14px" onclick="ir(\'' + idSeguro(e.botaoDestino) + '\')">'
+    +   esc(e.botaoTexto) + '</button>';
 }
 
 
@@ -347,23 +493,27 @@ function interruptorTravado(){
    PORTÃO 1 — ENTRAR E VER
    ========================================================================== */
 
-/* A tela de dados já existe em telas-acesso.js (cadastroDiarista).
-   Aqui ela ganha continuação. */
-function salvarDadosDaDiarista(){
-  const v = function(id){ return valorDoCampo(id).trim(); };
-  const nome = v("dia-nome");
+/* A tela de dados mora em telas-acesso.js (cadastroDiarista), e a dos
+   termos também (cadastroDiaristaTermos, que cria a conta). O passo 1 só
+   guarda o que foi digitado, como o do cliente: na maquete, nela mesma;
+   no app, no aparelho (a senha, só na memória). O e-mail é opcional. */
+function salvarDadosDaDiarista(botao){
+  const nome = valorDoCampo("dia-nome").trim();
+  limparErrosDoCadastroDaDiarista();
   if(nome.length < 3){
     mostrarErro("dia-erro", "Digite seu nome completo para continuar.");
     return;
   }
-  const d = euSouDiarista();
-  d.nome = nome;
-  d.telefone = v("dia-tel");
-  d.feito.dados = true;
-  E.perfil = "diarista";
-  E.logado = true;
-  salvar();
-  ir("diaristaRegiao");
+  FONTE.comecarCadastro({
+    papel: "diarista",
+    nome: nome,
+    email: valorDoCampo("dia-email").trim(),
+    telefone: valorDoCampo("dia-tel").trim(),
+    senha: valorDoCampo("dia-senha"),
+  }, function(r){
+    if(!r.ok) return mostrarErroDoCadastro(r);
+    ir("cadastroDiaristaTermos");
+  }, { botao: botao || null });
 }
 
 /* Os bairros como estão DESENHADOS na tela agora. O botão leva a POSIÇÃO
@@ -374,19 +524,47 @@ function salvarDadosDaDiarista(){
    mesma posição marcaria outro bairro sem aviso. */
 let BAIRROS_NA_TELA = [];
 
+/* Os bairros que ela está marcando agora, nesta visita à tela. Só viram os
+   bairros dela no "Ver oportunidades na minha região" (terminarPortaoUm):
+   no app, é aí que vão ao servidor. Voltar sem tocar nele não muda nada.
+   Ficam na memória (nunca no aparelho), presos à navegação: entrar de novo
+   na tela começa dos bairros que ela já tem. */
+let BAIRROS_MARCADOS = null;      // { navegacao, lista }
+
+function bairrosMarcadosNaTela(){
+  if(!BAIRROS_MARCADOS || BAIRROS_MARCADOS.navegacao !== NAVEGACAO)
+    BAIRROS_MARCADOS = { navegacao: NAVEGACAO, lista: (euSouDiarista().bairros || []).slice() };
+  return BAIRROS_MARCADOS.lista;
+}
+
+/* A frase de quando a lista dos bairros não chegou do servidor (só no
+   app), nesta visita à tela. */
+let ERRO_DA_REGIAO = null;        // { frase, navegacao }
+
 TELAS.diaristaRegiao = {
   html: function(){
-    const d = euSouDiarista();
+    const area = FONTE.ler.areaAtendida();
     const bairros = FONTE.ler.bairros();
+    const marcados = bairrosMarcadosNaTela();
+    const erro = (ERRO_DA_REGIAO && ERRO_DA_REGIAO.navegacao === NAVEGACAO) ? ERRO_DA_REGIAO.frase : "";
     BAIRROS_NA_TELA = bairros.slice();
     let lista = "";
     bairros.forEach(function(b, i){
-      const marcado = d.bairros.indexOf(b) >= 0;
+      const marcado = marcados.indexOf(b) >= 0;
       lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
         + 'onclick="alternarBairro(' + Number(i) + ')">'
         + '<div class="txt"><b>' + esc(b) + '</b></div>'
         + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
     });
+    /* no app, a lista vem do servidor: enquanto não chega, diz isso; sem
+       internet, diz o que houve e oferece tentar de novo */
+    if(!area){
+      lista = erro
+        ? '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+          + '<button class="btn btn-contorno" onclick="tentarARegiaoDeNovo()">Tentar de novo</button>'
+        : '<p class="apoio">Carregando os bairros…</p>';
+    }
+    const algumMarcado = marcados.some(function(b){ return bairros.indexOf(b) >= 0; });
 
     return ''
     + cabecalho("", { passos:[2,5] })
@@ -407,28 +585,60 @@ TELAS.diaristaRegiao = {
     +     'antes de aceitar.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" ' + (d.bairros.length ? "" : "disabled")
-    +     ' onclick="terminarPortaoUm()">Ver oportunidades na minha região</button>'
+    /* no app, até a 3b, não há oportunidades a ver: o botão só salva */
+    +   '<button class="btn btn-principal" ' + (algumMarcado ? "" : "disabled")
+    +     ' onclick="terminarPortaoUm(this)">'
+    +     (oportunidadesLigadas() ? "Ver oportunidades na minha região" : "Salvar meus bairros")
+    +   '</button>'
+    +   erroDoCampo("reg-erro", "diaristaRegiao", "")
     + '</div>';
+  },
+  /* no app, a lista dos bairros pode ainda não ter chegado (a tela abriu
+     direto, depois do código ou de recarregar): pede, e desenha de novo
+     (aqui não há nada digitado para se perder) */
+  aoEntrar: function(){
+    if(FONTE.ler.areaAtendida() || (ERRO_DA_REGIAO && ERRO_DA_REGIAO.navegacao === NAVEGACAO)) return;
+    FONTE.carregarArea(function(r){
+      ERRO_DA_REGIAO = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+      desenhar();
+    });
   }
 };
+
+/* As oportunidades da região dela já chegam? Na maquete, sempre (as de
+   exemplo); no app, só com a entrega 3b (até lá, FONTE.ler.oportunidades()
+   é null). Os textos que prometem oportunidades perguntam aqui: quando a 3b
+   ligar a lista, eles voltam sozinhos (revisão da 3a). */
+function oportunidadesLigadas(){
+  return FONTE.ehMaquete || FONTE.ler.oportunidades() !== null;
+}
+
+function tentarARegiaoDeNovo(){
+  ERRO_DA_REGIAO = null;
+  desenhar();
+}
 
 function alternarBairro(posicao){
   const b = BAIRROS_NA_TELA[Number(posicao)];
   if(!b) return;
-  const d = euSouDiarista();
-  const i = d.bairros.indexOf(b);
-  if(i >= 0) d.bairros.splice(i, 1); else d.bairros.push(b);
-  salvar();
+  const marcados = bairrosMarcadosNaTela();
+  const i = marcados.indexOf(b);
+  if(i >= 0) marcados.splice(i, 1); else marcados.push(b);
   desenhar();
 }
 
-function terminarPortaoUm(){
-  const d = euSouDiarista();
-  d.regiao = d.bairros.join(", ");
-  d.feito.regiao = true;
-  salvar();
-  ir("diaristaHome", { limparHistorico:true });
+/* Os bairros marcados viram os dela: na maquete, na hora; no app, no
+   servidor (que confere cada um contra a lista dos bairros atendidos). Só vão os que
+   estão na lista desenhada: um bairro que saiu da lista não volta. */
+function terminarPortaoUm(botao){
+  const bairros = bairrosMarcadosNaTela().filter(function(b){ return BAIRROS_NA_TELA.indexOf(b) >= 0; });
+  mostrarErro("reg-erro", "");
+  if(!bairros.length) return;
+  FONTE.salvarBairros({ bairros: bairros }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("reg-erro", r.erro);
+    ir("diaristaHome", { limparHistorico:true });
+  }, { botao: botao || null });
 }
 
 
@@ -500,9 +710,28 @@ function todasAsOportunidades(){
     });
 }
 
+/* As oportunidades que a tomada entrega: na maquete, as de exemplo,
+   montadas por todasAsOportunidades(); no app, null enquanto a lista de
+   verdade não está ligada (entrega 3b) — e a home diz isso, em vez de
+   dizer "nada nos seus bairros". */
+function oportunidadesDela(){
+  return FONTE.ler.oportunidades() || [];
+}
+
+/* No app, antes da lista de verdade: diz que ela chega, e o que vai
+   mostrar — sem dizer "nada nos seus bairros", que não seria verdade. Quem
+   ainda não escolheu os bairros tem o caminho para escolher. */
+function oportunidadesAindaNaoChegaram(d){
+  return '<div class="aviso roxo">🔍<div><b>Os pedidos da sua região chegam em breve</b>'
+    + 'Estamos preparando esta lista. Quando estiver pronta, cada pedido dos seus '
+    + 'bairros aparece aqui, com o dia, o bairro e quanto você ganha.</div></div>'
+    + ((d.bairros || []).length ? ""
+      : '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">Escolher meus bairros</button>');
+}
+
 /* O que ela pode aceitar: cabe na agenda e ainda não é dela. */
 function oportunidadesDaRegiao(){
-  return todasAsOportunidades().filter(function(o){ return o.cabe && !o.jaAceito; });
+  return oportunidadesDela().filter(function(o){ return o.cabe && !o.jaAceito; });
 }
 
 /* O que ficou de fora por conflito — e a tela DIZ isso.
@@ -510,13 +739,13 @@ function oportunidadesDaRegiao(){
    Sumir com a oportunidade sem explicar parece defeito, e ela ficaria
    achando que o app está escondendo trabalho dela. */
 function oportunidadesQueNaoCabem(){
-  return todasAsOportunidades().filter(function(o){ return !o.cabe && !o.jaAceito; });
+  return oportunidadesDela().filter(function(o){ return !o.cabe && !o.jaAceito; });
 }
 
 /* A oportunidade aberta é procurada pelo id, não pela posição — a lista
    encolhe quando ela muda de bairro, e a posição deixaria de valer. */
 function oportunidadePorId(id){
-  const lista = todasAsOportunidades();
+  const lista = oportunidadesDela();
   const achada = lista.filter(function(o){ return o.id === id; })[0];
   return achada || lista[0] || null;
 }
@@ -526,6 +755,8 @@ TELAS.diaristaHome = {
     const d = euSouDiarista();
     const pode = podeAceitarServico();
     const lista = oportunidadesDaRegiao();
+    /* no app, antes da lista de verdade (3b), não há lista nenhuma */
+    const listaLigada = FONTE.ler.oportunidades() !== null;
 
     let cards = "";
     lista.forEach(function(o){
@@ -565,36 +796,23 @@ TELAS.diaristaHome = {
     +   '<h2 class="titulo">Olá, ' + esc((d.nome || "").split(" ")[0] || "tudo bem") + '! 👋<br>'
     +     (pode ? "Veja o que tem para hoje." : "Veja o que está esperando por você.") + '</h2>'
 
-    /* mensagem nova de um cliente, com o app fora da conversa (A18) */
-    +   (pode ? cartaoDeMensagemNova("diarista") : "")
+    /* mensagem nova de um cliente, com o app fora da conversa (A18). No
+       app, a conversa é a entrega 8: até lá, nada */
+    +   (pode ? soNaMaquete(function(){ return cartaoDeMensagemNova("diarista"); }) : "")
 
     +   (pode ? faixaDoCadastro() : interruptorTravado())
 
-    +   (pode
-      ? '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" onclick="alternarDisponivel()">'
-        + '<div class="txt"><b>Disponível para trabalhar</b>'
-        + '<span>' + (d.disponivel
-            ? (ehIPhone()
-               ? "Com o aplicativo aberto, o pedido aparece aqui."
-               : "O celular toca quando aparecer pedido para voc\u00ea.")
-            : "Ligue para ser avisada de novos pedidos.") + '</span></div>'
-        + '<div class="botao"></div></div>'
-        + botaoDeTestarOSom()
-        + botaoDeVerOAlerta()
-        + avisoDoSomNoIPhone()
-        /* Sempre vis\u00edvel, n\u00e3o s\u00f3 com a chave ligada: ela precisa poder
-           acertar os dias ANTES de come\u00e7ar a receber alerta. */
-        + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
-        /* \ud83d\udcc5 e n\u00e3o \ud83d\uddd3: o segundo sai como quadradinho vazio no Windows. */
-        +   'onclick="ir(\'diaristaDisponibilidade\')">\ud83d\udcc5 Meus dias de trabalho \u203a</button>'
-        + avisoDeQuePausou()
-        + cartaoDoAlerta()
-      : "")
+    /* No app, ficar disponível (e o alerta) é a entrega 6a: até lá, a
+       aprovada lê que chega em breve, e não liga uma chave que não avisa
+       ninguém */
+    +   (pode ? soNaMaquete(function(){ return blocoDoDisponivel(d); })
+              + emBreveNoApp("Ficar disponível para trabalhar") : "")
 
     +   agendaDela()
     +   cartaoDaRendaDoConjunto()
     +   '<div class="rotulo">Oportunidades na sua região</div>'
-    +   (lista.length ? cards
+    +   (!listaLigada ? oportunidadesAindaNaoChegaram(d)
+      : lista.length ? cards
       : '<div class="aviso roxo">🔍<div><b>Nada nos seus bairros agora</b>'
         + 'Aparecem pedidos novos o dia inteiro. Marcar mais bairros aumenta '
         + 'suas chances — dá para mudar quando quiser.</div></div>'
@@ -603,10 +821,13 @@ TELAS.diaristaHome = {
     +   escondidasPorConflito()
     /* A13: não "quando você aceita". A frase vale para qualquer pedido —
        quem aceita depois das 18h da véspera já vê na hora. */
-    +   '<div class="rodape-seguro">Estes são pedidos reais da sua região.<br>'
-    +     'Depois do aceite, a rua e o número aparecem a partir das '
-    +     HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera.</div>'
-    +   avisoDoPushParaOTime()
+    +   (listaLigada
+      ? '<div class="rodape-seguro">Estes são pedidos reais da sua região.<br>'
+        + 'Depois do aceite, a rua e o número aparecem a partir das '
+        + HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera.</div>'
+      : '')
+    /* o aviso para o time de desenvolvimento é da maquete */
+    +   soNaMaquete(avisoDoPushParaOTime)
     + '</div>'
     + abasDaDiarista("inicio");
   },
@@ -615,6 +836,29 @@ TELAS.diaristaHome = {
      aoEntrar roda a cada desenho, então ele se rearma sozinho. */
   aoEntrar: function(){ relogioDoAlerta(); }
 };
+
+/* A chave "Disponível" da aprovada, com o som, os dias de trabalho e o
+   alerta (R22, R25). Só na maquete por enquanto: no app, é a entrega 6a. */
+function blocoDoDisponivel(d){
+  return '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" onclick="alternarDisponivel()">'
+    + '<div class="txt"><b>Disponível para trabalhar</b>'
+    + '<span>' + (d.disponivel
+        ? (ehIPhone()
+           ? "Com o aplicativo aberto, o pedido aparece aqui."
+           : "O celular toca quando aparecer pedido para você.")
+        : "Ligue para ser avisada de novos pedidos.") + '</span></div>'
+    + '<div class="botao"></div></div>'
+    + botaoDeTestarOSom()
+    + botaoDeVerOAlerta()
+    + avisoDoSomNoIPhone()
+    /* Sempre visível, não só com a chave ligada: ela precisa poder
+       acertar os dias ANTES de começar a receber alerta. */
+    + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
+    /* 📅 e não 🗓: o segundo sai como quadradinho vazio no Windows. */
+    +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
+    + avisoDeQuePausou()
+    + cartaoDoAlerta();
+}
 
 function alternarDisponivel(){
   const d = euSouDiarista();
@@ -676,15 +920,14 @@ TELAS.diaristaOportunidade = {
       ? '<button class="btn btn-principal" onclick="aceitarOportunidade()">Aceitar este serviço</button>'
         + '<button class="btn btn-texto" onclick="voltar()">Agora não</button>'
       : (function(){
+          /* o botão vem da tabela de estados (R24), como o do interruptor */
           const e = situacaoDaDiarista();
           return '<div class="aviso roxo" style="margin:0 0 10px">' + icone("escudo", 18)
             + '<div><b>' + esc(e.oportunidadeTitulo) + '</b>'
             + esc(e.oportunidadeFrase) + '</div></div>'
-            + (e.chave === "analise"
-              ? '<button class="btn btn-contorno" onclick="ir(\'diaristaAnalise\')">'
-                + 'Ver como está meu cadastro</button>'
-              : '<button class="btn btn-principal" onclick="ir(\'diaristaCadastro\')">'
-                + 'Completar meu cadastro</button>');
+            + '<button class="btn ' + (e.botaoContorno ? "btn-contorno" : "btn-principal") + '" '
+            +   'onclick="ir(\'' + idSeguro(e.botaoDestino) + '\')">'
+            +   esc(e.oportunidadeBotao || e.botaoTexto) + '</button>';
         })())
     + '</div>';
   }
@@ -757,29 +1000,65 @@ TELAS.diaristaCadastro = {
     +   '<h2 class="titulo">' + (est.chave === "analise"
         ? "Cadastro completo ✅" : "Cadastro " + p.pct + "%") + '</h2>'
     +   '<p class="apoio">' + esc(est.mapaFrase) + '</p>'
+    +   blocoDaDecisaoDaEquipe(est)
     +   atalhoDeAprovacao()
 
-    +   '<div class="rotulo">1 · Entrar e ver <span class="selo verde">feito</span></div>'
+    +   '<div class="rotulo">1 · Entrar e ver'
+    +     (d.feito.dados && d.feito.regiao ? ' <span class="selo verde">feito</span>' : '') + '</div>'
     +   passo(d.feito.dados,  "Seus dados", "Nome e telefone", "diaristaCadastro", true)
     +   passo(d.feito.regiao, "Onde você trabalha", d.regiao || "—", "diaristaRegiao")
 
-    +   '<div class="rotulo">2 · Para poder aceitar</div>'
-    +   passo(d.feito.documentos,   "Documento com foto", "RG ou CNH, e CPF", "diaristaDocumentos")
-    +   passo(d.feito.selfie,       "Selfie", "Para conferir que é você mesma", "diaristaSelfie")
-    +   passo(d.feito.antecedentes, "Antecedentes", "A gente consulta, você não faz nada", "diaristaAntecedentes")
-    +   passo(d.feito.termos,       "Termos e regras", "Leitura rápida", "diaristaTermos")
+    /* No app, os Portões 2 e 3 ainda não têm telas: o envio de documento e
+       selfie espera a decisão de onde guardá-los, e o Pix espera o
+       pagamento. A tela diz isso, em vez de levar a quatro "Chega em
+       breve" — e não promete uma verificação que o app não faz. */
+    +   (FONTE.ehMaquete ? portoesDoisETresNaMaquete(d) : portoesDoisETresNoApp())
 
-    +   '<div class="rotulo">3 · Para poder receber</div>'
-    +   passo(d.feito.recebimento, "Onde você recebe", "Pix ou conta bancária", "diaristaRecebimento")
-    +   passo(d.feito.experiencia, "Sua experiência", "Melhora sua posição na fila", "diaristaExperiencia")
-
-    +   '<div class="aviso roxo">🔒<div><b>Por que só agora pedimos documento</b>'
+    +   soNaMaquete('<div class="aviso roxo">🔒<div><b>Por que só agora pedimos documento</b>'
     +     'Você já viu quanto pode ganhar aqui. Agora sim faz sentido a gente '
     +     'conferir quem você é — é o que dá segurança ao cliente e o que '
-    +     'permite você entrar na casa dele.</div></div>'
+    +     'permite você entrar na casa dele.</div></div>')
     + '</div>';
+
+    function portoesDoisETresNaMaquete(d){
+      return '<div class="rotulo">2 · Para poder aceitar</div>'
+      +   passo(d.feito.documentos,   "Documento com foto", "RG ou CNH, e CPF", "diaristaDocumentos")
+      +   passo(d.feito.selfie,       "Selfie", "Para conferir que é você mesma", "diaristaSelfie")
+      +   passo(d.feito.antecedentes, "Antecedentes", "A gente consulta, você não faz nada", "diaristaAntecedentes")
+      +   passo(d.feito.termos,       "Termos e regras", "Leitura rápida", "diaristaTermos")
+
+      +   '<div class="rotulo">3 · Para poder receber</div>'
+      +   passo(d.feito.recebimento, "Onde você recebe", "Pix ou conta bancária", "diaristaRecebimento")
+      +   passo(d.feito.experiencia, "Sua experiência", "Melhora sua posição na fila", "diaristaExperiencia");
+    }
   }
 };
+
+function portoesDoisETresNoApp(){
+  return '<div class="rotulo">2 · Para poder aceitar</div>'
+    + '<div class="aviso roxo">📄<div><b>O envio dos documentos chega em breve</b>'
+    +   'Ainda estamos preparando esta parte do aplicativo. Nossa equipe vai falar com '
+    +   'você para combinar os próximos passos.</div></div>'
+    + '<div class="rotulo">3 · Para poder receber</div>'
+    + '<div class="aviso roxo">🔑<div><b>A chave Pix a gente pede depois da aprovação</b>'
+    +   'Antes disso, ainda não há pagamento para você.</div></div>';
+}
+
+/* Recusada ou suspensa: o que a nossa equipe escreveu, para ela ler (nada
+   de punição silenciosa). Vem da tomada: no app, o motivo que a equipe
+   gravou (o /eu manda junto); na maquete, não há equipe — nada aparece.
+   Responder ao motivo é a entrega 5a. */
+function blocoDaDecisaoDaEquipe(est){
+  if(est.chave !== "recusada" && est.chave !== "suspensa") return "";
+  const decisao = FONTE.ler.decisaoDaEquipe();
+  if(!decisao || !decisao.motivo) return "";
+  return '<div class="cartao">'
+    +   '<b style="font-size:13px">O que a nossa equipe escreveu</b>'
+    +   '<div style="font-size:14px;margin-top:6px;line-height:1.55;white-space:pre-line">'
+    +     esc(decisao.motivo) + '</div>'
+    + '</div>'
+    + emBreveNoApp("Responder à nossa equipe");
+}
 
 /* A ORDEM DO PORTÃO 2 — cada etapa emenda na seguinte.
 
@@ -2033,14 +2312,18 @@ TELAS.diaristaPerfil = {
     +     '<div class="txt"><b>Onde eu trabalho</b><span>'
     +       esc(d.regiao || "nenhum bairro escolhido") + '</span></div>'
     +     '<div class="seta">›</div></button>'
+    /* no app, o Pix chega com o pagamento, e o suporte com a entrega 9: o
+       item diz que chega em breve, em vez de prometer */
     +   '<button class="item" onclick="ir(\'diaristaRecebimento\')">'
     +     '<div class="txt"><b>Onde eu recebo</b><span>'
-    +       (d.feito.recebimento ? "Pix cadastrado" : "ainda não informado") + '</span></div>'
+    +       (!FONTE.ehMaquete ? "Chega em breve"
+             : d.feito.recebimento ? "Pix cadastrado" : "ainda não informado") + '</span></div>'
     +     '<div class="seta">›</div></button>'
 
     +   '<div class="rotulo">Ajuda</div>'
     +   '<button class="item" onclick="ir(\'diaristaEmBreve\')">'
-    +     '<div class="txt"><b>Falar com o suporte</b><span>Uma pessoa responde</span></div>'
+    +     '<div class="txt"><b>Falar com o suporte</b><span>'
+    +       (FONTE.ehMaquete ? "Uma pessoa responde" : "Chega em breve") + '</span></div>'
     +     '<div class="seta">›</div></button>'
 
     +   '<button class="btn btn-perigo" style="margin-top:18px" onclick="sairDaConta(this)">'
@@ -2445,7 +2728,7 @@ function blocoAntesDeTrabalhar(e, nosGanhos){
   const frase  = nosGanhos ? e.ganhosFrase  : e.trabalhoFrase;
   return '<div class="aviso roxo">' + icone("escudo", 18)
     +   '<div><b>' + esc(titulo) + '</b>' + esc(frase) + '</div></div>'
-    + '<button class="btn ' + (e.chave === "analise" ? "btn-contorno" : "btn-principal") + '" '
+    + '<button class="btn ' + (e.botaoContorno ? "btn-contorno" : "btn-principal") + '" '
     +   'onclick="ir(\'' + idSeguro(e.trabalhoDestino) + '\')">' + esc(e.trabalhoBotao) + '</button>';
 }
 
