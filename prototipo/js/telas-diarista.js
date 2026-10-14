@@ -385,12 +385,16 @@ function situacaoDaDiarista(){
        vem (e que a equipe fala com ela) */
     botaoTexto: envioDosDocumentos ? "Continuar meu cadastro" : "Ver meu cadastro",
     botaoDestino: "diaristaCadastro",
-    oportunidadeBotao: "Completar meu cadastro",
+    /* no app, a oportunidade (3b) não pede o que ainda não tem como mandar:
+       o envio dos documentos chega depois, e o mapa diz o que vem */
+    oportunidadeBotao: envioDosDocumentos ? "Completar meu cadastro" : "Ver meu cadastro",
     noCartao: "Complete seu cadastro para aceitar",
     mapaFrase: "Complete o segundo passo para começar a aceitar serviços.",
     oportunidadeTitulo: "Falta pouco para você aceitar",
-    oportunidadeFrase: "Envie seus documentos e, assim que a gente aprovar, "
-                     + "este botão libera.",
+    oportunidadeFrase: envioDosDocumentos
+      ? "Envie seus documentos e, assim que a gente aprovar, este botão libera."
+      : "Assim que seu cadastro for aprovado, este botão libera. Veja no seu cadastro "
+        + "o que vem agora.",
     trabalhoTitulo: "Falta pouco para sua agenda começar",
     trabalhoFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
                  + "aceitar aparece aqui, com o dia, o bairro e quanto você recebe. "
@@ -585,11 +589,9 @@ TELAS.diaristaRegiao = {
     +     'antes de aceitar.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    /* no app, até a 3b, não há oportunidades a ver: o botão só salva */
+    /* desde a 3b, também no app: o botão salva e leva às oportunidades */
     +   '<button class="btn btn-principal" ' + (algumMarcado ? "" : "disabled")
-    +     ' onclick="terminarPortaoUm(this)">'
-    +     (oportunidadesLigadas() ? "Ver oportunidades na minha região" : "Salvar meus bairros")
-    +   '</button>'
+    +     ' onclick="terminarPortaoUm(this)">Ver oportunidades na minha região</button>'
     +   erroDoCampo("reg-erro", "diaristaRegiao", "")
     + '</div>';
   },
@@ -604,14 +606,6 @@ TELAS.diaristaRegiao = {
     });
   }
 };
-
-/* As oportunidades da região dela já chegam? Na maquete, sempre (as de
-   exemplo); no app, só com a entrega 3b (até lá, FONTE.ler.oportunidades()
-   é null). Os textos que prometem oportunidades perguntam aqui: quando a 3b
-   ligar a lista, eles voltam sozinhos (revisão da 3a). */
-function oportunidadesLigadas(){
-  return FONTE.ehMaquete || FONTE.ler.oportunidades() !== null;
-}
 
 function tentarARegiaoDeNovo(){
   ERRO_DA_REGIAO = null;
@@ -711,22 +705,89 @@ function todasAsOportunidades(){
 }
 
 /* As oportunidades que a tomada entrega: na maquete, as de exemplo,
-   montadas por todasAsOportunidades(); no app, null enquanto a lista de
-   verdade não está ligada (entrega 3b) — e a home diz isso, em vez de
-   dizer "nada nos seus bairros". */
+   montadas por todasAsOportunidades(); no app, as do servidor (entrega 3b),
+   já com o valor dela, a distância e o veredito da agenda — e null
+   enquanto não chegaram. */
 function oportunidadesDela(){
   return FONTE.ler.oportunidades() || [];
 }
 
-/* No app, antes da lista de verdade: diz que ela chega, e o que vai
-   mostrar — sem dizer "nada nos seus bairros", que não seria verdade. Quem
-   ainda não escolheu os bairros tem o caminho para escolher. */
-function oportunidadesAindaNaoChegaram(d){
-  return '<div class="aviso roxo">🔍<div><b>Os pedidos da sua região chegam em breve</b>'
-    + 'Estamos preparando esta lista. Quando estiver pronta, cada pedido dos seus '
-    + 'bairros aparece aqui, com o dia, o bairro e quanto você ganha.</div></div>'
-    + ((d.bairros || []).length ? ""
-      : '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">Escolher meus bairros</button>');
+/* NO APP, a lista vem do servidor: uma vez a cada visita ao início (quem
+   volta ao início vê a lista de agora). Sem resposta, a frase e "Tentar de
+   novo"; nada é pedido de novo sozinho. */
+let OPORTUNIDADES_PEDIDAS_NA_NAVEGACAO = -1;
+let ERRO_DAS_OPORTUNIDADES = null;        // { frase, navegacao }
+
+function erroDasOportunidadesAgora(){
+  return (ERRO_DAS_OPORTUNIDADES && ERRO_DAS_OPORTUNIDADES.navegacao === NAVEGACAO)
+    ? ERRO_DAS_OPORTUNIDADES.frase : "";
+}
+
+function pedirOportunidadesNestaVisita(){
+  if(OPORTUNIDADES_PEDIDAS_NA_NAVEGACAO === NAVEGACAO || erroDasOportunidadesAgora()) return;
+  OPORTUNIDADES_PEDIDAS_NA_NAVEGACAO = NAVEGACAO;
+  FONTE.carregarOportunidades(depoisDasOportunidades);
+}
+
+/* O início não tem campo para digitar: redesenhar não apaga nada. Na
+   maquete a resposta chega na hora, e redesenhar seria trabalho à toa. */
+function depoisDasOportunidades(r){
+  if(r.destino) return seguirPeloErro(r);
+  ERRO_DAS_OPORTUNIDADES = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+  if(!FONTE.ehMaquete) desenhar();
+}
+
+function tentarAsOportunidadesDeNovo(){
+  ERRO_DAS_OPORTUNIDADES = null;
+  OPORTUNIDADES_PEDIDAS_NA_NAVEGACAO = -1;
+  desenhar();
+}
+
+/* No app, enquanto a lista não chegou: diz isso, ou o que houve (sem
+   internet), com "Tentar de novo". */
+function oportunidadesAindaNao(){
+  const erro = erroDasOportunidadesAgora();
+  if(!erro) return '<p class="apoio">Carregando os pedidos da sua região…</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="tentarAsOportunidadesDeNovo()">Tentar de novo</button>';
+}
+
+/* No app, quem ainda não escolheu os bairros não tem pedido nenhum para
+   ver (só entra pedido dos bairros dela): o caminho para escolher, em vez
+   de "nada nos seus bairros". */
+function oportunidadesSemBairros(){
+  return '<div class="aviso roxo">📍<div><b>Escolha onde você quer trabalhar</b>'
+    + 'Os pedidos dos seus bairros aparecem aqui, com o dia, a distância e quanto '
+    + 'você ganha.</div></div>'
+    + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">Escolher meus bairros</button>';
+}
+
+/* Os adicionais do pedido, pelo nome (sem preço: o valor que ela vê é o
+   dela, já somado), e se ela vai com mais uma profissional. */
+function adicionaisDaOportunidade(o){
+  return ((o.pedido && o.pedido.adicionais) || []).map(function(id){
+    const a = ADICIONAIS.filter(function(x){ return x.id === id; })[0];
+    return a ? a.nome : "";
+  }).filter(function(n){ return !!n; });
+}
+
+function comMaisUma(o){
+  return !!(o.pedido && o.pedido.duasProfissionais);
+}
+
+/* O que a 3b acrescentou ao cartão e ao detalhe (os adicionais e a dupla)
+   vale só NO APP até o aval do dono (A27): a maquete continua como ele a
+   conhece. */
+function mostraOsAdicionaisEADupla(){
+  return !FONTE.ehMaquete;
+}
+
+/* O resumo do cartão: o tipo e o tamanho e, no app, os adicionais e a dupla. */
+function resumoDoCartao(o){
+  if(!mostraOsAdicionaisEADupla()) return o.resumo;
+  const extras = adicionaisDaOportunidade(o);
+  return o.resumo + (extras.length ? " + " + extras.join(", ") : "")
+       + (comMaisUma(o) ? " · você e mais uma" : "");
 }
 
 /* O que ela pode aceitar: cabe na agenda e ainda não é dela. */
@@ -747,7 +808,9 @@ function oportunidadesQueNaoCabem(){
 function oportunidadePorId(id){
   const lista = oportunidadesDela();
   const achada = lista.filter(function(o){ return o.id === id; })[0];
-  return achada || lista[0] || null;
+  /* no app, a que sumiu (outra aceitou, o pedido caiu) não vira outra: a
+     tela diz que ela não está mais disponível */
+  return achada || (FONTE.ehMaquete ? lista[0] : null) || null;
 }
 
 TELAS.diaristaHome = {
@@ -755,8 +818,10 @@ TELAS.diaristaHome = {
     const d = euSouDiarista();
     const pode = podeAceitarServico();
     const lista = oportunidadesDaRegiao();
-    /* no app, antes da lista de verdade (3b), não há lista nenhuma */
+    /* no app, a lista do servidor ainda pode não ter chegado */
     const listaLigada = FONTE.ler.oportunidades() !== null;
+    /* no app, só entra pedido dos bairros dela: sem bairro, o caminho */
+    const semBairros = !FONTE.ehMaquete && !(d.bairros || []).length;
 
     let cards = "";
     lista.forEach(function(o){
@@ -767,7 +832,7 @@ TELAS.diaristaHome = {
         +     '<div style="flex:1;min-width:0">'
         +       '<b style="font-size:15px">' + esc(o.quando) + ' · ' + esc(o.janela) + '</b>'
         +       '<div style="font-size:12.5px;color:var(--suave);margin-top:4px;line-height:1.5">'
-        +         esc(o.resumo) + '<br>📍 ' + esc(o.bairro) + ' · '
+        +         esc(resumoDoCartao(o)) + '<br>📍 ' + esc(o.bairro) + ' · '
         +         String(o.km).replace(".", ",") + ' km de você</div>'
         +     '</div>'
         +     '<div style="text-align:right;flex:none">'
@@ -811,17 +876,21 @@ TELAS.diaristaHome = {
     +   agendaDela()
     +   cartaoDaRendaDoConjunto()
     +   '<div class="rotulo">Oportunidades na sua região</div>'
-    +   (!listaLigada ? oportunidadesAindaNaoChegaram(d)
-      : lista.length ? cards
-      : '<div class="aviso roxo">🔍<div><b>Nada nos seus bairros agora</b>'
-        + 'Aparecem pedidos novos o dia inteiro. Marcar mais bairros aumenta '
-        + 'suas chances — dá para mudar quando quiser.</div></div>'
-        + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">'
-        + 'Escolher mais bairros</button>')
+    +   (semBairros ? oportunidadesSemBairros()
+      : !listaLigada ? oportunidadesAindaNao()
+      /* uma pergunta que não teve resposta, com a lista de antes já na
+         tela: a frase em cima, e a lista de antes embaixo */
+      : (erroDasOportunidadesAgora() ? oportunidadesAindaNao() : "")
+        + (lista.length ? cards
+        : '<div class="aviso roxo">🔍<div><b>Nada nos seus bairros agora</b>'
+          + 'Aparecem pedidos novos o dia inteiro. Marcar mais bairros aumenta '
+          + 'suas chances — dá para mudar quando quiser.</div></div>'
+          + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">'
+          + 'Escolher mais bairros</button>'))
     +   escondidasPorConflito()
     /* A13: não "quando você aceita". A frase vale para qualquer pedido —
        quem aceita depois das 18h da véspera já vê na hora. */
-    +   (listaLigada
+    +   (listaLigada && !semBairros
       ? '<div class="rodape-seguro">Estes são pedidos reais da sua região.<br>'
         + 'Depois do aceite, a rua e o número aparecem a partir das '
         + HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera.</div>'
@@ -833,8 +902,12 @@ TELAS.diaristaHome = {
   },
 
   /* O relógio do alerta vive aqui: desenhar() apaga todos os relógios, e o
-     aoEntrar roda a cada desenho, então ele se rearma sozinho. */
-  aoEntrar: function(){ relogioDoAlerta(); }
+     aoEntrar roda a cada desenho, então ele se rearma sozinho. No app, a
+     lista é pedida ao servidor uma vez por visita (a guarda está dentro). */
+  aoEntrar: function(){
+    if(!FONTE.ehMaquete) pedirOportunidadesNestaVisita();
+    relogioDoAlerta();
+  }
 };
 
 /* A chave "Disponível" da aprovada, com o som, os dias de trabalho e o
@@ -885,12 +958,50 @@ function abrirOportunidade(id){
   ir("diaristaOportunidade");
 }
 
+/* NO APP, o detalhe pergunta de novo ao servidor, uma vez por visita: entre
+   a lista e o toque, outra pode ter aceitado, ou o pedido caído. O que
+   voltou entra no lugar dela na lista (ou sai, se não está mais disponível). */
+let OPORTUNIDADE_PEDIDA = null;           // { navegacao, terminou, frase }
+
+function pedirAOportunidadeNestaVisita(){
+  const id = E.oportunidadeAberta;
+  if(!(Number(id) > 0)) return;
+  if(OPORTUNIDADE_PEDIDA && OPORTUNIDADE_PEDIDA.navegacao === NAVEGACAO) return;
+  const pedida = { navegacao: NAVEGACAO, terminou: false, frase: "" };
+  OPORTUNIDADE_PEDIDA = pedida;
+  FONTE.carregarOportunidade(Number(id), function(r){
+    if(r.destino) return seguirPeloErro(r);
+    pedida.terminou = true;
+    pedida.frase = r.ok ? "" : (r.erro || "");
+    desenhar();
+  });
+}
+
+function oportunidadeAindaCarregando(){
+  return !FONTE.ehMaquete && !!OPORTUNIDADE_PEDIDA && OPORTUNIDADE_PEDIDA.navegacao === NAVEGACAO
+      && !OPORTUNIDADE_PEDIDA.terminou;
+}
+
+/* A que sumiu (ou o que houve, sem internet), com o caminho de volta. */
+function oportunidadeQueNaoVeio(){
+  const frase = (!FONTE.ehMaquete && OPORTUNIDADE_PEDIDA && OPORTUNIDADE_PEDIDA.navegacao === NAVEGACAO)
+    ? OPORTUNIDADE_PEDIDA.frase : "";
+  return cabecalho("Oportunidade")
+    + '<div class="corpo"><p class="apoio">'
+    + esc(frase || "Esta oportunidade não está mais disponível.") + '</p></div>'
+    + '<div class="rodape"><button class="btn btn-principal" '
+    +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver outros pedidos</button></div>';
+}
+
 TELAS.diaristaOportunidade = {
   html: function(){
     const o = oportunidadePorId(E.oportunidadeAberta || 0);
-    if(!o) return cabecalho("Oportunidade")
-      + '<div class="corpo"><p class="apoio">Esta oportunidade não está mais na sua região.</p></div>';
+    if(!o && oportunidadeAindaCarregando()) return cabecalho("Oportunidade")
+      + '<div class="corpo"><p class="apoio">Carregando a oportunidade…</p></div>';
+    if(!o) return oportunidadeQueNaoVeio();
     const pode = podeAceitarServico();
+    const extras = mostraOsAdicionaisEADupla() ? adicionaisDaOportunidade(o) : [];
+    const vagasAbertas = Number(o.vagasAbertas) || 0;
 
     return ''
     + cabecalho("Oportunidade")
@@ -899,10 +1010,22 @@ TELAS.diaristaOportunidade = {
     +     '<div style="font-size:12px;color:var(--suave)">você recebe</div>'
     +     '<div style="font-size:34px;font-weight:800;color:var(--verde)">' + moeda(o.receber) + '</div>'
     +   '</div>'
-    +   '<div class="cartao">'
+    /* servico-ficha: a explicação (<small>) da linha "Com você" fica numa
+       linha própria, como nas outras fichas de serviço */
+    +   '<div class="cartao servico-ficha">'
     +     '<div class="linha"><span class="rot">Quando</span><span class="val">' + esc(o.quando) + '</span></div>'
     +     '<div class="linha"><span class="rot">Você fica na casa</span><span class="val">' + esc(o.janela) + '</span></div>'
     +     '<div class="linha"><span class="rot">Serviço</span><span class="val">' + esc(o.resumo) + '</span></div>'
+    /* os adicionais pelo nome: o valor de cima já soma a parte dela */
+    +     (extras.length
+      ? '<div class="linha"><span class="rot">Adicionais</span><span class="val">'
+        + esc(extras.join(", ")) + '</span></div>' : "")
+    /* o pedido de duas: ela vai com mais uma (A3), e sabe se a outra já aceitou */
+    +     (mostraOsAdicionaisEADupla() && comMaisUma(o)
+      ? '<div class="linha"><span class="rot">Com você</span><span class="val">mais uma profissional'
+        + '<small>' + (vagasAbertas === 1 ? "Uma já aceitou: falta uma vaga."
+                                          : "O trabalho é dividido entre vocês duas.")
+        + '</small></span></div>' : "")
     +     '<div class="linha"><span class="rot">Região</span><span class="val">' + esc(o.bairro) + '</span></div>'
     +     '<div class="linha"><span class="rot">Distância</span><span class="val">'
     +       String(o.km).replace(".", ",") + ' km</span></div>'
@@ -916,7 +1039,12 @@ TELAS.diaristaOportunidade = {
     +   '<div class="rodape-seguro">' + esc(quandoARuaApareceSeAceitar(o)) + '</div>'
     + '</div>'
     + '<div class="rodape">'
-    +   (pode
+    /* no app, aceitar é a entrega 6a: a aprovada lê que chega em breve, e
+       nenhum botão finge que aceitou */
+    +   (pode && !FONTE.ehMaquete
+      ? emBreveNoApp("Aceitar serviços pelo app")
+        + '<button class="btn btn-texto" onclick="voltar()">Voltar</button>'
+      : pode
       ? '<button class="btn btn-principal" onclick="aceitarOportunidade()">Aceitar este serviço</button>'
         + '<button class="btn btn-texto" onclick="voltar()">Agora não</button>'
       : (function(){
@@ -930,7 +1058,8 @@ TELAS.diaristaOportunidade = {
             +   esc(e.oportunidadeBotao || e.botaoTexto) + '</button>';
         })())
     + '</div>';
-  }
+  },
+  aoEntrar: function(){ if(!FONTE.ehMaquete) pedirAOportunidadeNestaVisita(); }
 };
 
 /* O serviço que ela acabou de aceitar, para a tela do aceite dizer quando a
@@ -2433,7 +2562,11 @@ function fraseDaRuaNaVespera(s){
    aceitar. Pedido para hoje, ou para amanhã depois das 18h, já mostra a rua
    no aceite — a mesma regra, sem caso à parte. */
 function quandoARuaApareceSeAceitar(o){
-  if(enderecoLiberado(o, relogioDaAgenda()))
+  /* no app, quem diz se a véspera das 18h já passou é o servidor (o relógio
+     do celular pode estar errado); na maquete, a regra do dados.js */
+  const jaNoAceite = (typeof o.ruaNoAceite === "boolean") ? o.ruaNoAceite
+                                                          : enderecoLiberado(o, relogioDaAgenda());
+  if(jaNoAceite)
     return "A rua e o número aparecem assim que você aceitar.";
   return "Se você aceitar, a rua e o número aparecem " + quandoARuaAparece(o)
        + " a partir das " + HORA_DO_ENDERECO_NA_VESPERA + "h.";

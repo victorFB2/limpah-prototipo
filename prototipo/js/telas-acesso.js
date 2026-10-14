@@ -67,6 +67,7 @@ function tentarArranqueDeNovo(){
    02. ESCOLHA DO PERFIL
    -------------------------------------------------------------------------- */
 TELAS.perfil = {
+  aoEntrar: function(){ esquecerARecuperacao(); },
   html: function(){
     return ''
     + '<div class="corpo" style="display:flex;flex-direction:column;justify-content:center">'
@@ -151,7 +152,11 @@ TELAS.login = {
     +     'style="color:var(--roxo);font-weight:700;text-decoration:none">Cadastre-se</a></p>'
 
     + '</div>';
-  }
+  },
+  /* quem voltou do "esqueci a senha" para cá largou a recuperação: o
+     contato que ela digitou não fica na memória para a próxima pessoa do
+     mesmo celular */
+  aoEntrar: function(){ esquecerARecuperacao(); }
 };
 
 /* Entrar. Na maquete, qualquer coisa entra (e o testes.js chama isto sem a
@@ -197,22 +202,95 @@ function seguirPeloErro(r){
 
 
 /* --------------------------------------------------------------------------
-   05. RECUPERAR SENHA
+   05. RECUPERAR SENHA — por código no WhatsApp (decisão R28)
+
+   A tela 05 da imagem, com a única troca de texto da R28: "receber o
+   código", e não "o link". O código de 6 números vai SEMPRE ao WhatsApp do
+   celular confirmado da conta, mesmo quando a pessoa digita o e-mail. A
+   resposta é sempre a mesma, exista a conta ou não: a tela nunca diz se o
+   contato tem conta (quem tenta descobrir de quem é um e-mail não aprende
+   nada aqui).
+
+   Depois vêm duas telas que a imagem não desenhou (R4): digitar o código
+   com a senha nova, e "senha nova salva". Quem troca a senha já entra, e
+   sai da conta nos outros aparelhos.
+
+   O e-mail ou telefone digitado fica só na memória (CONTATO_DA_RECUPERACAO),
+   para preencher a tela seguinte: nunca no aparelho.
    -------------------------------------------------------------------------- */
+let CONTATO_DA_RECUPERACAO = "";
+/* Para onde vai quem acabou de trocar a senha (a tomada diz: o início dele). */
+let DESTINO_DEPOIS_DA_SENHA_NOVA = "";
+
+/* A recuperação foi largada (a pessoa voltou ao login ou à escolha de
+   perfil): o contato some da memória. */
+function esquecerARecuperacao(){
+  CONTATO_DA_RECUPERACAO = "";
+}
+
+const FRASE_DIGITE_O_CONTATO = "Digite o seu e-mail ou o celular com DDD.";
+
 TELAS.recuperar = {
   html: function(){
     return ''
     + cabecalho("")
     + '<div class="corpo">'
     +   '<h2 class="titulo">Recuperar senha 🔒</h2>'
-    +   '<p class="apoio">Digite seu e-mail ou telefone para receber o link de redefinição.</p>'
+    +   '<p class="apoio">Digite seu e-mail ou telefone para receber o código de redefinição.</p>'
     +   '<div class="campo"><label>E-mail ou telefone</label>'
-    +     '<input type="text" placeholder="Digite seu e-mail ou telefone"></div>'
-    +   '<button class="btn btn-principal" onclick="ir(\'recuperarEnviado\')">Enviar link</button>'
+    +     '<input id="rec-quem" type="text" placeholder="Digite seu e-mail ou telefone" '
+    +       'autocomplete="username" autocapitalize="none" spellcheck="false"'
+    +       valorJaDigitado(CONTATO_DA_RECUPERACAO) + '>'
+    +     erroDoCampo("rec-quem-erro", "recuperar", "email_ou_telefone") + '</div>'
+    +   erroDoCampo("rec-erro", "recuperar", "")
+    +   '<button class="btn btn-principal" onclick="pedirCodigoDaSenha(this)">Enviar código</button>'
+    /* só no app (A28, revisão da 4): quem já recebeu um código — inclusive
+       um que ela não pediu agora — vai direto digitá-lo, sem pedir outro */
+    +   (FONTE.ehMaquete ? ""
+      : '<button class="btn btn-texto" onclick="jaTenhoUmCodigo()">Já tenho um código</button>')
     +   '<button class="btn btn-texto" onclick="ir(\'login\')">Voltar para o login</button>'
     + '</div>';
   }
 };
+
+/* "Enviar código": a tomada pede o código (no app, ao servidor). Na volta,
+   a tela de "código enviado" — a mesma, com conta ou sem. O "espere" (este
+   contato já pediu daqui há menos de 1 minuto) também leva a ela: o código
+   daquele pedido é o que vale, e a tela seguinte conta o minuto do "Mandar
+   de novo" (antes, a pessoa ficava parada aqui, sem como digitar o código). */
+function pedirCodigoDaSenha(botao){
+  mostrarErro("rec-quem-erro", "");
+  mostrarErro("rec-erro", "");
+  const quem = valorDoCampo("rec-quem").trim();
+  CONTATO_DA_RECUPERACAO = quem;
+  FONTE.pedirCodigoDaSenha({ emailOuTelefone: quem }, function(r){
+    if(!r.ok && r.motivo === "espere") return ir("recuperarEnviado");
+    if(!r.ok) return mostrarErro(r.campo === "email_ou_telefone" ? "rec-quem-erro" : "rec-erro",
+                                 comADicaDoCodigo(r, "recuperar"));
+    ir("recuperarEnviado");
+  }, { botao: botao });
+}
+
+/* "Já pedimos muitos códigos" (só no app: o servidor diz o que houve). O
+   código que já chegou continua valendo, e cada tela diz onde digitá-lo —
+   a "Crie uma nova senha" não tem o botão "Já tenho um código" (revisão
+   da 4). */
+const DICA_DO_CODIGO_QUE_JA_CHEGOU = {
+  recuperar: 'Se um código já chegou, toque em "Já tenho um código".',
+  recuperarNovaSenha: "Se um código já chegou, digite-o no campo Código, logo abaixo.",
+};
+
+function comADicaDoCodigo(r, tela){
+  return r.motivo === "muitos_pedidos" && DICA_DO_CODIGO_QUE_JA_CHEGOU[tela]
+    ? r.erro + " " + DICA_DO_CODIGO_QUE_JA_CHEGOU[tela] : r.erro;
+}
+
+/* "Já tenho um código": a tela do código, com o contato que já estava no
+   campo (só na memória, como sempre). */
+function jaTenhoUmCodigo(){
+  CONTATO_DA_RECUPERACAO = valorDoCampo("rec-quem").trim();
+  ir("recuperarNovaSenha");
+}
 
 TELAS.recuperarEnviado = {
   html: function(){
@@ -220,12 +298,159 @@ TELAS.recuperarEnviado = {
     + cabecalho("")
     + '<div class="centro">'
     +   '<div class="emojao">📬</div>'
-    +   '<h2 class="titulo">Link enviado!</h2>'
-    +   '<p class="apoio">Se existir uma conta com esse contato, o link de redefinição chega em alguns instantes.</p>'
+    +   '<h2 class="titulo">Código enviado!</h2>'
+    +   '<p class="apoio">Se existir uma conta com esse contato, o código chega pelo WhatsApp '
+    +     'do celular cadastrado em alguns instantes.</p>'
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="ir(\'login\')">Voltar para o login</button></div>';
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="ir(\'recuperarNovaSenha\')">Digitar o código</button>'
+    +   '<button class="btn btn-texto" onclick="ir(\'login\')">Voltar para o login</button>'
+    + '</div>';
   }
 };
+
+/* O código + a senha nova (tela nova, R4: a imagem não desenhou). O
+   contato vem preenchido com o da tela anterior, e dá para corrigir.
+   "Mandar de novo" só depois de 1 minuto: o relógio mexe só no botão, sem
+   redesenhar (redesenhar apagaria o código e a senha digitados). */
+TELAS.recuperarNovaSenha = {
+  html: function(){
+    const falta = FONTE.ler.recuperacao().segundosParaMandarDeNovo;
+    return ''
+    + cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Crie uma nova senha 🔑</h2>'
+    +   '<p class="apoio">Digite o código de 6 números que mandamos pelo WhatsApp e escolha a '
+    +     'sua senha nova.</p>'
+    +   '<div class="campo"><label>E-mail ou telefone</label>'
+    +     '<input id="rns-quem" type="text" placeholder="Digite seu e-mail ou telefone" '
+    +       'autocomplete="username" autocapitalize="none" spellcheck="false"'
+    +       valorJaDigitado(CONTATO_DA_RECUPERACAO) + '>'
+    +     erroDoCampo("rns-quem-erro", "recuperarNovaSenha", "email_ou_telefone") + '</div>'
+    +   '<div class="campo"><label>Código</label>'
+    +     '<input id="rns-codigo" class="codigo" type="text" inputmode="numeric" '
+    +       'autocomplete="one-time-code" maxlength="7" placeholder="000000">'
+    +     erroDoCampo("rns-codigo-erro", "recuperarNovaSenha", "codigo") + '</div>'
+    +   '<div class="campo"><label>Nova senha</label>'
+    +     '<div style="position:relative">'
+    +       '<input id="rns-senha" type="password" placeholder="Crie uma senha" '
+    +         'autocomplete="new-password" style="padding-right:46px">'
+    +       '<button onclick="verSenha(\'rns-senha\')" aria-label="Mostrar senha" class="olho">'
+    +         '👁</button>'
+    +     '</div>'
+    +     erroDoCampo("rns-senha-erro", "recuperarNovaSenha", "senha") + '</div>'
+    +   erroDoCampo("rns-erro", "recuperarNovaSenha", "")
+    +   '<p class="ajuda" id="rns-aviso"></p>'
+    +   '<p class="ajuda">Não chegou? Confira o e-mail ou telefone e toque em Mandar de novo. '
+    +     'Se você não chegou a confirmar o celular no cadastro, faça o cadastro de novo.</p>'
+    +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+    +     '<div>Qualquer código de 6 números serve.</div></div>')
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" id="rns-salvar" onclick="salvarSenhaNova(this)">Salvar nova senha</button>'
+    +   '<button class="btn btn-contorno" id="rns-reenviar" onclick="mandarCodigoDaSenhaDeNovo(this)"'
+    +     (falta > 0 ? ' disabled' : '') + '>' + esc(textoDoMandarDeNovo(falta)) + '</button>'
+    +   '<button class="btn btn-texto" onclick="ir(\'login\')">Voltar para o login</button>'
+    + '</div>';
+  },
+  aoEntrar: function(){
+    FALTAVA_PARA_MANDAR_O_DA_SENHA = FONTE.ler.recuperacao().segundosParaMandarDeNovo;
+    repetir(atualizarMandarOCodigoDaSenha, 1000);
+  }
+};
+
+/* Quanto faltava no último toque do relógio (como o da tela do código do
+   celular: o botão só é ligado na passagem de "falta" para "pode"). */
+let FALTAVA_PARA_MANDAR_O_DA_SENHA = 0;
+
+function atualizarMandarOCodigoDaSenha(){
+  const botao = document.getElementById("rns-reenviar");
+  if(!botao) return;
+  const falta = FONTE.ler.recuperacao().segundosParaMandarDeNovo;
+  if(falta > 0){
+    botao.disabled = true;
+    botao.textContent = textoDoMandarDeNovo(falta);
+  } else if(FALTAVA_PARA_MANDAR_O_DA_SENHA > 0){
+    botao.disabled = false;
+    botao.textContent = textoDoMandarDeNovo(0);
+  }
+  FALTAVA_PARA_MANDAR_O_DA_SENHA = falta;
+}
+
+/* Os lugares de erro da tela, embaixo de cada campo. */
+const ERRO_DO_CAMPO_DA_SENHA_NOVA = {
+  email_ou_telefone: "rns-quem-erro", codigo: "rns-codigo-erro", senha: "rns-senha-erro",
+};
+
+function limparErrosDaSenhaNova(){
+  ["rns-quem-erro", "rns-codigo-erro", "rns-senha-erro", "rns-erro", "rns-aviso"].forEach(function(id){
+    mostrarErro(id, "");
+  });
+}
+
+function mostrarErroDaSenhaNova(r){
+  if(r.destino) return seguirPeloErro(r);
+  mostrarErro(ERRO_DO_CAMPO_DA_SENHA_NOVA[r.campo] || "rns-erro", r.erro);
+}
+
+/* "Salvar nova senha". O código mal digitado nem sai daqui (como na tela do
+   código do celular). A senha fica só no campo: nunca no E nem no aparelho. */
+function salvarSenhaNova(botao){
+  limparErrosDaSenhaNova();
+  const quem = valorDoCampo("rns-quem").trim();
+  const codigo = valorDoCampo("rns-codigo").replace(/[\s.\-]/g, "");
+  const senha = valorDoCampo("rns-senha");
+  if(!quem) return mostrarErro("rns-quem-erro", FRASE_DIGITE_O_CONTATO);
+  if(!/^[0-9]{6}$/.test(codigo)) return mostrarErro("rns-codigo-erro", FRASE_DO_CODIGO_MAL_DIGITADO);
+  if(!senha) return mostrarErro("rns-senha-erro", "Crie uma senha.");
+  CONTATO_DA_RECUPERACAO = quem;
+  FONTE.trocarSenha({ emailOuTelefone: quem, codigo: codigo, senha: senha }, function(r){
+    if(!r.ok) return mostrarErroDaSenhaNova(r);
+    CONTATO_DA_RECUPERACAO = "";
+    DESTINO_DEPOIS_DA_SENHA_NOVA = r.destino || "";
+    ir("senhaTrocada", { limparHistorico:true });
+  }, { botao: botao });
+}
+
+/* "Mandar de novo", para o contato que está no campo. A frase é a mesma,
+   com conta ou sem. */
+function mandarCodigoDaSenhaDeNovo(botao){
+  limparErrosDaSenhaNova();
+  const quem = valorDoCampo("rns-quem").trim();
+  CONTATO_DA_RECUPERACAO = quem;
+  FONTE.pedirCodigoDaSenha({ emailOuTelefone: quem }, function(r){
+    if(!r.ok && r.motivo === "muitos_pedidos" && !r.destino)
+      return mostrarErroDaSenhaNova({ ok:false, campo:r.campo, erro:comADicaDoCodigo(r, "recuperarNovaSenha") });
+    if(!r.ok) return mostrarErroDaSenhaNova(r);
+    mostrarErro("rns-aviso", "Pronto! Se existir uma conta com esse contato, mandamos um código novo.");
+  }, { botao: botao });
+}
+
+/* Senha nova salva (tela nova, R4). A pessoa já está na conta; o
+   "Continuar" leva ao início dela. */
+TELAS.senhaTrocada = {
+  html: function(){
+    return ''
+    + '<div class="centro">'
+    +   '<div class="emojao">✅</div>'
+    +   '<h2 class="titulo">Senha nova salva!</h2>'
+    +   '<p class="apoio">Pronto, você já está na sua conta. Por segurança, saímos dela nos '
+    +     'outros aparelhos.</p>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="continuarDepoisDaSenhaNova()">Continuar</button>'
+    + '</div>';
+  }
+};
+
+/* Sem o destino na memória (a página foi recarregada nesta tela): o início
+   de quem está usando, ou o login. */
+function continuarDepoisDaSenhaNova(){
+  const destino = DESTINO_DEPOIS_DA_SENHA_NOVA;
+  DESTINO_DEPOIS_DA_SENHA_NOVA = "";
+  if(destino) return ir(destino, { limparHistorico:true });
+  ir(E.logado ? telaInicialDeQuemEstaUsando() : "login", { limparHistorico:true });
+}
 
 
 /* --------------------------------------------------------------------------
@@ -890,10 +1115,10 @@ TELAS.cadastroDiarista = {
     /* PORTÃO 1 (decisão R18): aqui não se pede documento nenhum.
        São dois minutos até ela ver oportunidades reais com valores reais.
        O documento vem depois, quando ela já sabe o que tem a ganhar. */
-    /* no app, até a 3b, as oportunidades ainda não chegam (revisão da 3a) */
-    +   '<div class="aviso roxo">⏱️<div><b>' + (oportunidadesLigadas()
-          ? "Dois minutos e você já vê as oportunidades" : "Dois minutos e sua conta fica pronta")
-    +     '</b>'
+    /* desde a 3b é verdade também no app: depois dos bairros, ela vê os
+       pedidos reais da região (a revisão da 3a tinha trocado a frase
+       enquanto a lista não existia) */
+    +   '<div class="aviso roxo">⏱️<div><b>Dois minutos e você já vê as oportunidades</b>'
     +     'Documento só depois, quando você decidir que vale a pena.</div></div>'
     + '</div>'
     + '<div class="rodape">'

@@ -26,6 +26,9 @@
 const ESPERA_PARA_MANDAR_DE_NOVO_NA_MAQUETE_MS = 60000;
 let CODIGO_DA_MAQUETE_PODE_MANDAR_EM = 0;
 
+/* O mesmo minuto para o "Mandar de novo" do código da senha nova. */
+let CODIGO_DA_SENHA_NA_MAQUETE_PODE_MANDAR_EM = 0;
+
 /* Quem acabou de criar a conta vê "Conta criada!" depois do código. */
 let CONTA_DA_MAQUETE_ACABOU_DE_NASCER = false;
 
@@ -138,6 +141,24 @@ const FONTE = {
     pronto({ ok:true });
   },
 
+  /* ESQUECI A SENHA (R28): na maquete, nenhum código sai — a tela segue,
+     como seguiria no app, com e sem conta. "Mandar de novo" também só
+     depois de 1 minuto, só para a tela se comportar como a do app. */
+  pedirCodigoDaSenha: function(d, pronto){
+    /* o campo vazio ouve o mesmo que no app (revisão da 4) */
+    if(!String(d.emailOuTelefone || "").trim())
+      return pronto({ ok:false, campo:"email_ou_telefone", erro:FRASE_DIGITE_O_CONTATO });
+    CODIGO_DA_SENHA_NA_MAQUETE_PODE_MANDAR_EM = Date.now() + ESPERA_PARA_MANDAR_DE_NOVO_NA_MAQUETE_MS;
+    pronto({ ok:true });
+  },
+
+  /* A senha nova: na maquete, qualquer código de 6 números serve, e a
+     pessoa entra como no "Entrar" (com a conta de exemplo, se ninguém se
+     cadastrou neste aparelho). Nenhuma senha é guardada. */
+  trocarSenha: function(d, pronto){
+    FONTE.entrar({}, pronto);
+  },
+
   /* Os termos mudaram: aceitar e seguir para o início. */
   aceitarTermos: function(d, pronto){
     pronto({ ok:true, destino: E.perfil === "diarista" ? "diaristaHome" : "home" });
@@ -193,6 +214,15 @@ const FONTE = {
 
   /* Os bairros atendidos: os de exemplo, sempre à mão. */
   carregarArea: function(pronto){
+    pronto({ ok:true });
+  },
+
+  /* As oportunidades dela (a lista e uma só): na maquete, as de exemplo já
+     estão sempre à mão (ler.oportunidades). */
+  carregarOportunidades: function(pronto){
+    pronto({ ok:true });
+  },
+  carregarOportunidade: function(id, pronto){
     pronto({ ok:true });
   },
 
@@ -466,6 +496,12 @@ const FONTE = {
         segundosParaMandarDeNovo: Math.max(0, falta),
         podeCorrigirONumero: true,
       };
+    },
+
+    /* A tela da senha nova: quanto falta para poder pedir outro código. */
+    recuperacao: function(){
+      const falta = Math.ceil((CODIGO_DA_SENHA_NA_MAQUETE_PODE_MANDAR_EM - Date.now()) / 1000);
+      return { segundosParaMandarDeNovo: Math.max(0, falta) };
     },
   },
 };
