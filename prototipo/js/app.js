@@ -131,10 +131,36 @@ function criarCasaDeQuemJaUsava(){
   salvar();
 }
 
+/* A casa do pedido. No app, a casa que sumiu da lista (trocada, que ganha
+   outro número no servidor, ou apagada) NÃO vira a primeira da lista: o
+   resumo mostraria um endereço e o "Confirmar" mandaria outro. Sem ela, as
+   telas pedem para escolher de novo (casaDoPedidoSumiu, telas-cliente.js).
+   Na maquete, o de sempre. */
 function casaDoPedido(pedido){
-  const casas = (E.cliente && E.cliente.casas) || [];
-  return casas.find(function(c){ return c.id === (pedido || E.pedido).casaId; })
-      || casas[0] || null;
+  const casas = FONTE.ler.casas() || [];
+  const casa = casas.find(function(c){ return c.id === (pedido || E.pedido).casaId; });
+  if(casa) return casa;
+  return FONTE.ehMaquete ? (casas[0] || null) : null;
+}
+
+/* A RUA E O NÚMERO. O formulário do endereço tem os dois em campos
+   separados (o servidor guarda os dois separados). Na maquete, a casa
+   sempre guardou os dois juntos na rua ("Rua das Flores, 123"), e as telas
+   leem a rua assim: juntarRuaENumero monta, ruaENumero separa para o
+   formulário. */
+function juntarRuaENumero(rua, numero){
+  rua = String(rua || "").trim();
+  numero = String(numero || "").trim();
+  return numero ? rua + ", " + numero : rua;
+}
+
+function ruaENumero(en){
+  en = en || {};
+  if(en.logradouro != null || en.numero != null)
+    return { logradouro:String(en.logradouro || ""), numero:String(en.numero || "") };
+  const rua = String(en.rua || "");
+  const partes = /^(.*\S)\s*,\s*([0-9][^,]{0,9})$/.exec(rua);
+  return partes ? { logradouro:partes[1], numero:partes[2].trim() } : { logradouro:rua, numero:"" };
 }
 
 function reiniciarPrototipo(){
@@ -692,6 +718,16 @@ function periodosQueComportam(horasDaJanela){
 function nomePeriodo(id){
   const p = PERIODOS.find(function(x){ return x.id === id; });
   return p ? (p.nome + " (" + p.faixa + ")") : "";
+}
+
+/* O período na linha logo acima de "Ela fica na sua casa: das 12h às 18h".
+   Com a janela padrão, o nome com a faixa ("Tarde (12h às 16h)"); com uma
+   janela maior, só o nome ("Tarde") — a faixa padrão contradiria a janela
+   de verdade, na linha de baixo. */
+function nomePeriodoComAJanela(id, textoDaJanela){
+  const p = PERIODOS.find(function(x){ return x.id === id; });
+  if(!p) return "";
+  return ("das " + p.faixa === textoDaJanela) ? nomePeriodo(id) : p.nome;
 }
 
 

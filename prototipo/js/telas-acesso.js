@@ -297,7 +297,7 @@ TELAS.cadastroCliente = {
     +   erroDoCampo("cc-erro", "cadastroCliente", "")
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="cadastroClientePasso1()">Continuar</button>'
+    +   '<button class="btn btn-principal" onclick="cadastroClientePasso1(this)">Continuar</button>'
     +   '<p class="apoio" style="text-align:center;margin:12px 0 0">Já tem uma conta? '
     +     '<a href="#" onclick="ir(\'login\');return false;" style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
     + '</div>';
@@ -311,7 +311,7 @@ function limparErrosDoCadastro(){
   });
 }
 
-function cadastroClientePasso1(){
+function cadastroClientePasso1(botao){
   const nome  = valorDoCampo("cc-nome").trim();
   const email = valorDoCampo("cc-email").trim();
   limparErrosDoCadastro();
@@ -327,7 +327,7 @@ function cadastroClientePasso1(){
   }, function(r){
     if(!r.ok) return mostrarErroDoCadastro(r);
     ir("cadastroClienteEndereco");
-  });
+  }, { botao: botao || null });
 }
 
 /* O que o cliente fica sabendo sobre quem vê o endereço dele (A13,
@@ -346,36 +346,182 @@ TELAS.cadastroClienteEndereco = {
   html: function(){
     /* na maquete, o endereço de exemplo; no app, o que a pessoa já digitou */
     const en = FONTE.ler.enderecoDoCadastro();
+    const rua = ruaENumero(en);
     const cidadeEstado = [en.cidade, en.estado].filter(function(x){ return !!x; }).join(" - ");
     return ''
     + cabecalho("", { passos:[2,3] })
     + '<div class="corpo">'
     +   '<h2 class="titulo">Onde fica sua casa? 📍</h2>'
     +   '<p class="apoio">Usamos o endereço para encontrar profissionais perto de você.</p>'
-    +   '<div class="campo"><label>CEP</label><input id="ce-cep" type="text" value="' + esc(en.cep) + '"></div>'
-    +   '<div class="campo"><label>Endereço</label><input id="ce-rua" type="text" value="' + esc(en.rua) + '"></div>'
+    +   '<div class="campo"><label>CEP</label><input id="ce-cep" type="text" inputmode="numeric" '
+    +     'autocomplete="postal-code" value="' + esc(en.cep) + '"></div>'
+    +   camposDaRua("ce-rua", "ce-numero", rua, "cadastroClienteEndereco")
     +   '<div class="campo"><label>Complemento</label><input id="ce-comp" type="text" value="' + esc(en.complemento) + '"></div>'
-    +   '<div class="campo"><label>Bairro</label><input id="ce-bairro" type="text" value="' + esc(en.bairro) + '"></div>'
+    +   campoDeBairro("ce-bairro", en.bairro, "cadastroClienteEndereco")
     +   '<div class="campo"><label>Cidade e estado</label><input id="ce-cidade" type="text" value="' + esc(cidadeEstado) + '"></div>'
     +   avisoDePrivacidadeDoEndereco()
     + '</div>'
     + '<div class="rodape"><button class="btn btn-principal" onclick="cadastroClientePasso2()">Continuar</button></div>';
+  },
+  aoEntrar: function(){ pedirBairrosSeFaltar(); }
+};
+
+/* O endereço do passo 2, como está na tela agora. */
+function enderecoDoPasso2(){
+  const cidadeEstado = separarCidadeEEstado(valorDoCampo("ce-cidade"));
+  return {
+    apelido: "Casa",
+    cep:         valorDoCampo("ce-cep").trim(),
+    logradouro:  valorDoCampo("ce-rua").trim(),
+    numero:      valorDoCampo("ce-numero").trim(),
+    complemento: valorDoCampo("ce-comp").trim(),
+    bairro:      valorDoCampo("ce-bairro").trim(),
+    cidade:      cidadeEstado.cidade,
+    estado:      cidadeEstado.estado,
+  };
+}
+
+function cadastroClientePasso2(){
+  FONTE.guardarEnderecoDoCadastro(enderecoDoPasso2(), function(){
+    ir("cadastroClienteTermos");
+  });
+}
+
+/* "Cidade e estado" é um campo só: "São Paulo - SP". O estado é o que vem
+   depois do último traço (uma cidade com traço no nome continua inteira);
+   vazio, vale São Paulo - SP, como sempre valeu. */
+function separarCidadeEEstado(texto){
+  const t = String(texto || "").trim() || "São Paulo - SP";
+  const i = t.lastIndexOf("-");
+  if(i < 0) return { cidade:t, estado:"SP" };
+  return { cidade:t.slice(0, i).trim(), estado:t.slice(i + 1).trim() || "SP" };
+}
+
+
+/* --------------------------------------------------------------------------
+   PEDAÇOS DO ENDEREÇO (no passo 2 do cadastro e em "Sua casa")
+
+   A rua e o NÚMERO lado a lado, e o BAIRRO escolhido numa lista: a lista
+   dos bairros atendidos (na maquete, os de exemplo; no app, os do
+   servidor). Quem não acha o bairro vê "Onde atendemos".
+   -------------------------------------------------------------------------- */
+function camposDaRua(idRua, idNumero, rua, tela){
+  return '<div class="campos-lado">'
+    +   '<div class="campo"><label>Endereço</label>'
+    +     '<input id="' + esc(idRua) + '" type="text" autocomplete="address-line1" '
+    +       'placeholder="Rua, avenida..." value="' + esc(rua.logradouro) + '">'
+    +     erroDoCampo(idRua + "-erro", tela, "rua") + '</div>'
+    +   '<div class="campo numero"><label>Número</label>'
+    +     '<input id="' + esc(idNumero) + '" type="text" inputmode="numeric" value="' + esc(rua.numero) + '">'
+    +     erroDoCampo(idNumero + "-erro", tela, "numero") + '</div>'
+    + '</div>';
+}
+
+function campoDeBairro(id, atual, tela){
+  return '<div class="campo"><label>Bairro</label>'
+    +   '<div class="seletor"><select id="' + esc(id) + '">' + opcoesDeBairro(atual) + '</select></div>'
+    +   erroDoCampo(id + "-erro", tela, "bairro")
+    +   '<p class="ajuda">Seu bairro não está na lista? '
+    +     '<a href="#" onclick="verOndeAtendemos();return false;" class="link-roxo">Veja onde atendemos</a></p>'
+    + '</div>';
+}
+
+/* As opções da lista. O bairro que já estava escrito (uma casa de antes,
+   de fora da lista) aparece também, marcado: a pessoa vê o que está
+   guardado, e o servidor diz se atende. */
+function opcoesDeBairro(atual){
+  const area = FONTE.ler.areaAtendida();
+  const lista = area ? area.bairros.slice() : [];
+  atual = String(atual || "");
+  if(atual && lista.indexOf(atual) < 0) lista.push(atual);
+  let html = '<option value="" disabled' + (atual ? '' : ' selected') + '>'
+           + (area ? 'Escolha o bairro' : 'Carregando os bairros…') + '</option>';
+  lista.forEach(function(b){
+    html += '<option value="' + esc(b) + '"' + (b === atual ? ' selected' : '') + '>' + esc(b) + '</option>';
+  });
+  return html;
+}
+
+/* A lista de bairros de cada tela de endereço. */
+const LISTA_DE_BAIRROS_DA_TELA = { cadastroClienteEndereco:"ce-bairro", cadastrarCasa:"casa-bairro" };
+
+/* No app, a lista dos bairros chega do servidor antes da tela (no
+   "Continuar" do passo 1 e no "+ Cadastrar endereço"). Se ainda faltar
+   (a página foi recarregada), ela é pedida aqui e entra NA LISTA, sem
+   redesenhar a tela: redesenhar apagaria o que a pessoa já digitou. */
+function pedirBairrosSeFaltar(){
+  if(FONTE.ler.areaAtendida()) return;
+  FONTE.carregarArea(function(r){
+    const id = LISTA_DE_BAIRROS_DA_TELA[E.tela];
+    const lista = id ? document.getElementById(id) : null;
+    if(!r.ok) return mostrarErro(id + "-erro", r.erro);
+    if(lista) lista.innerHTML = opcoesDeBairro(lista.value);
+  });
+}
+
+/* "Veja onde atendemos": o que a pessoa já digitou fica guardado (no passo
+   2, no rascunho do cadastro; em "Sua casa", na memória), e o "Voltar" de
+   lá traz tudo de volta. */
+function verOndeAtendemos(){
+  if(E.tela !== "cadastroClienteEndereco"){
+    guardarOQueFoiDigitadoNaCasa();
+    ir("ondeAtendemos");
+    return;
+  }
+  FONTE.guardarEnderecoDoCadastro(enderecoDoPasso2(), function(){
+    ir("ondeAtendemos");
+  });
+}
+
+
+/* --------------------------------------------------------------------------
+   1B. ONDE ATENDEMOS (tela nova, do app de verdade)
+
+   A área de cobertura, antes do cadastro: abre do "Seu bairro não está na
+   lista?" do endereço. Os bairros vêm da tomada: na maquete, os de
+   exemplo; no app, os do servidor.
+   -------------------------------------------------------------------------- */
+let ERRO_DOS_BAIRROS = null;    // { frase, navegacao }: vale só nesta visita à tela
+
+TELAS.ondeAtendemos = {
+  html: function(){
+    const area = FONTE.ler.areaAtendida();
+    const erro = (ERRO_DOS_BAIRROS && ERRO_DOS_BAIRROS.navegacao === NAVEGACAO) ? ERRO_DOS_BAIRROS.frase : "";
+    let lista;
+    if(area){
+      lista = '<div class="cartao lista-de-bairros">'
+        + area.bairros.map(function(b){ return '<div><span class="ok">✓</span>' + esc(b) + '</div>'; }).join("")
+        + '</div>';
+    } else if(erro){
+      lista = '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+        + '<button class="btn btn-contorno" onclick="tentarOsBairrosDeNovo()">Tentar de novo</button>';
+    } else {
+      lista = '<p class="apoio">Carregando os bairros…</p>';
+    }
+    return ''
+    + cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Onde atendemos 📍</h2>'
+    +   '<p class="apoio">Por enquanto, a Limpah atende estes bairros'
+    +     (area && area.cidade ? ' de ' + esc(area.cidade) : '') + ':</p>'
+    +   lista
+    +   '<div class="aviso roxo" style="margin-top:18px">🏡<div><b>Seu bairro não está aqui?</b>'
+    +     'Ainda não chegamos aí 😔 Estamos começando por poucos bairros, para cuidar bem de cada casa.</div></div>'
+    + '</div>'
+    + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+  },
+  aoEntrar: function(){
+    if(FONTE.ler.areaAtendida() || (ERRO_DOS_BAIRROS && ERRO_DOS_BAIRROS.navegacao === NAVEGACAO)) return;
+    FONTE.carregarArea(function(r){
+      ERRO_DOS_BAIRROS = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+      desenhar();
+    });
   }
 };
 
-function cadastroClientePasso2(){
-  const cidadeEstado = (valorDoCampo("ce-cidade") || "São Paulo - SP").split("-");
-  FONTE.guardarEnderecoDoCadastro({
-    apelido: "Casa",
-    cep:         valorDoCampo("ce-cep").trim(),
-    rua:         valorDoCampo("ce-rua").trim(),
-    complemento: valorDoCampo("ce-comp").trim(),
-    bairro:      valorDoCampo("ce-bairro").trim(),
-    cidade:      (cidadeEstado[0] || "").trim(),
-    estado:      (cidadeEstado[1] || "SP").trim(),
-  }, function(){
-    ir("cadastroClienteTermos");
-  });
+function tentarOsBairrosDeNovo(){
+  ERRO_DOS_BAIRROS = null;
+  desenhar();
 }
 
 TELAS.cadastroClienteTermos = {
@@ -458,16 +604,33 @@ function voltarAoPasso1DoCadastro(r){
   ir("cadastroCliente", { semHistorico:true });
 }
 
+/* Depois do "Conta criada!", a tomada diz para onde: na maquete, o início,
+   como sempre; no app, quem digitou o endereço no cadastro confere a casa
+   ("Cadastrar minha casa", já preenchida), ou deixa para depois. */
 TELAS.boasVindas = {
   html: function(){
     const nome = FONTE.ler.cliente().primeiroNome || "por aqui";
+    const depois = FONTE.ler.depoisDasBoasVindas();
+    /* o destino escrito no botão (passando por idSeguro), e não decidido
+       dentro de uma função: o teste das armadilhas (testes.js) lê os
+       destinos no onclick */
+    const principal = (depois.tela === "cadastrarCasa")
+      ? '<button class="btn btn-principal" onclick="abrirAFichaDaCasa(null,{limparHistorico:true})">'
+      : '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(depois.tela) + '\',{limparHistorico:true})">';
     return ''
     + '<div class="centro">'
     +   '<div class="circulo-ok">✓</div>'
     +   '<h2 class="titulo">Conta criada, ' + esc(nome) + '! 🎉</h2>'
-    +   '<p class="apoio">Agora é só pedir seu primeiro serviço. Leva menos de um minuto.</p>'
+    +   '<p class="apoio">' + esc(depois.apoio || "Agora é só pedir seu primeiro serviço. Leva menos de um minuto.") + '</p>'
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="ir(\'home\',{limparHistorico:true})">Ir para o início</button></div>';
+    + '<div class="rodape">'
+    +   principal + esc(depois.texto) + '</button>'
+    +   (depois.agoraNao
+         ? '<button class="btn btn-texto" onclick="ir(\'' + idSeguro(telaInicialDeQuemEstaUsando())
+           + '\',{limparHistorico:true})">Agora não</button>'
+         : '')
+    +   erroDoCampo("casas-erro", "boasVindas", "")
+    + '</div>';
   }
 };
 
@@ -505,7 +668,8 @@ TELAS.codigoCelular = {
     +   '</p>'
     +   '<div class="campo"><label>Código</label>'
     +     '<input id="cod-codigo" class="codigo" type="text" inputmode="numeric" '
-    +       'autocomplete="one-time-code" maxlength="7" placeholder="000000">'
+    +       'autocomplete="one-time-code" maxlength="7" placeholder="000000" enterkeyhint="done" '
+    +       'onkeydown="if(event.key===\'Enter\'){event.preventDefault();confirmarCodigoPeloTeclado();}">'
     +     erroDoCampo("cod-erro", "codigoCelular", "codigo") + '</div>'
     +   '<p class="ajuda" id="cod-aviso">' + esc(c.aviso) + '</p>'
     +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
@@ -514,7 +678,7 @@ TELAS.codigoCelular = {
     +     '<button class="btn btn-contorno" onclick="ir(\'termosNovos\')">Ver a tela dos termos novos</button></div>')
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="confirmarCodigo(this)">Confirmar</button>'
+    +   '<button class="btn btn-principal" id="cod-confirmar" onclick="confirmarCodigo(this)">Confirmar</button>'
     +   '<button class="btn btn-contorno" id="cod-reenviar" onclick="mandarCodigoDeNovo(this)"'
     +     (falta > 0 ? ' disabled' : '') + '>' + esc(textoDoMandarDeNovo(falta)) + '</button>'
     +   botaoDeSair("codigoCelular")
@@ -560,6 +724,13 @@ function confirmarCodigo(botao){
     if(!r.ok) return mostrarErroDoCodigo(r);
     ir(r.destino, { limparHistorico:true });
   }, { botao: botao });
+}
+
+/* O Enter (o "ok" do teclado do celular) no campo do código confirma, como
+   o botão — e passa pelo botão: desligado ("Enviando…"), não manda de novo. */
+function confirmarCodigoPeloTeclado(){
+  const botao = document.getElementById("cod-confirmar");
+  if(botao && !botao.disabled) confirmarCodigo(botao);
 }
 
 /* Na resposta, o relógio do botão volta a contar sozinho (no próximo

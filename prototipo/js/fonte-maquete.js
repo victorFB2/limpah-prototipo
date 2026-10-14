@@ -76,9 +76,17 @@ const FONTE = {
     pronto({ ok:true });
   },
 
-  /* passo 2: o endereço fica na cliente */
+  /* passo 2: o endereço fica na cliente, com a rua e o número juntos na
+     rua, como as outras telas da maquete sempre leram */
   guardarEnderecoDoCadastro: function(endereco, pronto){
-    if(E.cliente) E.cliente.endereco = endereco;
+    if(E.cliente){
+      E.cliente.endereco = {
+        apelido: endereco.apelido, cep: endereco.cep,
+        rua: juntarRuaENumero(endereco.logradouro, endereco.numero),
+        complemento: endereco.complemento, bairro: endereco.bairro,
+        cidade: endereco.cidade, estado: endereco.estado,
+      };
+    }
     salvar();
     pronto({ ok:true });
   },
@@ -141,6 +149,82 @@ const FONTE = {
     if(de === "cadastroCliente") RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
   },
 
+  /* AS CASAS. Na maquete elas moram na cliente, neste aparelho, e já estão
+     sempre "carregadas": as duas leituras abaixo respondem na hora. */
+  carregarCasas: function(pronto){
+    pronto({ ok:true });
+  },
+
+  /* Os bairros atendidos: os de exemplo, sempre à mão. */
+  carregarArea: function(pronto){
+    pronto({ ok:true });
+  },
+
+  /* Salvar a casa (nova ou trocada). Na maquete, a rua e o número ficam
+     juntos na rua, como sempre ficaram ("Rua das Flores, 123"): as outras
+     telas da maquete leem a rua assim. Nada é recusado. */
+  salvarCasa: function(d, pronto){
+    E.cliente = E.cliente || Object.assign({}, CLIENTE_EXEMPLO);
+    const casas = (E.cliente.casas = E.cliente.casas || []);
+    const editando = d.id ? casas.find(function(c){ return c.id === d.id; }) : null;
+    const dados = {
+      apelido: d.apelido, tipoImovel: d.tipoImovel, comodos: d.comodos, banheiros: d.banheiros,
+      rua: juntarRuaENumero(d.logradouro, d.numero), complemento: d.complemento,
+      bairro: d.bairro, cidade: d.cidade, estado: d.estado, cep: d.cep,
+    };
+    let id;
+    if(editando){
+      Object.assign(editando, dados, { veioDoHistorico:false });
+      id = editando.id;
+    } else {
+      id = "casa-" + Date.now();
+      casas.push(Object.assign({ id:id }, dados));
+    }
+    salvar();
+    pronto({ ok:true, id:id });
+  },
+
+  /* Apagar a casa: sai da lista da cliente. */
+  apagarCasa: function(id, pronto){
+    const casas = (E.cliente && E.cliente.casas) || [];
+    const i = casas.findIndex(function(c){ return c.id === id; });
+    if(i >= 0) casas.splice(i, 1);
+    salvar();
+    pronto({ ok:true });
+  },
+
+  /* OS PEDIDOS. Na maquete eles moram neste aparelho (E.pedidos) e já
+     estão sempre à mão; a conta é a do motor da maquete (calcularPedido,
+     no dados.js), feita na hora. */
+  carregarPedidos: function(pronto){
+    pronto({ ok:true });
+  },
+
+  /* A conta do resumo: na maquete, já está pronta (ler.simulacao). */
+  simularPedido: function(pedido, pronto){
+    pronto({ ok:true });
+  },
+
+  /* Confirmar o pedido. Na maquete o pagamento é de mentira e passa na
+     hora: o pedido nasce "buscando", e a busca começa. A conta fica
+     congelada dentro do pedido. */
+  enviarPedido: function(d, pronto){
+    const pedido = pedidoDaMaquete(d, "buscando");
+    E.pedidos.unshift(pedido);
+    E.pedidoAtual = pedido.id;
+    E.busca = { minutos:0, modo:"normal", jaAvisou:false };   // relógio da régua zerado
+    salvar();
+    pronto({ ok:true, id:pedido.id, destino:"buscando" });
+  },
+
+  /* Cancelar: na maquete, sempre sem custo. */
+  cancelarPedido: function(id, pronto){
+    const p = (E.pedidos || []).find(function(x){ return x.id === id; });
+    if(p) p.situacao = "cancelado";
+    salvar();
+    pronto({ ok:true });
+  },
+
   ler: {
     /* Com que estado o app começa: duas favoritas e uma mensagem não lida,
        para a home da maquete não abrir vazia. Cópia nova a cada vez: a
@@ -157,6 +241,29 @@ const FONTE = {
       return BAIRROS_DE_EXEMPLO.slice();
     },
 
+    /* Onde o app atende (a tela "Onde atendemos" e a lista de bairros do
+       endereço): na maquete, os bairros de exemplo, da cidade de exemplo. */
+    areaAtendida: function(){
+      const partes = CIDADE_DAS_OPORTUNIDADES.split(" - ");
+      return { cidade: partes[0], uf: partes[1] || "", bairros: BAIRROS_DE_EXEMPLO.slice() };
+    },
+
+    /* As casas da cliente (nunca "ainda não se sabe": moram no aparelho). */
+    casas: function(){
+      return (E.cliente && E.cliente.casas) || [];
+    },
+
+    /* Na maquete o endereço do cadastro não vira casa sozinho: a cliente
+       cadastra a casa no primeiro pedido, como sempre. */
+    casaDoCadastro: function(){
+      return null;
+    },
+
+    /* Depois do "Conta criada!": o início, como sempre. */
+    depoisDasBoasVindas: function(){
+      return { tela:"home", texto:"Ir para o início", agoraNao:false };
+    },
+
     /* Se esta tela pode ser desenhada. Na maquete, todas: é o lugar de ver
        tudo funcionando de mentira. */
     telaLiberada: function(){
@@ -171,6 +278,49 @@ const FONTE = {
     /* As profissionais favoritas, para o perfil. */
     favoritas: function(){
       return PROFISSIONAIS.filter(function(p){ return E.favoritos.indexOf(p.id) >= 0; });
+    },
+
+    /* Os serviços que a maquete vende: todos os do catálogo que estão
+       disponíveis (null = sem lista à parte). */
+    categoriasVendidas: function(){
+      return null;
+    },
+
+    /* Os pedidos da cliente (nunca "ainda não se sabe": moram no aparelho). */
+    pedidos: function(){
+      return E.pedidos || [];
+    },
+
+    /* Um pedido pelo número; sem ele, o mais recente (como sempre foi). */
+    pedido: function(id){
+      const lista = E.pedidos || [];
+      return lista.find(function(p){ return p.id === id; }) || lista[0];
+    },
+
+    /* Quem vai: a profissional de exemplo que "aceitou". */
+    profissionalDoPedido: function(p){
+      return (p && PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; })) || null;
+    },
+
+    /* Na maquete, cancelar sempre pode (e é sempre sem custo). */
+    podeCancelar: function(p){
+      return !!p && p.situacao !== "cancelado" && p.situacao !== "concluido";
+    },
+
+    /* A conta que o resumo e o pagamento mostram. Na maquete, a do motor
+       da maquete, na hora; a janela, pelo período escolhido. null = não há
+       pedido montado. */
+    simulacao: function(pedido){
+      const conta = calcularPedido(pedido);
+      if(!conta) return null;
+      return {
+        conta: conta,
+        trava: conta.bloqueadoPorLimiteLegal
+          ? "A jornada de uma diarista é de no máximo 8 horas por dia — é lei, não é escolha nossa."
+          : "",
+        comDuas: null,         // na maquete, a chave "duas" fica nos detalhes
+        quando: null,          // na maquete, o horário é conferido na tela de data
+      };
     },
 
     /* O que foi digitado no passo 1 do cadastro, para preencher a tela de
@@ -198,3 +348,36 @@ const FONTE = {
     },
   },
 };
+
+
+/* O pedido da maquete, com a conta CONGELADA dentro dele: o comprovante
+   mostra o que foi cobrado no dia, mesmo que a tabela de preços mude
+   depois. Também é usado pelo atalho "pedido esperando o pagamento" do
+   quadro NA MAQUETE (telas-cliente.js). */
+function pedidoDaMaquete(d, situacao){
+  const conta = calcularPedido(d);
+  return {
+    id: "P" + Date.now(),
+    criadoEm: new Date().toISOString(),
+    categoria: d.categoria,
+    casaId: d.casaId,
+    respostas: Object.assign({}, d.respostas),
+    adicionais: d.adicionais.slice(),
+    duasProfissionais: d.duasProfissionais,
+    data: d.data,
+    periodo: d.periodo,
+    pagamento: d.pagamento,
+    total: conta.total,
+    horas: conta.horas,
+    horasSemAdicionais: conta.horasSemAdicionais,
+    precoServico: conta.precoServico,
+    precoAdicionais: conta.precoAdicionais,
+    tempoExtra: conta.tempoExtra,
+    mudouDeFaixa: conta.mudouDeFaixa,
+    quantidade: conta.quantidade,
+    resumoTexto: conta.categoria.nome + " · " + conta.horas + "h",
+    situacao: situacao,
+    profissionalId: null,
+    recusadas: [],
+  };
+}

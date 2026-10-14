@@ -11,18 +11,38 @@
    -------------------------------------------------------------------------- */
 TELAS.home = {
   html: function(){
-    const c = E.cliente || CLIENTE_EXEMPLO;
-    const proximo = E.pedidos.find(function(p){ return p.situacao === "confirmado"; });
+    const c = FONTE.ler.cliente();
+    /* no app, os pedidos vêm do servidor (enquanto não chegam, a lista
+       fica vazia, e a tela se redesenha quando eles chegam) */
+    const pedidos = FONTE.ler.pedidos() || [];
+    const proximo = pedidos.find(function(p){ return p.situacao === "confirmado"; });
+    const aPagar = proximoPedidoAPagar(pedidos);
+    const lugar = lugarDoCliente(c);
 
     /* --- próximo serviço --- */
     let blocoProximo;
     if(proximo){
-      const prof = PROFISSIONAIS.find(function(x){ return x.id === proximo.profissionalId; });
+      const prof = FONTE.ler.profissionalDoPedido(proximo) || { nome:"", cor:"" };
       blocoProximo = '<button class="item" onclick="abrirPedido(\'' + idSeguro(proximo.id) + '\')">'
         + avatar(prof.nome, prof.cor, "pequeno")
-        + '<div class="txt"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
-        + '<span>' + esc(dataPorExtenso(proximo.data)) + ' · ' + esc(nomePeriodo(proximo.periodo)) + '</span></div>'
+        + '<div class="txt"><b>' + esc(nomeCurto(prof.nome) || proximo.resumoTexto) + '</b>'
+        + '<span>' + esc(dataPorExtenso(proximo.data)) + ' · '
+        + esc(nomePeriodoComAJanela(proximo.periodo, janelaDoPedidoEmTexto(proximo))) + '</span></div>'
         + '<span class="selo verde">Confirmado</span></button>';
+    } else if(aPagar){
+      /* O pedido que acabou de nascer "Aguardando o pagamento" aparece aqui,
+         com o selo de "Meus serviços": sem ele, o início dizia "Nenhum
+         serviço agendado" logo depois do "Confirmar pedido", e a pessoa
+         podia achar que o pedido sumiu e pedir de novo. */
+      const cat = CATALOGO.find(function(x){ return x.id === aPagar.categoria; }) || { icone:"" };
+      blocoProximo = '<button class="item" onclick="abrirPedido(\'' + idSeguro(aPagar.id) + '\')">'
+        + '<div style="color:var(--roxo);width:26px">' + icone(cat.icone, 21) + '</div>'
+        + '<div class="txt"><b>' + esc(aPagar.resumoTexto) + '</b>'
+        /* com a janela maior que a faixa (6 h à tarde), só "Tarde": a faixa
+           padrão contradiria o detalhe ("das 12h às 18h") */
+        + '<span>' + esc(dataPorExtenso(aPagar.data)) + ' · '
+        + esc(nomePeriodoComAJanela(aPagar.periodo, janelaDoPedidoEmTexto(aPagar))) + '</span></div>'
+        + SELO_DA_SITUACAO.aguardando_pagamento + '</button>';
     } else {
       blocoProximo = '<div class="cartao" style="display:flex;gap:12px;align-items:center">'
         + '<div style="font-size:26px">📅</div>'
@@ -31,14 +51,14 @@ TELAS.home = {
     }
 
     /* --- serviços recentes --- */
-    const concluidos = E.pedidos.filter(function(p){ return p.situacao === "concluido"; });
+    const concluidos = pedidos.filter(function(p){ return p.situacao === "concluido"; });
     let blocoRecentes = "";
     if(concluidos.length){
       blocoRecentes = '<div class="rotulo" style="display:flex;justify-content:space-between">'
         + '<span>Serviços recentes</span>'
         + '<a href="#" onclick="trocarAba(\'servicos\');return false;" style="color:var(--roxo);font-weight:600;text-decoration:none;font-size:12.5px">Ver todos</a></div>';
       concluidos.slice(0, 2).forEach(function(p){
-        const prof = PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; });
+        const prof = FONTE.ler.profissionalDoPedido(p) || { nome:"", cor:"" };
         blocoRecentes += '<button class="item" onclick="abrirPedido(\'' + idSeguro(p.id) + '\')">'
           + avatar(prof.nome, prof.cor, "pequeno")
           + '<div class="txt"><b>' + esc(p.resumoTexto) + '</b>'
@@ -46,8 +66,8 @@ TELAS.home = {
       });
     }
 
-    /* --- favoritas --- */
-    const favoritas = PROFISSIONAIS.filter(function(p){ return E.favoritos.indexOf(p.id) >= 0; });
+    /* --- favoritas (no app, ainda não existem: a lista vem vazia) --- */
+    const favoritas = FONTE.ler.favoritas() || [];
     let blocoFavoritas = "";
     if(favoritas.length){
       blocoFavoritas = '<div class="rotulo">Suas favoritas ❤️</div><div class="fileira">';
@@ -67,7 +87,7 @@ TELAS.home = {
     return ''
     + '<div class="corpo">'
     +   '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 14px">'
-    +     '<div style="font-size:12.5px;color:var(--suave)">📍 ' + esc(c.endereco.cidade + ", " + c.endereco.estado) + '</div>'
+    +     '<div style="font-size:12.5px;color:var(--suave)">' + (lugar ? '📍 ' + esc(lugar) : '') + '</div>'
     +     '<div style="position:relative">' + avatar(c.nome, c.cor, "pequeno")
     +       (naoLidasDoCliente() ? '<span style="position:absolute;top:-2px;right:-2px;width:12px;height:12px;'
     +         'background:var(--vermelho);border:2px solid var(--fundo);border-radius:50%"></span>' : "")
@@ -87,8 +107,71 @@ TELAS.home = {
     +   blocoFavoritas
     + '</div>'
     + abas("inicio");
-  }
+  },
+  /* no app: os pedidos de agora (a cada visita) e as casas (a cidade) */
+  aoEntrar: function(){ pedirPedidosNestaVisita(); pedirCasasSeFaltar(); }
 };
+
+/* O pedido esperando o pagamento com o dia mais perto (de hoje em diante). */
+function proximoPedidoAPagar(pedidos){
+  const hoje = isoDoDia(new Date());
+  return pedidos
+    .filter(function(p){ return p.situacao === "aguardando_pagamento" && String(p.data) >= hoje; })
+    .sort(function(a, b){ return String(a.data) < String(b.data) ? -1 : (String(a.data) > String(b.data) ? 1 : 0); })[0]
+    || null;
+}
+
+/* A cidade do alto do início: a do endereço do cadastro (maquete) ou a da
+   primeira casa (app). Sem nenhuma, nada. */
+function lugarDoCliente(c){
+  const en = (c && c.endereco) || (FONTE.ler.casas() || [])[0] || null;
+  if(!en || !en.cidade) return "";
+  return en.cidade + (en.estado ? ", " + en.estado : "");
+}
+
+/* OS PEDIDOS QUE AINDA NÃO CHEGARAM (só no app: na maquete moram no
+   aparelho). As telas da lista ("Meus serviços", o início) perguntam ao
+   servidor a cada visita — um pedido pode ter mudado desde a última vez;
+   o detalhe, só se a lista ainda não veio. Sem resposta, a frase e o
+   "Tentar de novo", só nesta visita. */
+let PEDIDOS_PEDIDOS_NA_NAVEGACAO = -1;
+let ERRO_DOS_PEDIDOS = null;    // { frase, navegacao }
+
+function erroDosPedidosAgora(){
+  return (ERRO_DOS_PEDIDOS && ERRO_DOS_PEDIDOS.navegacao === NAVEGACAO) ? ERRO_DOS_PEDIDOS.frase : "";
+}
+
+function pedirPedidosNestaVisita(){
+  if(PEDIDOS_PEDIDOS_NA_NAVEGACAO === NAVEGACAO || erroDosPedidosAgora()) return;
+  PEDIDOS_PEDIDOS_NA_NAVEGACAO = NAVEGACAO;
+  FONTE.carregarPedidos(depoisDosPedidos);
+}
+
+function pedirPedidosSeFaltar(){
+  if(FONTE.ler.pedidos() !== null) return;
+  pedirPedidosNestaVisita();
+}
+
+/* Telas sem campo para digitar: redesenhar não apaga nada. Na maquete a
+   resposta chega na hora, e redesenhar seria trabalho à toa. */
+function depoisDosPedidos(r){
+  if(r.destino) return seguirPeloErro(r);
+  ERRO_DOS_PEDIDOS = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+  if(!FONTE.ehMaquete) desenhar();
+}
+
+function pedidosAindaNao(){
+  const erro = erroDosPedidosAgora();
+  if(!erro) return '<p class="apoio">Carregando seus pedidos…</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="tentarOsPedidosDeNovo()">Tentar de novo</button>';
+}
+
+function tentarOsPedidosDeNovo(){
+  ERRO_DOS_PEDIDOS = null;
+  PEDIDOS_PEDIDOS_NA_NAVEGACAO = -1;
+  desenhar();
+}
 
 function comecarPedido(){
   E.pedido = pedidoNovo();
@@ -105,7 +188,7 @@ TELAS.novoServico = {
   html: function(){
     let lista = "";
     CATALOGO.forEach(function(cat){
-      if(cat.disponivel){
+      if(categoriaVendida(cat)){
         lista += '<button class="opcao" onclick="escolherCategoria(\'' + idSeguro(cat.id) + '\')">'
           + '<div class="icone">' + icone(cat.icone, 22) + '</div>'
           + '<div class="txt"><b>' + esc(cat.nome) + '</b><span>' + esc(cat.descricao) + '</span></div>'
@@ -124,13 +207,22 @@ TELAS.novoServico = {
     +   '<h2 class="titulo">Qual serviço você precisa?</h2>'
     +   '<p class="apoio">Escolha uma categoria para continuar.</p>'
     +   lista
+    +   erroDoCampo("casas-erro", "novoServico", "")
     + '</div>';
   }
 };
 
+/* O serviço pode ser pedido agora? O do catálogo marcado como disponível
+   e, no app, só os que o servidor vende agora (os outros aparecem como
+   "Em breve"). */
+function categoriaVendida(cat){
+  const vendidas = FONTE.ler.categoriasVendidas();
+  return !!cat && cat.disponivel === true && (vendidas === null || vendidas.indexOf(cat.id) >= 0);
+}
+
 function escolherCategoria(id){
   const cat = CATALOGO.find(function(c){ return c.id === id; });
-  if(!cat || !cat.disponivel) return;
+  if(!categoriaVendida(cat)) return;
 
   E.pedido = pedidoNovo();
   E.pedido.categoria = id;
@@ -146,11 +238,25 @@ function escolherCategoria(id){
   salvar();
 
   /* NOVA ORDEM (decisão R10): a casa vem antes do horário.
-     Sem saber o tamanho, o app não tem como oferecer horários que caibam. */
-  const casas = (E.cliente && E.cliente.casas) || [];
-  if(casas.length === 0)      ir("cadastrarCasa");
-  else if(casas.length === 1) usarCasa(casas[0].id);
-  else                        ir("escolherCasa");
+     Sem saber o tamanho, o app não tem como oferecer horários que caibam.
+     No app, as casas de agora vêm do servidor antes de escolher o caminho
+     (sem internet, a frase fica nesta tela). */
+  mostrarErro("casas-erro", "");
+  FONTE.carregarCasas(function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("casas-erro", r.erro);
+    seguirParaACasa();
+  });
+}
+
+/* Sem casa: cadastrar. Uma só, e atendida: segue com ela. Mais de uma, ou
+   uma que está fora da área ou precisa ser conferida (só no app): a
+   escolha, onde a casa em âmbar abre a ficha dela, e não o pedido. */
+function seguirParaACasa(){
+  const casas = FONTE.ler.casas() || [];
+  if(casas.length === 0) novaCasa();
+  else if(casas.length === 1 && !NOTA_DA_AREA[casas[0].area]) usarCasa(casas[0].id);
+  else ir("escolherCasa");
 }
 
 /* Escolhida a casa, o tamanho dela entra no pedido. */
@@ -178,29 +284,86 @@ function usarCasa(casaId){
      escolherCasa   — qual delas, quando há mais de uma
      cadastrarCasa  — cadastrar ou editar
      minhasCasas    — a lista, dentro do Perfil
+
+   As casas vêm da tomada (FONTE): na maquete, deste aparelho; no app, do
+   servidor, que descobre a posição pelo endereço e diz se a casa está na
+   área atendida ("area": atendida, fora ou conferir). A tela só mostra.
    ========================================================================== */
 
+/* O que dizer de uma casa que não está na área (no app; na maquete, toda
+   casa é atendida). */
+const NOTA_DA_AREA = {
+  fora: "Ainda não atendemos este endereço",
+  conferir: "Toque para conferir este endereço",
+};
+
 function cartaoDeCasa(casa, aoTocar, extra){
+  const nota = NOTA_DA_AREA[casa.area] || "";
   return '<button class="item" onclick="' + aoTocar + '">'
     + '<div style="color:var(--roxo);width:26px">'
     +   icone(casa.tipoImovel === "casa" ? "casa" : (casa.tipoImovel === "escritorio" ? "maleta" : "predio"), 21)
     + '</div>'
     + '<div class="txt"><b>' + esc(casa.apelido) + '</b>'
     +   '<span>' + esc(casa.rua) + (casa.bairro ? " · " + esc(casa.bairro) : "")
-    +     '<br>' + casa.comodos + ' cômodos · ' + casa.banheiros + ' banheiro'
-    +     (casa.banheiros === 1 ? "" : "s") + '</span></div>'
+    +     '<br>' + Number(casa.comodos) + ' cômodos · ' + Number(casa.banheiros) + ' banheiro'
+    +     (Number(casa.banheiros) === 1 ? "" : "s") + '</span>'
+    +   (nota ? '<span class="nota-da-area">' + esc(nota) + '</span>' : '')
+    + '</div>'
     + (extra || '<div class="seta">›</div>')
     + '</button>';
+}
+
+/* AS CASAS QUE AINDA NÃO CHEGARAM (só no app: na maquete elas moram no
+   aparelho e estão sempre à mão). A lista é pedida ao servidor quando a
+   tela abre; enquanto isso, "Carregando". Sem resposta, a frase e o
+   "Tentar de novo" — e só nesta visita à tela: voltando a ela, pergunta de
+   novo. */
+let ERRO_DAS_CASAS = null;    // { frase, navegacao }
+
+function erroDasCasasAgora(){
+  return (ERRO_DAS_CASAS && ERRO_DAS_CASAS.navegacao === NAVEGACAO) ? ERRO_DAS_CASAS.frase : "";
+}
+
+function casasAindaNao(){
+  const erro = erroDasCasasAgora();
+  if(!erro) return '<p class="apoio">Carregando seus endereços…</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="tentarAsCasasDeNovo()">Tentar de novo</button>';
+}
+
+/* Pede as casas, se faltarem, e redesenha quando chegam (telas sem campo
+   para digitar: redesenhar não apaga nada). Uma vez por visita: o início
+   pede também os pedidos, e redesenhar quando eles chegam não pede as
+   casas de novo. */
+let CASAS_PEDIDAS_NA_NAVEGACAO = -1;
+
+function pedirCasasSeFaltar(){
+  if(FONTE.ler.casas() !== null || erroDasCasasAgora() || CASAS_PEDIDAS_NA_NAVEGACAO === NAVEGACAO) return;
+  CASAS_PEDIDAS_NA_NAVEGACAO = NAVEGACAO;
+  FONTE.carregarCasas(function(r){
+    if(r.destino) return seguirPeloErro(r);
+    ERRO_DAS_CASAS = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+    desenhar();
+  });
+}
+
+function tentarAsCasasDeNovo(){
+  ERRO_DAS_CASAS = null;
+  CASAS_PEDIDAS_NA_NAVEGACAO = -1;
+  desenhar();
 }
 
 
 /* ---- 79. QUAL CASA ---- */
 TELAS.escolherCasa = {
   html: function(){
-    const casas = (E.cliente && E.cliente.casas) || [];
+    const casas = FONTE.ler.casas();
     let lista = "";
-    casas.forEach(function(c){
-      lista += cartaoDeCasa(c, "usarCasa('" + idSeguro(c.id) + "')");
+    if(casas === null) lista = casasAindaNao();
+    else casas.forEach(function(c){
+      /* casa fora da área (ou para conferir) abre a ficha dela, e não o pedido */
+      if(NOTA_DA_AREA[c.area]) lista += cartaoDeCasa(c, "editarCasa('" + idSeguro(c.id) + "')");
+      else lista += cartaoDeCasa(c, "usarCasa('" + idSeguro(c.id) + "')");
     });
 
     return ''
@@ -211,40 +374,82 @@ TELAS.escolherCasa = {
     +   lista
     +   '<button class="btn btn-contorno" style="margin-top:6px" onclick="novaCasa()">'
     +     '+ Cadastrar outro endereço</button>'
+    +   erroDoCampo("casas-erro", "escolherCasa", "")
     + '</div>';
-  }
+  },
+  aoEntrar: function(){ pedirCasasSeFaltar(); }
 };
 
 
 /* ---- 80. CADASTRAR OU EDITAR A CASA ---- */
+
+/* O que a pessoa já digitou na ficha, guardado na MEMÓRIA (nunca no
+   aparelho) quando a tela precisa ser redesenhada (o tipo de imóvel, os
+   contadores) ou quando ela vai ver "Onde atendemos": sem isso, um toque
+   no "+" apagava o endereço digitado. Some ao abrir outra ficha, ao salvar
+   e ao apagar. */
+let CASA_DIGITADA = null;
+const CAMPOS_DA_FICHA_DA_CASA = { apelido:"casa-apelido", cep:"casa-cep", rua:"casa-rua",
+                                  numero:"casa-numero", complemento:"casa-comp",
+                                  bairro:"casa-bairro", cidade:"casa-cidade" };
+
+function guardarOQueFoiDigitadoNaCasa(){
+  if(E.tela !== "cadastrarCasa") return;
+  const desenhada = document.getElementById("casa-apelido");
+  if(!desenhada) return;
+  CASA_DIGITADA = {};
+  Object.keys(CAMPOS_DA_FICHA_DA_CASA).forEach(function(k){
+    CASA_DIGITADA[k] = valorDoCampo(CAMPOS_DA_FICHA_DA_CASA[k]);
+  });
+}
+
+/* Abrir a ficha: no app, a lista dos bairros vem antes (sem internet, a
+   frase aparece na tela de onde a pessoa veio, no lugar "casas-erro"). */
+function abrirAFichaDaCasa(id, opcoes){
+  mostrarErro("casas-erro", "");
+  FONTE.carregarArea(function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("casas-erro", r.erro);
+    E.casaEditando = id;
+    E.casaRascunhoTipo = null;
+    E.casaRascunhoComodos = null;
+    E.casaRascunhoBanheiros = null;
+    CASA_DIGITADA = null;
+    salvar();
+    ir("cadastrarCasa", opcoes);
+  });
+}
+
 function novaCasa(){
-  E.casaEditando = null;
-  salvar();
-  ir("cadastrarCasa");
+  abrirAFichaDaCasa(null);
 }
 
 function editarCasa(id){
-  E.casaEditando = id;
-  salvar();
-  ir("cadastrarCasa");
+  abrirAFichaDaCasa(id);
 }
 
 TELAS.cadastrarCasa = {
   html: function(){
-    const casas = (E.cliente && E.cliente.casas) || [];
+    const casas = FONTE.ler.casas() || [];
     const editando = E.casaEditando
       ? casas.find(function(c){ return c.id === E.casaEditando; })
       : null;
-    const c = editando || {
+    /* no app, quem acabou de criar a conta encontra o endereço do cadastro */
+    const doCadastro = editando ? null : FONTE.ler.casaDoCadastro();
+    /* o endereço do cadastro não diz o tamanho nem o tipo: vêm do padrão */
+    const c = editando || Object.assign({
       apelido:"", tipoImovel:"apartamento", comodos:3, banheiros:1,
       rua:"", complemento:"", bairro:"", cidade:"São Paulo", estado:"SP", cep:"",
-    };
+    }, doCadastro || {});
     const primeira = casas.length === 0;
+    const rua = ruaENumero(c);
+    const d = function(k, padrao){ return (CASA_DIGITADA && CASA_DIGITADA[k] != null) ? CASA_DIGITADA[k] : padrao; };
+    const cidadeEstado = [c.cidade || "São Paulo", c.estado || "SP"].join(" - ");
 
     /* tipo de imóvel */
     let tipos = "";
     TIPOS_DE_IMOVEL.forEach(function(t){
-      const marcado = (E.casaRascunhoTipo || c.tipoImovel) === t.id;
+      const marcado = (E.casaRascunhoTipo || c.tipoImovel || "apartamento") === t.id;
       tipos += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
         + 'onclick="escolherTipoDeImovel(\'' + idSeguro(t.id) + '\')" style="margin-bottom:8px">'
         + '<div class="icone">' + icone(t.icone === "predio" ? "predio" : t.icone, 22) + '</div>'
@@ -263,6 +468,15 @@ TELAS.cadastrarCasa = {
     +   (c.veioDoHistorico
         ? '<div class="aviso roxo">👋<div><b>Preenchemos com o que já sabíamos</b>'
           + 'Tiramos do seu último pedido. Confira se está certo.</div></div>' : "")
+    +   (doCadastro
+        ? '<div class="aviso roxo">👋<div><b>Preenchemos com o endereço do cadastro</b>'
+          + 'Confira se está tudo certo e conte o tamanho da casa.</div></div>' : "")
+    +   (editando && editando.area === "fora"
+        ? '<div class="aviso ambar">📍<div><b>Ainda não atendemos este endereço</b>'
+          + 'Veja abaixo os bairros onde já atendemos.</div></div>' : "")
+    +   (editando && editando.area === "conferir"
+        ? '<div class="aviso ambar">📍<div><b>Confira este endereço</b>'
+          + 'Salve de novo para conferirmos no mapa.</div></div>' : "")
 
     +   '<div class="rotulo">Tipo de imóvel</div>'
     +   tipos
@@ -272,7 +486,7 @@ TELAS.cadastrarCasa = {
     +     '<span class="nome">Número de cômodos</span>'
     +     '<span class="controles">'
     +       '<button onclick="contarNaCasa(\'comodos\',-1)">−</button>'
-    +       '<span class="valor" id="casa-comodos">' + (E.casaRascunhoComodos != null ? E.casaRascunhoComodos : c.comodos) + '</span>'
+    +       '<span class="valor" id="casa-comodos">' + Number(E.casaRascunhoComodos != null ? E.casaRascunhoComodos : c.comodos) + '</span>'
     +       '<button onclick="contarNaCasa(\'comodos\',1)">+</button>'
     +     '</span></div>'
     +   '<p class="ajuda">Conte quartos, sala, cozinha e área de serviço.</p>'
@@ -280,113 +494,165 @@ TELAS.cadastrarCasa = {
     +     '<span class="nome">Banheiros</span>'
     +     '<span class="controles">'
     +       '<button onclick="contarNaCasa(\'banheiros\',-1)">−</button>'
-    +       '<span class="valor" id="casa-banheiros">' + (E.casaRascunhoBanheiros != null ? E.casaRascunhoBanheiros : c.banheiros) + '</span>'
+    +       '<span class="valor" id="casa-banheiros">' + Number(E.casaRascunhoBanheiros != null ? E.casaRascunhoBanheiros : c.banheiros) + '</span>'
     +       '<button onclick="contarNaCasa(\'banheiros\',1)">+</button>'
     +     '</span></div>'
 
     +   '<div class="rotulo">Endereço</div>'
     +   '<div class="campo"><label>Como você chama este lugar</label>'
-    +     '<input id="casa-apelido" type="text" placeholder="Casa, Apartamento, Escritório..." value="' + esc(c.apelido) + '"></div>'
-    +   '<div class="campo"><label>CEP</label><input id="casa-cep" type="text" value="' + esc(c.cep) + '"></div>'
-    +   '<div class="campo"><label>Endereço</label><input id="casa-rua" type="text" value="' + esc(c.rua) + '"></div>'
-    +   '<div class="campo"><label>Complemento</label><input id="casa-comp" type="text" value="' + esc(c.complemento) + '"></div>'
-    +   '<div class="campo"><label>Bairro</label><input id="casa-bairro" type="text" value="' + esc(c.bairro) + '"></div>'
+    +     '<input id="casa-apelido" type="text" placeholder="Casa, Apartamento, Escritório..." value="' + esc(d("apelido", c.apelido)) + '">'
+    +     erroDoCampo("casa-apelido-erro", "cadastrarCasa", "apelido") + '</div>'
+    +   '<div class="campo"><label>CEP</label><input id="casa-cep" type="text" inputmode="numeric" '
+    +     'autocomplete="postal-code" value="' + esc(d("cep", c.cep)) + '">'
+    +     erroDoCampo("casa-cep-erro", "cadastrarCasa", "cep") + '</div>'
+    +   camposDaRua("casa-rua", "casa-numero",
+                    { logradouro:d("rua", rua.logradouro), numero:d("numero", rua.numero) }, "cadastrarCasa")
+    +   '<div class="campo"><label>Complemento</label><input id="casa-comp" type="text" value="' + esc(d("complemento", c.complemento)) + '">'
+    +     erroDoCampo("casa-comp-erro", "cadastrarCasa", "complemento") + '</div>'
+    +   campoDeBairro("casa-bairro", d("bairro", c.bairro), "cadastrarCasa")
     +   '<div class="campo"><label>Cidade e estado</label>'
-    +     '<input id="casa-cidade" type="text" value="' + esc(c.cidade + " - " + c.estado) + '"></div>'
+    +     '<input id="casa-cidade" type="text" value="' + esc(d("cidade", cidadeEstado)) + '">'
+    +     erroDoCampo("casa-cidade-erro", "cadastrarCasa", "cidade") + '</div>'
 
     +   avisoDePrivacidadeDoEndereco()
-    +   '<div id="casa-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
     + '</div>'
+    /* a frase que não é de um campo (o endereço com pedido marcado, o mapa
+       fora do ar, "Preencha ao menos...") fica no rodapé, junto do botão:
+       no fim da ficha ela aparecia fora da vista, e o "Salvar" parecia um
+       botão morto (revisão da 1c e da 2a) */
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="salvarCasa()">'
+    +   '<button class="btn btn-principal" onclick="salvarCasa(this)">'
     +     (editando ? "Salvar alterações" : "Salvar e continuar") + '</button>'
+    +   '<div id="casa-erro" class="erro-do-campo"></div>'
     +   (editando && casas.length > 1
-       ? '<button class="btn btn-perigo" onclick="apagarCasa(\'' + idSeguro(editando.id) + '\')">Apagar este endereço</button>'
+       ? '<button class="btn btn-perigo" onclick="apagarCasa(\'' + idSeguro(editando.id) + '\', this)">Apagar este endereço</button>'
        : "")
     + '</div>';
-  }
+  },
+  aoEntrar: function(){ pedirBairrosSeFaltar(); }
 };
 
-function escolherTipoDeImovel(id){ E.casaRascunhoTipo = id; salvar(); desenhar(); }
+function escolherTipoDeImovel(id){
+  guardarOQueFoiDigitadoNaCasa();
+  E.casaRascunhoTipo = id;
+  salvar();
+  desenhar();
+}
 
 function contarNaCasa(qual, delta){
-  const casas = (E.cliente && E.cliente.casas) || [];
+  const casas = FONTE.ler.casas() || [];
   const editando = E.casaEditando ? casas.find(function(c){ return c.id === E.casaEditando; }) : null;
   const limites = { comodos:[1,12], banheiros:[0,6] };
   const chave = qual === "comodos" ? "casaRascunhoComodos" : "casaRascunhoBanheiros";
   const atual = (E[chave] != null) ? E[chave] : (editando ? editando[qual] : (qual === "comodos" ? 3 : 1));
   const novo = atual + delta;
   if(novo < limites[qual][0] || novo > limites[qual][1]) return;
+  guardarOQueFoiDigitadoNaCasa();
   E[chave] = novo;
   salvar();
   desenhar();
 }
 
-function salvarCasa(){
+/* qual lugar de erro, embaixo de qual campo da ficha */
+const ERRO_DO_CAMPO_DA_CASA = {
+  apelido:"casa-apelido-erro", cep:"casa-cep-erro", rua:"casa-rua-erro", numero:"casa-numero-erro",
+  complemento:"casa-comp-erro", bairro:"casa-bairro-erro", cidade:"casa-cidade-erro",
+};
+
+function limparErrosDaCasa(){
+  Object.keys(ERRO_DO_CAMPO_DA_CASA).forEach(function(k){ mostrarErro(ERRO_DO_CAMPO_DA_CASA[k], ""); });
+  mostrarErro("casa-erro", "");
+}
+
+/* A frase de uma casa recusada (no app: bairro fora da área, endereço que o
+   mapa não achou, localizador fora do ar...), embaixo do campo. Nada do que
+   foi digitado é apagado. */
+function mostrarErroDaCasa(r){
+  if(r.destino) return seguirPeloErro(r);
+  mostrarErro(ERRO_DO_CAMPO_DA_CASA[r.campo] || "casa-erro", r.erro);
+}
+
+function salvarCasa(botao){
   const valor = function(id){ return valorDoCampo(id).trim(); };
+  limparErrosDaCasa();
   const apelido = valor("casa-apelido");
   const rua = valor("casa-rua");
   if(apelido.length < 2 || rua.length < 3){
     mostrarErro("casa-erro", "Preencha ao menos como você chama o lugar e o endereço.");
     return;
   }
-  const cidadeEstado = (valor("casa-cidade") || "São Paulo - SP").split("-");
-  const casas = (E.cliente.casas = E.cliente.casas || []);
+  const cidadeEstado = separarCidadeEEstado(valor("casa-cidade"));
+  const casas = FONTE.ler.casas() || [];
   const editando = E.casaEditando ? casas.find(function(c){ return c.id === E.casaEditando; }) : null;
 
-  const dados = {
+  FONTE.salvarCasa({
+    id: editando ? editando.id : null,
     apelido: apelido,
     tipoImovel: E.casaRascunhoTipo || (editando ? editando.tipoImovel : "apartamento"),
     comodos:   (E.casaRascunhoComodos   != null) ? E.casaRascunhoComodos   : (editando ? editando.comodos : 3),
     banheiros: (E.casaRascunhoBanheiros != null) ? E.casaRascunhoBanheiros : (editando ? editando.banheiros : 1),
-    rua: rua,
+    logradouro: rua,
+    numero: valor("casa-numero"),
     complemento: valor("casa-comp"),
     bairro: valor("casa-bairro"),
-    cidade: (cidadeEstado[0] || "").trim(),
-    estado: (cidadeEstado[1] || "SP").trim(),
+    cidade: cidadeEstado.cidade,
+    estado: cidadeEstado.estado,
     cep: valor("casa-cep"),
-  };
-
-  let id;
-  if(editando){
-    Object.assign(editando, dados, { veioDoHistorico:false });
-    id = editando.id;
-  } else {
-    id = "casa-" + Date.now();
-    casas.push(Object.assign({ id:id }, dados));
-  }
-
-  E.casaEditando = null;
-  E.casaRascunhoTipo = null;
-  E.casaRascunhoComodos = null;
-  E.casaRascunhoBanheiros = null;
-  salvar();
-
-  /* Se veio de dentro de um pedido, segue o pedido. Senão, volta para a lista. */
-  if(E.pedido && E.pedido.categoria && !E.pedido.casaId) usarCasa(id);
-  else voltar();
+  }, function(r){
+    if(!r.ok) return mostrarErroDaCasa(r);
+    E.casaEditando = null;
+    E.casaRascunhoTipo = null;
+    E.casaRascunhoComodos = null;
+    E.casaRascunhoBanheiros = null;
+    CASA_DIGITADA = null;
+    /* A casa do pedido em montagem foi salva de novo: no app ela pode
+       ganhar outro número (o endereço mudou numa casa que já teve pedido:
+       o servidor grava uma nova e desliga a antiga), e o pedido passa a ser
+       dela — senão o "Confirmar" mandaria a antiga, e o servidor diria
+       "Não achamos esse endereço" para sempre. O tamanho novo também vale,
+       a não ser que a pessoa tenha ajustado só para este pedido. */
+    if(E.pedido && r.trocou && E.pedido.casaId === r.trocou){
+      E.pedido.casaId = r.id;
+      const nova = casaDoPedido(E.pedido);
+      if(nova && !E.pedido.ajustadoDestaVez){
+        if(E.pedido.respostas.comodos   !== undefined) E.pedido.respostas.comodos   = nova.comodos;
+        if(E.pedido.respostas.banheiros !== undefined) E.pedido.respostas.banheiros = nova.banheiros;
+      }
+    }
+    salvar();
+    /* Se veio de dentro de um pedido, segue o pedido. Senão, volta para
+       onde estava — ou, sem para onde voltar (veio da boas-vindas), para a
+       lista dos endereços, com a casa nova nela. */
+    if(E.pedido && E.pedido.categoria && !E.pedido.casaId) return usarCasa(r.id);
+    if(E.historico.length) return voltar();
+    ir("minhasCasas", { limparHistorico:true });
+  }, { botao: botao || null });
 }
 
-function apagarCasa(id){
-  const casas = (E.cliente && E.cliente.casas) || [];
+function apagarCasa(id, botao){
+  const casas = FONTE.ler.casas() || [];
   if(casas.length <= 1) return;   // ninguém fica sem nenhuma casa
-  const i = casas.findIndex(function(c){ return c.id === id; });
-  if(i >= 0) casas.splice(i, 1);
-  E.casaEditando = null;
-  salvar();
-  voltar();
+  mostrarErro("casa-erro", "");
+  FONTE.apagarCasa(id, function(r){
+    if(!r.ok) return mostrarErroDaCasa(r);
+    E.casaEditando = null;
+    CASA_DIGITADA = null;
+    salvar();
+    voltar();
+  }, { botao: botao || null });
 }
 
 
 /* ---- 81. MINHAS CASAS (dentro do Perfil) ---- */
 TELAS.minhasCasas = {
   html: function(){
-    const casas = (E.cliente && E.cliente.casas) || [];
+    const casas = FONTE.ler.casas();
     let lista = "";
-    casas.forEach(function(c){
+    if(casas === null) lista = casasAindaNao();
+    else casas.forEach(function(c){
       lista += cartaoDeCasa(c, "editarCasa('" + idSeguro(c.id) + "')");
     });
-    if(!casas.length) lista = '<div class="vazio">Você ainda não cadastrou nenhum endereço.</div>';
+    if(casas && !casas.length) lista = '<div class="vazio">Você ainda não cadastrou nenhum endereço.</div>';
 
     return ''
     + cabecalho("Meus endereços")
@@ -397,8 +663,10 @@ TELAS.minhasCasas = {
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="novaCasa()">+ Cadastrar endereço</button>'
+    +   erroDoCampo("casas-erro", "minhasCasas", "")
     + '</div>';
-  }
+  },
+  aoEntrar: function(){ pedirCasasSeFaltar(); }
 };
 
 
@@ -622,7 +890,8 @@ TELAS.detalhes = {
       }
 
       if(p.tipo === "texto"){
-        campos += '<div class="campo"><textarea id="txt-' + p.id + '" placeholder="' + esc(p.exemplo || "") + '" '
+        /* 500: o mesmo limite que o servidor guarda */
+        campos += '<div class="campo"><textarea id="txt-' + p.id + '" maxlength="500" placeholder="' + esc(p.exemplo || "") + '" '
           + 'oninput="anotar(\'' + idSeguro(p.id) + '\', this.value)">' + esc(E.pedido.respostas[p.id] || "") + '</textarea></div>';
       }
 
@@ -928,10 +1197,15 @@ function alternarAdicional(id){
    -------------------------------------------------------------------------- */
 TELAS.resumo = {
   html: function(){
-    const conta = calcularPedido(E.pedido);
-    if(!conta) return htmlDaTela("novoServico");
-    const c = E.cliente || CLIENTE_EXEMPLO;
+    if(!calcularPedido(E.pedido)) return htmlDaTela("novoServico");
+    /* A conta que vale é a do servidor (no app): a da maquete é a mesma
+       conta, feita aqui. Enquanto ela não chega, "Calculando". */
+    const s = FONTE.ler.simulacao(E.pedido);
+    if(!s) return contaAindaNao("Confira seu pedido");
+    const conta = s.conta;
     const cat = conta.categoria;
+    const casa = casaDoPedido(E.pedido);
+    const en = casa || FONTE.ler.cliente().endereco || {};
 
     /* descrição do que foi respondido, em português */
     let detalhes = "";
@@ -944,7 +1218,7 @@ TELAS.resumo = {
       }
       if(p.tipo === "contador" && v > 0){
         detalhes += '<div class="linha"><span class="rot">' + esc(p.rotulo) + '</span>'
-          + '<span class="val">' + v + '</span></div>';
+          + '<span class="val">' + Number(v) + '</span></div>';
       }
     });
 
@@ -956,6 +1230,10 @@ TELAS.resumo = {
     });
 
     const obs = E.pedido.respostas.observacoes;
+    const podeSeguir = !s.trava && !quandoQueNaoServe(s) && !casaDoPedidoSumiu();
+    /* "Vila Madalena, São Paulo - SP" */
+    const lugar = [en.bairro, [en.cidade, en.estado].filter(Boolean).join(" - ")]
+      .filter(Boolean).join(", ");
 
     return ''
     + cabecalho("Confira seu pedido")
@@ -963,35 +1241,37 @@ TELAS.resumo = {
 
     +   '<div class="cartao">'
     +     '<div style="display:flex;gap:12px;align-items:center;margin-bottom:6px">'
-    +       '<div style="font-size:26px">' + cat.icone + '</div>'
+    +       '<div style="color:var(--roxo)">' + icone(cat.icone, 26) + '</div>'
     +       '<div><b style="font-size:16px">' + esc(cat.nome) + '</b>'
     +       '<div style="font-size:12.5px;color:var(--suave)">' + esc(cat.descricao) + '</div></div></div>'
     +     detalhes
     +     '<div class="linha"><span class="rot">Data</span><span class="val">' + esc(dataPorExtenso(E.pedido.data)) + '</span></div>'
-    +     '<div class="linha"><span class="rot">Período</span><span class="val">' + esc(nomePeriodo(E.pedido.periodo)) + '</span></div>'
+    +     '<div class="linha"><span class="rot">Período</span><span class="val">'
+    +       esc(nomePeriodoComAJanela(E.pedido.periodo, textoDaJanela(s, conta))) + '</span></div>'
     +     '<div class="linha"><span class="rot">'
     +       (conta.quantidade > 1 ? "As duas ficam" : "Ela fica") + ' na sua casa</span>'
-    +       '<span class="val">'
-    +       esc((janelaDoServico(E.pedido.periodo, conta.horas) || {}).texto || (conta.horas + " horas"))
-    +       '</span></div>'
+    +       '<span class="val">' + esc(textoDaJanela(s, conta)) + '</span></div>'
     +     (conta.quantidade > 1
         ? '<div class="linha"><span class="rot">Profissionais</span><span class="val">2 pessoas</span></div>' : "")
     +   '</div>'
+    +   avisoDoQuando(s)
 
     +   '<div class="rotulo">Endereço</div>'
-    +   '<div class="cartao" style="display:flex;gap:12px;align-items:flex-start">'
+    +   (casaDoPedidoSumiu() ? avisoDaCasaQueSumiu()
+       : (!FONTE.ehMaquete && !casa) ? casasAindaNao()
+       : '<div class="cartao" style="display:flex;gap:12px;align-items:flex-start">'
     +     '<div style="font-size:20px">📍</div>'
-    +     '<div><b style="font-size:14px">' + esc(c.endereco.apelido) + '</b>'
+    +     '<div><b style="font-size:14px">' + esc(en.apelido) + '</b>'
     +     '<div style="font-size:13px;color:var(--suave);margin-top:3px;line-height:1.5">'
-    +       esc(c.endereco.rua) + (c.endereco.complemento ? " · " + esc(c.endereco.complemento) : "") + '<br>'
-    +       esc(c.endereco.bairro + ", " + c.endereco.cidade + " - " + c.endereco.estado) + '</div></div></div>'
+    +       esc(en.rua) + (en.complemento ? " · " + esc(en.complemento) : "") + '<br>'
+    +       esc(lugar) + '</div></div></div>')
 
     +   (obs ? '<div class="rotulo">Suas observações</div><div class="cartao">'
     +     '<div style="font-size:13.5px;line-height:1.55;color:var(--suave)">' + esc(obs) + '</div></div>' : "")
 
     +   '<div class="rotulo">Valores</div>'
     +   '<div class="cartao">'
-    +     '<div class="linha"><span class="rot">' + esc(cat.nome) + ' · ' + conta.horasSemAdicionais + 'h'
+    +     '<div class="linha"><span class="rot">' + esc(cat.nome) + ' · ' + Number(conta.horasSemAdicionais) + 'h'
     +       (conta.quantidade > 1 ? " × 2 profissionais" : "") + '</span>'
     +       '<span class="val">' + moeda(conta.precoServico) + '</span></div>'
     +     linhasAdicionais
@@ -1000,87 +1280,236 @@ TELAS.resumo = {
     +       (conta.quantidade > 1 ? ' <span style="font-weight:600;font-size:12px">(duas diaristas)</span>' : "")
     +       '</span><span class="val">' + moeda(conta.total) + '</span></div>'
     +   '</div>'
+    +   avisoDaTrava(s)
 
     +   '<div class="aviso verde">🛡️<div><b>Pagamento protegido</b>'
     +     'O valor só é liberado para a profissional depois que o serviço é concluído.</div></div>'
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="ir(\'pagamento\')">Ir para o pagamento</button></div>';
-  }
+    + '<div class="rodape"><button class="btn btn-principal" ' + (podeSeguir ? "" : "disabled")
+    +   ' onclick="ir(\'pagamento\')">Ir para o pagamento</button></div>';
+  },
+  /* no app, depois de recarregar, as casas também (o endereço do pedido) */
+  aoEntrar: function(){ simularSeFaltar(); pedirCasasSeFaltar(); }
 };
+
+/* A CASA DO PEDIDO QUE SUMIU (só no app): apagada, ou trocada em outro
+   lugar (no servidor, trocar dá outro número à casa). O pedido não segue
+   para outro endereço sem a pessoa ver: ela escolhe de novo. Enquanto as
+   casas não chegam (recarregou), não se sabe — e não sumiu. */
+function casaDoPedidoSumiu(){
+  if(FONTE.ehMaquete) return false;
+  return FONTE.ler.casas() !== null && !casaDoPedido(E.pedido);
+}
+
+function avisoDaCasaQueSumiu(){
+  return '<div class="aviso ambar">📍<div><b>Escolha o endereço de novo</b>'
+    + 'O endereço deste pedido mudou ou foi apagado.</div></div>'
+    + '<button class="btn btn-contorno" onclick="ir(\'escolherCasa\')">Escolher o endereço</button>';
+}
+
+/* A janela que vale: a do servidor (com o relógio dele), ou, na maquete,
+   a do período escolhido. */
+function textoDaJanela(s, conta){
+  if(s.quando && s.quando.janelaTexto) return s.quando.janelaTexto;
+  return (janelaDoServico(E.pedido.periodo, conta.horas) || {}).texto || (conta.horas + " horas");
+}
+
+/* O dia ou o período que já não servem, pelo relógio do servidor (no app:
+   o do celular pode estar errado): o que veio com a conta, ou o que o
+   servidor disse ao confirmar o pedido (o tempo passou desde o resumo). A
+   frase é dele, e a saída é mudar. */
+function quandoQueNaoServe(s){
+  const aoConfirmar = avisoDoCampo(E.tela, "quando");
+  if(aoConfirmar) return aoConfirmar;
+  return (s.quando && !s.quando.serve) ? (s.quando.erro || " ") : "";
+}
+
+function avisoDoQuando(s){
+  const frase = quandoQueNaoServe(s);
+  if(!frase) return "";
+  return '<div class="aviso ambar">🕗<div><b>Este horário não dá mais</b>'
+    + esc(frase) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="ir(\'dataHorario\')">Mudar data e horário</button>';
+}
+
+/* A TRAVA DAS 8 HORAS (R8), com a frase de quem decide (no app, o
+   servidor). Quando uma não dá conta e duas dão, a saída é oferecida com o
+   preço das duas — quem decide é o cliente: o valor dobra. */
+function avisoDaTrava(s){
+  if(!s.trava) return "";
+  return '<div class="aviso" style="background:var(--vermelho-claro);color:var(--vermelho)">⚖️'
+    + '<div><b>Passou do que cabe em um dia de trabalho</b>' + esc(s.trava) + '</div></div>'
+    + (s.comDuas
+       ? '<button class="btn btn-contorno" onclick="pedirComDuas()">Pedir com duas '
+         + esc(s.comDuas.categoria.comoChamamosPlural) + ' · ' + moeda(s.comDuas.total) + '</button>'
+       : "");
+}
+
+function pedirComDuas(){
+  E.pedido.duasProfissionais = true;
+  salvar();
+  desenhar();
+}
+
+/* A CONTA QUE AINDA NÃO CHEGOU (só no app). Pedida ao servidor quando a
+   tela abre; sem resposta, a frase e o "Tentar de novo", só nesta visita. */
+let ERRO_DA_SIMULACAO = null;    // { frase, navegacao }
+
+function erroDaSimulacaoAgora(){
+  return (ERRO_DA_SIMULACAO && ERRO_DA_SIMULACAO.navegacao === NAVEGACAO) ? ERRO_DA_SIMULACAO.frase : "";
+}
+
+function contaAindaNao(titulo){
+  const erro = erroDaSimulacaoAgora();
+  return cabecalho(titulo)
+    + '<div class="corpo">'
+    + (erro
+       ? '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+         + '<button class="btn btn-contorno" onclick="tentarAContaDeNovo()">Tentar de novo</button>'
+       : '<p class="apoio">Calculando o valor do seu pedido…</p>')
+    + '</div>';
+}
+
+/* Telas sem campo para digitar: redesenhar quando a conta chega não apaga
+   nada. */
+function simularSeFaltar(){
+  if(!calcularPedido(E.pedido) || FONTE.ler.simulacao(E.pedido) || erroDaSimulacaoAgora()) return;
+  FONTE.simularPedido(E.pedido, function(r){
+    ERRO_DA_SIMULACAO = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+    desenhar();
+  });
+}
+
+function tentarAContaDeNovo(){
+  ERRO_DA_SIMULACAO = null;
+  desenhar();
+}
 
 
 /* --------------------------------------------------------------------------
-   07. PAGAMENTO (simulado)
+   07. PAGAMENTO
+   Na maquete, simulado (Pix ou cartão, e nada é cobrado). No app, o
+   pagamento chega numa próxima etapa: confirmar guarda o pedido
+   "aguardando o pagamento" (R20: primeiro o pagamento, depois a busca).
    -------------------------------------------------------------------------- */
 TELAS.pagamento = {
   html: function(){
-    const conta = calcularPedido(E.pedido);
-    if(!conta) return htmlDaTela("novoServico");
-    const formas = [
-      { id:"pix",     icone:"⚡", nome:"Pix",              detalhe:"Aprovação na hora" },
-      { id:"cartao",  icone:"💳", nome:"Cartão de crédito", detalhe:"Visa •••• 4242" },
-    ];
-    let lista = "";
-    formas.forEach(function(f){
-      const marcado = E.pedido.pagamento === f.id;
-      lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" onclick="escolherPagamento(\'' + idSeguro(f.id) + '\')">'
-        + '<div class="icone">' + f.icone + '</div>'
-        + '<div class="txt"><b>' + esc(f.nome) + '</b><span>' + esc(f.detalhe) + '</span></div>'
-        + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
-    });
+    if(!calcularPedido(E.pedido)) return htmlDaTela("novoServico");
+    const s = FONTE.ler.simulacao(E.pedido);
+    if(!s) return contaAindaNao("Pagamento");
+    const conta = s.conta;
 
     return ''
     + cabecalho("Pagamento")
     + '<div class="corpo">'
-    +   '<h2 class="titulo">Como você quer pagar?</h2>'
-    +   '<p class="apoio">Só cobramos depois que uma profissional aceitar o serviço.</p>'
-    +   lista
+    +   (FONTE.ehMaquete
+         ? '<h2 class="titulo">Como você quer pagar?</h2>'
+           + '<p class="apoio">Só cobramos depois que uma profissional aceitar o serviço.</p>'
+           + formasDePagamentoDaMaquete()
+         : '<h2 class="titulo">Falta pouco!</h2>'
+           + '<p class="apoio">Primeiro vem o pagamento, depois a busca: assim que ele entrar, '
+           + 'começamos a procurar a sua diarista.</p>'
+           + '<div class="aviso roxo">🚧<div><b>O pagamento pelo app chega em breve</b>'
+           + 'Ao confirmar, seu pedido fica guardado como “Aguardando o pagamento”. '
+           + 'Ninguém é chamado e nada é cobrado. Se mudar de ideia, cancele sem custo.</div></div>')
     +   '<div class="cartao" style="margin-top:16px">'
     +     '<div class="linha total"><span class="rot">Total a pagar'
     +       (conta.quantidade > 1 ? ' <span style="font-weight:600;font-size:12px">(duas diaristas)</span>' : "")
     +       '</span>'
     +     '<span class="val">' + moeda(conta.total) + '</span></div></div>'
-    +   '<div class="aviso roxo">🧪<div><b>Protótipo</b>'
-    +     'Nenhuma cobrança de verdade acontece aqui.</div></div>'
+    +   avisoDoQuando(s)
+    +   avisoDaTrava(s)
+    /* a frase do servidor sobre a casa, ou (sem ela) a casa que sumiu */
+    +   (avisoDoPedido("casa") || (casaDoPedidoSumiu() ? avisoDaCasaQueSumiu() : ""))
+    +   soNaMaquete(function(){
+          return '<div class="aviso roxo">🧪<div><b>Protótipo</b>'
+            + 'Nenhuma cobrança de verdade acontece aqui.</div></div>'
+            + '<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+            + '<div>No app de verdade, o pedido nasce “Aguardando o pagamento” e só vai '
+            + 'para a busca quando o pagamento entra.</div>'
+            + '<button class="btn btn-contorno" onclick="verPedidoEsperandoPagamento()">'
+            + 'Ver um pedido esperando pagamento</button></div>';
+        })
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="enviarPedido()">Confirmar pedido</button></div>';
-  }
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" '
+    +     ((s.trava || quandoQueNaoServe(s) || casaDoPedidoSumiu()) ? "disabled " : "")
+    +     'onclick="enviarPedido(this)">Confirmar pedido</button>'
+    +   '<div class="erro-do-campo" id="pedido-erro"></div>'
+    + '</div>';
+  },
+  /* no app, depois de recarregar, as casas também (o endereço do pedido) */
+  aoEntrar: function(){ simularSeFaltar(); pedirCasasSeFaltar(); }
 };
+
+/* Pix e cartão: só na maquete (o cartão é de exemplo). */
+function formasDePagamentoDaMaquete(){
+  const formas = [
+    { id:"pix",     icone:"⚡", nome:"Pix",              detalhe:"Aprovação na hora" },
+    { id:"cartao",  icone:"💳", nome:"Cartão de crédito", detalhe:"Visa •••• 4242" },
+  ];
+  let lista = "";
+  formas.forEach(function(f){
+    const marcado = E.pedido.pagamento === f.id;
+    lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" onclick="escolherPagamento(\'' + idSeguro(f.id) + '\')">'
+      + '<div class="icone">' + f.icone + '</div>'
+      + '<div class="txt"><b>' + esc(f.nome) + '</b><span>' + esc(f.detalhe) + '</span></div>'
+      + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
+  });
+  return lista;
+}
+
+/* A frase que o servidor deixou para um lugar desta tela (a casa que saiu
+   da área, ao confirmar). */
+function avisoDoPedido(campo){
+  const frase = avisoDoCampo(E.tela, campo);
+  if(!frase) return "";
+  return '<div class="aviso ambar">📍<div>' + esc(frase) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="ir(\'minhasCasas\')">Ver meus endereços</button>';
+}
 
 function escolherPagamento(id){ E.pedido.pagamento = id; salvar(); desenhar(); }
 
-function enviarPedido(){
+/* CONFIRMAR O PEDIDO. Na maquete, o pedido nasce "buscando" e a busca
+   começa; no app, ele nasce "aguardando o pagamento" e a pessoa vê o
+   detalhe dele. O botão fica desligado enquanto o pedido vai: um toque
+   duplo não vira dois pedidos (e o servidor devolve o mesmo pedido, se
+   chegar duas vezes). */
+function enviarPedido(botao){
+  /* trava dupla (R8): o botão já não deixa, mas a regra não pode depender
+     só do estado de um botão */
   const conta = calcularPedido(E.pedido);
-  const pedido = {
-    id: "P" + Date.now(),
-    criadoEm: new Date().toISOString(),
-    categoria: E.pedido.categoria,
-    respostas: Object.assign({}, E.pedido.respostas),
-    adicionais: E.pedido.adicionais.slice(),
-    duasProfissionais: E.pedido.duasProfissionais,
-    data: E.pedido.data,
-    periodo: E.pedido.periodo,
-    pagamento: E.pedido.pagamento,
-    /* a conta fica congelada dentro do pedido: o comprovante mostra o que
-       foi cobrado no dia, mesmo que a tabela de preços mude depois */
-    total: conta.total,
-    horas: conta.horas,
-    horasSemAdicionais: conta.horasSemAdicionais,
-    precoServico: conta.precoServico,
-    precoAdicionais: conta.precoAdicionais,
-    tempoExtra: conta.tempoExtra,
-    mudouDeFaixa: conta.mudouDeFaixa,
-    quantidade: conta.quantidade,
-    resumoTexto: conta.categoria.nome + " · " + conta.horas + "h",
-    situacao: "buscando",
-    profissionalId: null,
-    recusadas: [],
-  };
+  if(!conta || conta.bloqueadoPorLimiteLegal) return;
+  /* a casa que sumiu: o servidor recusaria; a tela já diz o que fazer */
+  if(casaDoPedidoSumiu()) return desenhar();
+  mostrarErro("pedido-erro", "");
+  FONTE.enviarPedido(E.pedido, function(r){
+    if(!r.ok) return mostrarErroDoPedido(r);
+    ir(r.destino, { limparHistorico:true });
+  }, { botao: botao || null });
+}
+
+/* O dia ou o período que não servem mais, ou a casa: a frase vai para o
+   lugar dela na tela, com a saída ("Mudar data e horário", "Ver meus
+   endereços"). O resto, embaixo do botão. */
+function mostrarErroDoPedido(r){
+  if(r.destino) return seguirPeloErro(r);
+  if(r.campo === "quando" || r.campo === "casa"){
+    avisarNaTela({ tela:E.tela, campo:r.campo, erro:r.erro });
+    return desenhar();
+  }
+  mostrarErro("pedido-erro", r.erro);
+}
+
+/* NA MAQUETE: o pedido parado em "Aguardando o pagamento", o estado em que
+   todo pedido nasce no app de verdade. */
+function verPedidoEsperandoPagamento(){
+  if(!FONTE.ehMaquete || !calcularPedido(E.pedido)) return;
+  const pedido = pedidoDaMaquete(E.pedido, "aguardando_pagamento");
   E.pedidos.unshift(pedido);
   E.pedidoAtual = pedido.id;
-  E.busca = { minutos:0, modo:"normal", jaAvisou:false };   // relógio da régua zerado
   salvar();
-  ir("buscando", { limparHistorico:true });
+  ir("detalhePedido", { limparHistorico:true });
 }
 
 
@@ -1272,7 +1701,7 @@ TELAS.buscaCancelada = {
 };
 
 function pedidoAtual(){
-  return E.pedidos.find(function(p){ return p.id === E.pedidoAtual; }) || E.pedidos[0];
+  return FONTE.ler.pedido(E.pedidoAtual);
 }
 
 /* Rede de segurança das telas que dependem de um pedido em andamento.
@@ -1522,32 +1951,49 @@ TELAS.perfilProfissional = {
    -------------------------------------------------------------------------- */
 TELAS.meusServicos = {
   html: function(){
+    const pedidos = FONTE.ler.pedidos();
     let lista = "";
-    if(!E.pedidos.length){
+    if(pedidos === null){
+      lista = pedidosAindaNao();
+    } else if(!pedidos.length){
       lista = '<div class="vazio">Você ainda não pediu nenhum serviço.<br>Que tal começar agora?</div>';
     } else {
-      E.pedidos.forEach(function(p){
-        const prof = PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; });
-        const selo = {
-          buscando:  '<span class="selo ambar">Buscando</span>',
-          confirmado:'<span class="selo verde">Confirmado</span>',
-          concluido: '<span class="selo cinza">Concluído</span>',
-          cancelado: '<span class="selo cinza">Cancelado</span>',
-        }[p.situacao] || "";
+      pedidos.forEach(function(p){
+        const prof = FONTE.ler.profissionalDoPedido(p);
         lista += '<button class="item" onclick="abrirPedido(\'' + idSeguro(p.id) + '\')">'
           + (prof ? avatar(prof.nome, prof.cor, "pequeno")
                   : '<div class="avatar pequeno" style="background:#CFC6E6">?</div>')
           + '<div class="txt"><b>' + esc(p.resumoTexto) + '</b>'
           + '<span>' + esc(dataPorExtenso(p.data)) + ' · ' + moeda(p.total) + '</span></div>'
-          + selo + '</button>';
+          + (SELO_DA_SITUACAO[p.situacao] || "") + '</button>';
       });
     }
     return ''
     + '<div class="cabecalho"><h1>Meus serviços</h1></div>'
     + '<div class="corpo">' + lista + '</div>'
     + abas("servicos");
-  }
+  },
+  /* no app: os pedidos de agora, a cada visita */
+  aoEntrar: function(){ pedirPedidosNestaVisita(); }
 };
+
+/* O selo de cada situação. O pedido que espera o pagamento tem o seu: um
+   pedido não pago nunca aparece como "Buscando". Curto, porque a 320 px o
+   selo comprido apertava o nome do serviço numa coluna de 36 px. */
+const SELO_DA_SITUACAO = {
+  aguardando_pagamento: '<span class="selo ambar">A pagar</span>',
+  buscando:   '<span class="selo ambar">Buscando</span>',
+  confirmado: '<span class="selo verde">Confirmado</span>',
+  concluido:  '<span class="selo cinza">Concluído</span>',
+  cancelado:  '<span class="selo cinza">Cancelado</span>',
+};
+
+/* "das 12h às 18h": a janela do pedido (a do servidor, no app; a da conta,
+   na maquete). Um lugar só, para o início e o detalhe dizerem o mesmo. */
+function janelaDoPedidoEmTexto(p){
+  return p.janelaTexto || (janelaDoServico(p.periodo, p.horas) || {}).texto
+      || (p.horas + " horas");
+}
 
 function abrirPedido(id){
   E.pedidoAtual = id;
@@ -1558,9 +2004,15 @@ function abrirPedido(id){
 TELAS.detalhePedido = {
   html: function(){
     const p = pedidoAtual();
-    if(!p) return '<div class="corpo"><div class="vazio">Pedido não encontrado.</div></div>';
-    const prof = PROFISSIONAIS.find(function(x){ return x.id === p.profissionalId; });
-    const cat = CATALOGO.find(function(c){ return c.id === p.categoria; });
+    if(!p){
+      return cabecalho("Detalhes do pedido") + '<div class="corpo">'
+        + (FONTE.ler.pedidos() === null ? pedidosAindaNao() : '<div class="vazio">Pedido não encontrado.</div>')
+        + '</div>';
+    }
+    const prof = FONTE.ler.profissionalDoPedido(p);
+    const cat = CATALOGO.find(function(c){ return c.id === p.categoria; })
+             || { nome:"Serviço", icone:"" };
+    const janelaDoPedido = janelaDoPedidoEmTexto(p);
 
     let blocoProfissional = "";
     if(prof){
@@ -1575,6 +2027,21 @@ TELAS.detalhePedido = {
         + (ehFavorita ? "❤️ Nas suas favoritas" : "🤍 Adicionar aos favoritos") + '</button></div>';
     }
 
+    /* esperando o pagamento: ninguém foi chamado ainda, e a pessoa sabe */
+    let avisoDaSituacao = "";
+    if(p.situacao === "aguardando_pagamento"){
+      avisoDaSituacao = '<div class="aviso ambar">⏳<div><b>Aguardando o pagamento</b>'
+        + (FONTE.ehMaquete
+           ? 'A busca pela diarista começa assim que o pagamento entrar.'
+           : 'O pagamento pelo app chega em breve. Enquanto isso, ninguém é chamado e nada é '
+             + 'cobrado. Se mudar de ideia, cancele sem custo.')
+        + '</div></div>';
+    } else if(p.situacao === "cancelado" && p.situacaoTexto && p.situacaoTexto !== "Cancelado"){
+      /* no app, o porquê do cancelamento, quando o servidor diz (o pedido
+         que não foi pago a tempo) */
+      avisoDaSituacao = '<div class="aviso">📌<div><b>' + esc(p.situacaoTexto) + '</b></div></div>';
+    }
+
     let acoes = "";
     if(p.situacao === "confirmado"){
       acoes = '<button class="btn btn-principal" onclick="abrirConversaDoPedido(\'' + idSeguro(p.id) + '\')">Conversar com a profissional</button>'
@@ -1583,6 +2050,10 @@ TELAS.detalhePedido = {
     } else if(p.situacao === "buscando"){
       acoes = '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
         + '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar pedido</button>';
+    } else if(p.situacao === "aguardando_pagamento"){
+      acoes = FONTE.ler.podeCancelar(p)
+        ? '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar pedido</button>'
+        : '<button class="btn btn-contorno" onclick="trocarAba(\'servicos\')">Ver meus serviços</button>';
     } else {
       acoes = '<button class="btn btn-principal" onclick="comecarPedido()">Pedir novamente</button>';
     }
@@ -1590,25 +2061,25 @@ TELAS.detalhePedido = {
     return ''
     + cabecalho("Detalhes do pedido")
     + '<div class="corpo">'
+    +   avisoDaSituacao
     +   '<div class="cartao">'
     +     '<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">'
-    +       '<div style="font-size:26px">' + cat.icone + '</div>'
+    +       '<div style="color:var(--roxo)">' + icone(cat.icone, 26) + '</div>'
     +       '<div style="flex:1"><b style="font-size:16px">' + esc(cat.nome) + '</b></div>'
     +     '</div>'
     +     '<div class="linha"><span class="rot">Data</span><span class="val">' + esc(dataPorExtenso(p.data)) + '</span></div>'
-    +     '<div class="linha"><span class="rot">Período</span><span class="val">' + esc(nomePeriodo(p.periodo)) + '</span></div>'
+    +     '<div class="linha"><span class="rot">Período</span><span class="val">'
+    +       esc(nomePeriodoComAJanela(p.periodo, janelaDoPedido)) + '</span></div>'
     +     '<div class="linha"><span class="rot">'
     +       ((p.quantidade > 1) ? "As duas ficam" : "Ela fica") + ' na sua casa</span>'
-    +       '<span class="val">'
-    +       esc((janelaDoServico(p.periodo, p.horas) || {}).texto || (p.horas + " horas"))
-    +       '</span></div>'
+    +       '<span class="val">' + esc(janelaDoPedido) + '</span></div>'
     +   '</div>'
 
     /* o comprovante: a mesma quebra de valores que ele viu ao pedir */
     +   '<div class="rotulo">Valores</div>'
     +   '<div class="cartao">'
     +     '<div class="linha"><span class="rot">' + esc(cat.nome) + ' · '
-    +       (p.horasSemAdicionais || p.horas) + 'h'
+    +       Number(p.horasSemAdicionais || p.horas) + 'h'
     +       (p.quantidade > 1 ? " × 2 profissionais" : "") + '</span>'
     +       '<span class="val">' + moeda(p.precoServico != null ? p.precoServico : p.total) + '</span></div>'
     +     (p.precoAdicionais
@@ -1629,7 +2100,9 @@ TELAS.detalhePedido = {
     +   blocoProfissional
     + '</div>'
     + '<div class="rodape">' + acoes + '</div>';
-  }
+  },
+  /* no app: a lista dos pedidos, se ainda não veio (recarregou aqui) */
+  aoEntrar: function(){ pedirPedidosSeFaltar(); }
 };
 
 function alternarFavorita(id){
@@ -1640,6 +2113,30 @@ function alternarFavorita(id){
 
 TELAS.cancelarPedido = {
   html: function(){
+    const p = pedidoAtual();
+    /* esperando o pagamento: ninguém reservou nada, e nada foi cobrado */
+    if(p && p.situacao === "aguardando_pagamento"){
+      return ''
+      + cabecalho("Cancelar pedido")
+      + '<div class="corpo">'
+      +   '<div class="centro" style="flex:none;padding:20px 0">'
+      +     '<div class="emojao">🤔</div>'
+      +     '<h2 class="titulo">Tem certeza que quer cancelar?</h2>'
+      +     '<p class="apoio">Ninguém foi chamado ainda, e nada foi cobrado.</p>'
+      +   '</div>'
+      +   '<div class="aviso verde">✓<div><b>Sem custo</b>'
+      +     'Um pedido que ainda espera o pagamento é cancelado de graça.</div></div>'
+      + '</div>'
+      /* "Manter o pedido" fica POR ÚLTIMO, no lugar em que estava o
+         "Cancelar pedido" da tela anterior: um toque duplo cai nele, e não
+         no "Sim, cancelar" (revisão da 2a; vale para a busca, na 2b) */
+      + '<div class="rodape">'
+      +   (FONTE.ler.podeCancelar(p)
+           ? '<button class="btn btn-perigo" onclick="confirmarCancelamento(this)">Sim, cancelar</button>' : "")
+      +   '<div class="erro-do-campo" id="cancelar-erro"></div>'
+      +   '<button class="btn btn-contorno" onclick="voltar()">Manter o pedido</button>'
+      + '</div>';
+    }
     return ''
     + cabecalho("Cancelar serviço")
     + '<div class="corpo">'
@@ -1648,22 +2145,36 @@ TELAS.cancelarPedido = {
     +     '<h2 class="titulo">Tem certeza que quer cancelar?</h2>'
     +     '<p class="apoio">A profissional já reservou esse horário na agenda dela.</p>'
     +   '</div>'
-    +   '<div class="aviso">📌<div><b>Política de cancelamento</b>'
+    /* a política de cancelamento (R20) ainda é do dono: no app, o
+       cancelamento depois de pago chega com ela */
+    +   soNaMaquete('<div class="aviso">📌<div><b>Política de cancelamento</b>'
     +     'As regras de prazo e cobrança ainda serão definidas pelo dono do projeto. '
-    +     'Neste protótipo, o cancelamento é sempre gratuito.</div></div>'
+    +     'Neste protótipo, o cancelamento é sempre gratuito.</div></div>')
+    +   (FONTE.ler.podeCancelar(p) ? "" : '<div class="aviso">📌<div><b>Cancelar este pedido</b>'
+    +     'Para cancelar um pedido em andamento, fale com a gente pelo suporte.</div></div>')
     + '</div>'
+    /* "Manter" por último, como acima: o toque duplo não cancela */
     + '<div class="rodape">'
+    +   (FONTE.ler.podeCancelar(p)
+         ? '<button class="btn btn-perigo" onclick="confirmarCancelamento(this)">Sim, cancelar</button>' : "")
+    +   '<div class="erro-do-campo" id="cancelar-erro"></div>'
     +   '<button class="btn btn-contorno" onclick="voltar()">Manter o serviço</button>'
-    +   '<button class="btn btn-perigo" onclick="confirmarCancelamento()">Sim, cancelar</button>'
     + '</div>';
   }
 };
 
-function confirmarCancelamento(){
+/* Cancelar: na maquete, sempre sem custo; no app, só o pedido que ainda
+   espera o pagamento (quem confere é o servidor). O botão fica desligado
+   enquanto o pedido vai. */
+function confirmarCancelamento(botao){
   const p = pedidoAtual();
-  p.situacao = "cancelado";
-  salvar();
-  trocarAba("servicos");
+  if(!p) return;
+  mostrarErro("cancelar-erro", "");
+  FONTE.cancelarPedido(p.id, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("cancelar-erro", r.erro);
+    trocarAba("servicos");
+  }, { botao: botao || null });
 }
 
 
@@ -2321,11 +2832,12 @@ TELAS.perfilCliente = {
     const favoritas = FONTE.ler.favoritas();
 
     const itens = [
-      { ic:"📍", nome:"Meus endereços", tela:"minhasCasas",
-        /* casas: null = ainda não se sabe (no app, elas chegam na entrega da casa) */
-        detalhe: (c.casas === null) ? ""
-          : ((c.casas || []).length + " cadastrado" + (((c.casas || []).length === 1) ? "" : "s")) },
-      { ic:"💳", nome:"Formas de pagamento", detalhe:"Pix e cartão" },
+      { ic:"📍", nome:"Meus endereços", tela:"minhasCasas", id:"perfil-casas",
+        /* null = ainda não se sabe (no app, até as casas chegarem) */
+        detalhe: quantasCasas(FONTE.ler.casas()) },
+      /* no app, o detalhe não promete Pix e cartão: a tela do pagamento
+         diz que ele chega em breve, e as duas dizem o mesmo */
+      { ic:"💳", nome:"Formas de pagamento", detalhe: FONTE.ehMaquete ? "Pix e cartão" : "Chega em breve" },
       favoritas ? { ic:"❤️", nome:"Profissionais favoritas", detalhe:favoritas.length + " salvas" } : null,
       { ic:"🔔", nome:"Notificações",        detalhe:"Lembretes e avisos" },
       { ic:"🛟", nome:"Ajuda e suporte",     detalhe:"Fale com a gente" },
@@ -2337,7 +2849,8 @@ TELAS.perfilCliente = {
       lista += '<button class="item" onclick="ir(\'' + idSeguro(i.tela || "chatSuporte") + '\')">'
         + '<div style="font-size:20px;width:28px;text-align:center">' + i.ic + '</div>'
         + '<div class="txt"><b>' + esc(i.nome) + '</b>'
-        + (i.detalhe ? '<span>' + esc(i.detalhe) + '</span>' : "") + '</div>'
+        + ((i.detalhe || i.id) ? '<span' + (i.id ? ' id="' + esc(i.id) + '"' : '') + '>'
+           + esc(i.detalhe) + '</span>' : "") + '</div>'
         + '<div class="seta" style="color:var(--suave)">›</div></button>';
     });
 
@@ -2357,8 +2870,22 @@ TELAS.perfilCliente = {
     +     'Nenhum dado real é usado, cobrado ou consultado.</div>')
     + '</div>'
     + abas("perfil");
+  },
+  /* no app, as casas chegam depois: só a contagem muda, sem redesenhar a
+     tela (redesenhar apagaria a frase do "Sair" sem internet) */
+  aoEntrar: function(){
+    if(FONTE.ler.casas() !== null) return;
+    FONTE.carregarCasas(function(r){
+      const lugar = document.getElementById("perfil-casas");
+      if(r.ok && lugar) lugar.textContent = quantasCasas(FONTE.ler.casas());
+    });
   }
 };
+
+function quantasCasas(casas){
+  if(!casas) return "";
+  return casas.length + " cadastrado" + (casas.length === 1 ? "" : "s");
+}
 
 /* Sair da conta (o cliente, a diarista, e quem ainda não confirmou o
    celular). Na maquete, esquece quem estava logado. No app, o servidor

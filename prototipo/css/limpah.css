@@ -198,6 +198,21 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .campo input[readonly]{background:var(--fundo);color:var(--suave)}
 .campo input[readonly]:focus{border-color:var(--borda)}
 .campo input::placeholder,.campo textarea::placeholder{color:#A79FBC}
+/* A lista (o bairro): o desenho igual ao dos campos, e a setinha roxa à
+   direita, desenhada aqui (sem imagem de fora) */
+.campo select{-webkit-appearance:none;appearance:none;padding-right:42px}
+.campo select:focus{outline:none;border-color:var(--roxo)}
+.seletor{position:relative}
+.seletor::after{
+  content:"";position:absolute;right:18px;top:50%;width:8px;height:8px;pointer-events:none;
+  border-right:2px solid var(--roxo);border-bottom:2px solid var(--roxo);
+  transform:translateY(-70%) rotate(45deg);
+}
+/* A rua e o número lado a lado: o número, estreito */
+.campos-lado{display:flex;gap:10px}
+.campos-lado .campo{flex:1;min-width:0}
+.campos-lado .campo.numero{flex:0 0 96px}
+.link-roxo{color:var(--roxo);font-weight:700;text-decoration:none}
 
 /* ---------- cartões de escolha ---------- */
 .opcao{
@@ -326,6 +341,17 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .item .txt b{display:block;font-size:14.5px}
 .item .txt span{display:block;font-size:12.5px;color:var(--suave);margin-top:3px}
 .vazio{text-align:center;color:var(--suave);font-size:13.5px;padding:40px 20px;line-height:1.6}
+/* a linha de apoio que ainda não tem texto (a contagem das casas, no app,
+   antes de elas chegarem) não ocupa lugar */
+.item .txt span:empty{display:none}
+/* a casa fora da área atendida, ou para conferir no mapa */
+.item .txt span.nota-da-area{color:var(--ambar);font-weight:600}
+/* "Onde atendemos": os bairros, um por linha, com o ✓ verde */
+.lista-de-bairros{padding:4px 16px}
+.lista-de-bairros div{display:flex;align-items:center;gap:10px;padding:11px 0;font-size:15px;
+  border-bottom:1px solid var(--borda)}
+.lista-de-bairros div:last-child{border-bottom:0}
+.lista-de-bairros .ok{color:var(--verde);font-weight:800}
 
 /* ---------- barra de abas ---------- */
 .abas{
