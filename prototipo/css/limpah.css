@@ -362,6 +362,14 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
   border-bottom:1px solid var(--borda)}
 .lista-de-bairros div:last-child{border-bottom:0}
 .lista-de-bairros .ok{color:var(--verde);font-weight:800}
+/* A busca em cima das listas de bairro (R32: os 96 distritos de São Paulo).
+   Sem a aparência de "campo de busca" do iPhone, para ficar igual aos
+   outros campos; e a linha escondida pela busca some de verdade (o
+   display:flex das linhas venceria o "hidden"). */
+.busca-de-bairro{-webkit-appearance:none;appearance:none;margin-bottom:8px}
+.lista-de-bairros[hidden],.lista-de-bairros div[hidden],.opcao[hidden]{display:none}
+.marcados-da-regiao{font-size:13px;color:var(--suave);margin:0 0 10px}
+.marcados-da-regiao b{color:var(--roxo)}
 
 /* ---------- barra de abas ---------- */
 .abas{

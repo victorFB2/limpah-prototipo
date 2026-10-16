@@ -649,6 +649,12 @@ function separarCidadeEEstado(texto){
    A rua e o NÚMERO lado a lado, e o BAIRRO escolhido numa lista: a lista
    dos bairros atendidos (na maquete, os de exemplo; no app, os do
    servidor). Quem não acha o bairro vê "Onde atendemos".
+
+   Desde a R32 (14/10/2026) a lista são os 96 distritos de São Paulo. 96
+   itens soltos é ruim no celular: em cima da lista vem uma BUSCA, que
+   deixa na lista só os que batem com o que foi digitado (sem diferenciar
+   acento e maiúscula). Achou um só, ele já fica escolhido. A lista
+   continua sendo um <select> de verdade: quem preferir rolar, rola.
    -------------------------------------------------------------------------- */
 function camposDaRua(idRua, idNumero, rua, tela){
   return '<div class="campos-lado">'
@@ -664,27 +670,58 @@ function camposDaRua(idRua, idNumero, rua, tela){
 
 function campoDeBairro(id, atual, tela){
   return '<div class="campo"><label>Bairro</label>'
+    +   '<input id="' + esc(id) + '-busca" class="busca-de-bairro" type="search" '
+    +     'autocomplete="off" placeholder="🔍 Digite para achar o bairro" '
+    +     'oninput="filtrarBairrosDaLista(\'' + idSeguro(id) + '\')">'
     +   '<div class="seletor"><select id="' + esc(id) + '">' + opcoesDeBairro(atual) + '</select></div>'
     +   erroDoCampo(id + "-erro", tela, "bairro")
-    +   '<p class="ajuda">Seu bairro não está na lista? '
+    +   '<p class="ajuda">A lista tem os distritos da cidade. Não achou o nome do seu bairro? '
+    +     'Escolha o distrito onde ele fica. '
     +     '<a href="#" onclick="verOndeAtendemos();return false;" class="link-roxo">Veja onde atendemos</a></p>'
     + '</div>';
 }
 
+/* O texto da busca bate com o bairro? Sem acento e sem maiúscula: "jacana"
+   acha "Jaçanã". Vazio, todos batem. */
+function bairroBateComABusca(bairro, busca){
+  const b = semAcento(busca).trim();
+  return !b || semAcento(bairro).indexOf(b) >= 0;
+}
+
 /* As opções da lista. O bairro que já estava escrito (uma casa de antes,
    de fora da lista) aparece também, marcado: a pessoa vê o que está
-   guardado, e o servidor diz se atende. */
-function opcoesDeBairro(atual){
+   guardado, e o servidor diz se atende. Com uma busca, só os bairros que
+   batem com ela (o escolhido sai da lista se não bater: quem busca está
+   trocando de bairro); se sobrar um só, ele já vem escolhido. */
+function opcoesDeBairro(atual, busca){
   const area = FONTE.ler.areaAtendida();
-  const lista = area ? area.bairros.slice() : [];
+  let lista = area ? area.bairros.slice() : [];
   atual = String(atual || "");
   if(atual && lista.indexOf(atual) < 0) lista.push(atual);
-  let html = '<option value="" disabled' + (atual ? '' : ' selected') + '>'
-           + (area ? 'Escolha o bairro' : 'Carregando os bairros…') + '</option>';
+  const buscando = !!semAcento(busca).trim();
+  if(buscando){
+    lista = lista.filter(function(b){ return bairroBateComABusca(b, busca); });
+    if(lista.indexOf(atual) < 0) atual = lista.length === 1 ? lista[0] : "";
+  }
+  const primeira = !area ? 'Carregando os bairros…'
+    : !buscando ? 'Escolha o bairro'
+    : !lista.length ? 'Nenhum bairro com esse nome'
+    : lista.length === 1 ? 'Achamos 1 bairro com esse nome'
+    : lista.length + ' bairros com esse nome: escolha um';
+  let html = '<option value="" disabled' + (atual ? '' : ' selected') + '>' + esc(primeira) + '</option>';
   lista.forEach(function(b){
     html += '<option value="' + esc(b) + '"' + (b === atual ? ' selected' : '') + '>' + esc(b) + '</option>';
   });
   return html;
+}
+
+/* A busca em cima da lista: refaz só as opções, sem redesenhar a tela (o
+   que a pessoa já digitou nos outros campos fica). */
+function filtrarBairrosDaLista(id){
+  const lista = document.getElementById(id);
+  const busca = document.getElementById(id + "-busca");
+  if(!lista || !busca) return;
+  lista.innerHTML = opcoesDeBairro(lista.value, busca.value);
 }
 
 /* A lista de bairros de cada tela de endereço. */
@@ -700,7 +737,8 @@ function pedirBairrosSeFaltar(){
     const id = LISTA_DE_BAIRROS_DA_TELA[E.tela];
     const lista = id ? document.getElementById(id) : null;
     if(!r.ok) return mostrarErro(id + "-erro", r.erro);
-    if(lista) lista.innerHTML = opcoesDeBairro(lista.value);
+    const busca = id ? document.getElementById(id + "-busca") : null;
+    if(lista) lista.innerHTML = opcoesDeBairro(lista.value, busca ? busca.value : "");
   });
 }
 
@@ -722,9 +760,11 @@ function verOndeAtendemos(){
 /* --------------------------------------------------------------------------
    1B. ONDE ATENDEMOS (tela nova, do app de verdade)
 
-   A área de cobertura, antes do cadastro: abre do "Seu bairro não está na
-   lista?" do endereço. Os bairros vêm da tomada: na maquete, os de
-   exemplo; no app, os do servidor.
+   A área de cobertura, antes do cadastro: abre do "Veja onde atendemos"
+   do endereço. Os bairros vêm da tomada: na maquete, os de exemplo; no
+   app, os do servidor. Desde a R32 são os 96 distritos de São Paulo: a
+   lista ganhou uma busca (esconde as linhas que não batem, sem redesenhar
+   a tela) e o texto diz que é a cidade inteira.
    -------------------------------------------------------------------------- */
 let ERRO_DOS_BAIRROS = null;    // { frase, navegacao }: vale só nesta visita à tela
 
@@ -734,9 +774,15 @@ TELAS.ondeAtendemos = {
     const erro = (ERRO_DOS_BAIRROS && ERRO_DOS_BAIRROS.navegacao === NAVEGACAO) ? ERRO_DOS_BAIRROS.frase : "";
     let lista;
     if(area){
-      lista = '<div class="cartao lista-de-bairros">'
-        + area.bairros.map(function(b){ return '<div><span class="ok">✓</span>' + esc(b) + '</div>'; }).join("")
-        + '</div>';
+      lista = '<div class="campo"><input id="onde-busca" class="busca-de-bairro" type="search" '
+        +   'autocomplete="off" placeholder="🔍 Procure o seu bairro" oninput="filtrarOndeAtendemos()"></div>'
+        + '<div class="cartao lista-de-bairros" id="onde-lista">'
+        + area.bairros.map(function(b){
+            return '<div data-bairro="' + esc(b) + '"><span class="ok">✓</span>' + esc(b) + '</div>';
+          }).join("")
+        + '</div>'
+        + '<p class="apoio" id="onde-nenhum" hidden>Nenhum bairro com esse nome. '
+        +   'A lista usa os nomes dos distritos: procure o distrito onde fica a casa.</p>';
     } else if(erro){
       lista = '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
         + '<button class="btn btn-contorno" onclick="tentarOsBairrosDeNovo()">Tentar de novo</button>';
@@ -747,11 +793,13 @@ TELAS.ondeAtendemos = {
     + cabecalho("")
     + '<div class="corpo">'
     +   '<h2 class="titulo">Onde atendemos 📍</h2>'
-    +   '<p class="apoio">Por enquanto, a Limpah atende estes bairros'
-    +     (area && area.cidade ? ' de ' + esc(area.cidade) : '') + ':</p>'
+    +   '<p class="apoio">A Limpah atende '
+    +     (area && area.cidade ? 'a cidade de ' + esc(area.cidade) + ' inteira' : 'estes bairros')
+    +     (area ? ': ' + area.bairros.length + ' bairros' : '') + ' 🎉</p>'
     +   lista
-    +   '<div class="aviso roxo" style="margin-top:18px">🏡<div><b>Seu bairro não está aqui?</b>'
-    +     'Ainda não chegamos aí 😔 Estamos começando por poucos bairros, para cuidar bem de cada casa.</div></div>'
+    +   '<div class="aviso roxo" style="margin-top:18px">🏡<div><b>Não achou o seu?</b>'
+    +     'A lista usa os nomes dos distritos da Prefeitura: escolha o distrito onde a casa fica. '
+    +     'Fora da cidade, ainda não chegamos 😔 Estamos começando por aqui, para cuidar bem de cada casa.</div></div>'
     + '</div>'
     + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
   },
@@ -767,6 +815,22 @@ TELAS.ondeAtendemos = {
 function tentarOsBairrosDeNovo(){
   ERRO_DOS_BAIRROS = null;
   desenhar();
+}
+
+/* A busca do "Onde atendemos": esconde as linhas que não batem. */
+function filtrarOndeAtendemos(){
+  const busca = document.getElementById("onde-busca");
+  const lista = document.getElementById("onde-lista");
+  const nenhum = document.getElementById("onde-nenhum");
+  if(!busca || !lista) return;
+  let visiveis = 0;
+  Array.prototype.forEach.call(lista.children, function(linha){
+    const bate = bairroBateComABusca(linha.getAttribute("data-bairro") || "", busca.value);
+    linha.hidden = !bate;
+    if(bate) visiveis++;
+  });
+  lista.hidden = visiveis === 0;
+  if(nenhum) nenhum.hidden = visiveis > 0;
 }
 
 TELAS.cadastroClienteTermos = {

@@ -132,6 +132,25 @@ function progressoDoCadastro(){
    Agora existe UM lugar que decide, e as telas só leem daqui. Frase nova
    sobre o estado dela entra NESTA tabela, nunca solta dentro de uma tela.
    ========================================================================== */
+/* As frases do Pix no app, enquanto o pagamento de verdade não está ligado
+   (entrega 7). Ver situacaoDaDiarista. */
+const PIX_SEM_O_PAGAMENTO = {
+  pixFalta: false,
+  pixDesde: "",
+  semPagamento: true,
+  pixSelo: "Pix ainda não ligado",
+  pixQuando: "quando o pagamento pelo app for ligado",
+  pixPassoTitulo: "Cai no seu Pix",
+  pixPassoFrase: "Esta parte ainda está sendo ligada no app. Até lá, nenhum valor cai no "
+               + "seu Pix por aqui.",
+  /* curta: o aviso no alto dos ganhos já diz que o pagamento não está
+     ligado — repetir a frase três vezes na mesma tela só cansa */
+  aReceberFrase: "O valor de cada diária já está combinado no aceite.",
+  antesDeTerminarFrase: "O pagamento pelo app ainda não está ligado: quando estiver, o valor "
+                      + "cai no seu Pix depois que o serviço terminar.",
+  semMensalidadeFrase: "O valor que aparece aqui é o que vai cair no seu Pix.",
+};
+
 function situacaoDaDiarista(){
   const d = euSouDiarista();
   const p = progressoDoCadastro();
@@ -152,27 +171,47 @@ function situacaoDaDiarista(){
      quem nunca cadastrou chave nenhuma. As frases do Pix que os ganhos e o
      extrato usam moram aqui, não soltas nas telas. */
   const temPix = !!d.feito.recebimento;
+  const quando = temPix ? prazoDoPix() : "depois que você cadastrar a chave";
   const pix = {
     pixFalta: !temPix,
     /* desde quando a chave existe — antes disso nada pode ter caído */
     pixDesde: temPix ? (d.pixDesde || "") : "",
     pixSelo: "Esperando sua chave Pix",
     pixEsperando: "esperando sua chave Pix",          // "R$ 711,75 esperando sua chave Pix"
-    pixQuando: temPix ? prazoDoPix() : "depois que você cadastrar a chave",
+    pixQuando: quando,
     /* o passo 3 de "Como o dinheiro chega até você" */
     pixPassoTitulo: temPix ? "Cai no seu Pix " + prazoDoPix()
                            : "Cai no seu Pix depois que você cadastrar a chave",
     pixPassoFrase:  temPix ? "Contado a partir do dia em que o serviço terminou. "
                              + "Sábado e domingo não contam."
                            : "Até lá o dinheiro fica guardado com a gente, e não se perde.",
+    /* na maquete o pagamento existe; no app, só quando for ligado */
+    semPagamento: false,
+    /* embaixo do "A receber" dos ganhos, e no detalhe do serviço que ainda
+       não terminou */
+    aReceberFrase: "Cada diária fica guardada com a gente até o serviço terminar, e cai no seu Pix "
+                 + quando + ".",
+    antesDeTerminarFrase: "O cliente já pagou: o valor fica guardado com a gente até o serviço "
+                        + "terminar e cai no seu Pix " + quando + ".",
+    /* no aviso "Sem mensalidade, sem desconto" dos ganhos e do extrato */
+    semMensalidadeFrase: "O valor que aparece aqui é o que cai no seu Pix.",
   };
   /* Antes da aprovação a chave ainda não é pedida (Portão 3) — a frase diz
      quando ela entra, em vez de prometer prazo a quem não tem chave. */
-  const pixAntesDeAprovar = temPix ? {} : {
+  let pixAntesDeAprovar = temPix ? {} : {
     pixPassoTitulo: "Cai no seu Pix",
     pixPassoFrase:  "A chave Pix a gente pede depois da aprovação. Com ela cadastrada, "
                   + "cada serviço cai " + prazoDoPix() + " depois de terminar.",
   };
+  /* NO APP, o Pix dela só funciona quando o pagamento de verdade for ligado
+     (entrega 7, DECISOES A36). Até lá não há chave a cadastrar, nada "caiu" e
+     nada está "a caminho": as frases dizem isso com todas as letras, em vez
+     de levar a um "chega em breve" ou de prometer prazo. Valem para todos
+     os estados. */
+  if(!chavePix){
+    Object.assign(pix, PIX_SEM_O_PAGAMENTO);
+    pixAntesDeAprovar = {};
+  }
 
   /* OS QUATRO ESTADOS QUE NASCERAM COM O APP DE VERDADE (entrega 3a). Na
      maquete eles só aparecem nos testes; no app, o servidor diz. Sem uma
@@ -419,7 +458,8 @@ function situacaoDaDiarista(){
          prometeria algo que essas telas não mostram */
       ganhosTitulo: "Seus ganhos começam assim que aprovarmos",
       ganhosFrase: "Está tudo enviado. Depois da aprovação, cada serviço que você "
-                 + "fizer aparece aqui, com quanto você recebe e quando cai no seu Pix.",
+                 + "fizer aparece aqui, com quanto você recebe"
+                 + (chavePix ? " e quando cai no seu Pix." : "."),
       trabalhoBotao: "Ver como está meu cadastro",
       trabalhoDestino: "diaristaAnalise",
       pct: p.pct,
@@ -458,7 +498,9 @@ function situacaoDaDiarista(){
                  + HORA_DO_ENDERECO_NA_VESPERA + "h.",
     ganhosTitulo: "Falta pouco para você começar a ganhar",
     ganhosFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
-               + "fizer aparece aqui, com quanto você recebe e quando cai no seu Pix.",
+               + "fizer aparece aqui, com quanto você recebe"
+               /* no app, o Pix dela chega com o pagamento de verdade (7) */
+               + (chavePix ? " e quando cai no seu Pix." : "."),
     trabalhoBotao: envioDosDocumentos ? "Continuar meu cadastro" : "Ver meu cadastro",
     trabalhoDestino: "diaristaCadastro",
     telaDaSituacao: "diaristaCadastro",
@@ -605,21 +647,52 @@ function bairrosMarcadosNaTela(){
    app), nesta visita à tela. */
 let ERRO_DA_REGIAO = null;        // { frase, navegacao }
 
+/* A busca da lista (R32: 96 distritos é muito para rolar no celular). Vale
+   nesta visita à tela, e sobrevive ao redesenho de cada toque. */
+let BUSCA_DA_REGIAO = null;       // { navegacao, texto }
+
+function buscaDaRegiaoNaTela(){
+  return (BUSCA_DA_REGIAO && BUSCA_DA_REGIAO.navegacao === NAVEGACAO) ? BUSCA_DA_REGIAO.texto : "";
+}
+
+/* "✓ 2 marcados: Itaquera, Tatuapé" — com 96 bairros, o que ela já marcou
+   pode estar fora da busca; esta linha mostra sempre. */
+function resumoDosMarcados(marcados, bairros){
+  /* na ordem da lista, e não na ordem dos toques */
+  const dela = bairros.filter(function(b){ return marcados.indexOf(b) >= 0; });
+  if(!dela.length) return 'Nenhum bairro marcado ainda.';
+  return '✓ ' + dela.length + (dela.length === 1 ? ' marcado: ' : ' marcados: ')
+    + dela.map(function(b){ return '<b>' + esc(b) + '</b>'; }).join(", ");
+}
+
 TELAS.diaristaRegiao = {
   html: function(){
     const area = FONTE.ler.areaAtendida();
     const bairros = FONTE.ler.bairros();
     const marcados = bairrosMarcadosNaTela();
     const erro = (ERRO_DA_REGIAO && ERRO_DA_REGIAO.navegacao === NAVEGACAO) ? ERRO_DA_REGIAO.frase : "";
+    const busca = buscaDaRegiaoNaTela();
     BAIRROS_NA_TELA = bairros.slice();
-    let lista = "";
+    let lista = "", visiveis = 0;
     bairros.forEach(function(b, i){
       const marcado = marcados.indexOf(b) >= 0;
+      const bate = bairroBateComABusca(b, busca);
+      if(bate) visiveis++;
       lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
+        + 'data-bairro="' + esc(b) + '"' + (bate ? '' : ' hidden') + ' '
         + 'onclick="alternarBairro(' + Number(i) + ')">'
         + '<div class="txt"><b>' + esc(b) + '</b></div>'
         + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
     });
+    if(area){
+      lista = '<div class="campo"><input id="reg-busca" class="busca-de-bairro" type="search" '
+        +   'autocomplete="off" placeholder="🔍 Procure um bairro" value="' + esc(busca) + '" '
+        +   'oninput="filtrarARegiao()"></div>'
+        + '<p class="marcados-da-regiao">' + resumoDosMarcados(marcados, bairros) + '</p>'
+        + '<div id="reg-lista">' + lista + '</div>'
+        + '<p class="apoio" id="reg-nenhum"' + (visiveis ? ' hidden' : '') + '>'
+        +   'Nenhum bairro com esse nome. A lista usa os nomes dos distritos da cidade.</p>';
+    }
     /* no app, a lista vem do servidor: enquanto não chega, diz isso; sem
        internet, diz o que houve e oferece tentar de novo */
     if(!area){
@@ -639,9 +712,12 @@ TELAS.diaristaRegiao = {
     /* R16 revista (12/10/2026): o transporte é dela, e o valor da tela é o
        que ela recebe. Dito aqui, antes da primeira oportunidade, para ela
        nunca esperar um acréscimo que não vem. */
-    +   '<div class="aviso roxo">🚶<div><b>Atendemos num raio de '
-    +     DESLOCAMENTO.raioMaximoKm + ' km</b>'
-    +     'De propósito: perto significa menos tempo de trânsito e mais tempo seu. '
+    /* R33 (14/10/2026): o raio passou a 15 km, e pedido de bairro vizinho
+       também chega a ela, pelas ondas (DECISOES, A33). */
+    +   '<div class="aviso roxo">🚶<div><b>Pedidos até '
+    +     DESLOCAMENTO.raioMaximoKm + ' km de você</b>'
+    +     'Quem está mais perto é chamada primeiro. Os bairros que você marca dizem de onde '
+    +     'você sai, e pedidos de bairros vizinhos também podem aparecer. '
     /* sem <b> no meio da frase: dentro do .aviso o <b> vira título, em
        linha própria (o "todo seu" de antes quebrava a frase assim) */
     +     'O transporte é por sua conta, e o valor de cada oportunidade é '
@@ -670,6 +746,23 @@ TELAS.diaristaRegiao = {
 function tentarARegiaoDeNovo(){
   ERRO_DA_REGIAO = null;
   desenhar();
+}
+
+/* A busca da lista: esconde os bairros que não batem, sem redesenhar (o
+   teclado continua aberto), e guarda o texto para o próximo redesenho. */
+function filtrarARegiao(){
+  const busca = document.getElementById("reg-busca");
+  const lista = document.getElementById("reg-lista");
+  if(!busca || !lista) return;
+  BUSCA_DA_REGIAO = { navegacao: NAVEGACAO, texto: busca.value };
+  let visiveis = 0;
+  Array.prototype.forEach.call(lista.children, function(item){
+    const bate = bairroBateComABusca(item.getAttribute("data-bairro") || "", busca.value);
+    item.hidden = !bate;
+    if(bate) visiveis++;
+  });
+  const nenhum = document.getElementById("reg-nenhum");
+  if(nenhum) nenhum.hidden = visiveis > 0;
 }
 
 function alternarBairro(posicao){
@@ -750,6 +843,9 @@ function todasAsOportunidades(){
       o.cabe = veredito.cabe;
       o.porQueNaoCabe = veredito.motivo;
       o.regraQueBarrou = veredito.regra || "";
+      /* "Meus dias de trabalho": só segura o alerta, nunca a lista (no app,
+         quem diz é o servidor: na_grade) */
+      o.naGrade = periodoServeParaEla(o.data, o.periodo);
       /* Pelo id E pela data: as oportunidades fictícias mudam de data todo
          dia, e um aceite antigo (de agosto, com o mesmo id) escondia para
          sempre a oportunidade de amanhã — a agenda dizia "livre" e a home
@@ -940,7 +1036,7 @@ TELAS.diaristaHome = {
          tela: a frase em cima, e a lista de antes embaixo */
       : (erroDasOportunidadesAgora() ? oportunidadesAindaNao() : "")
         + (lista.length ? cards
-        : '<div class="aviso roxo">🔍<div><b>Nada nos seus bairros agora</b>'
+        : '<div class="aviso roxo">🔍<div><b>Nada perto de você agora</b>'
           + 'Aparecem pedidos novos o dia inteiro. Marcar mais bairros aumenta '
           + 'suas chances — dá para mudar quando quiser.</div></div>'
           + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">'
@@ -1031,11 +1127,11 @@ function blocoDoDisponivel(d){
     + soNaMaquete(botaoDeVerOAlerta)
     + (FONTE.ehMaquete ? avisoDoSomNoIPhone() : avisoDoAlertaNoApp(d))
     /* Sempre visível, não só com a chave ligada: ela precisa poder
-       acertar os dias ANTES de começar a receber alerta. No app, a grade
-       é a entrega 6c. */
-    + soNaMaquete('<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
+       acertar os dias ANTES de começar a receber alerta. No app, desde a
+       entrega 6c (a grade fica no servidor). */
+    + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
     /* 📅 e não 🗓: o segundo sai como quadradinho vazio no Windows. */
-    +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>')
+    +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
     + avisoDeQuePausou()
     + cartaoDoAlerta();
 }
@@ -1248,13 +1344,12 @@ TELAS.diaristaAceitou = {
     +   '<div class="circulo-ok">✓</div>'
     +   '<h2 class="titulo">Pedido aceito! ✅</h2>'
     +   (jaTemARua && !FONTE.ehMaquete
-      /* no app, a rua chega pela tela do serviço, que ainda está sendo
-         construída: nada de dizer que ela já está na agenda */
+      /* no app, a rua não vem na agenda: ela está no detalhe do serviço (6b) */
       ? '<p class="apoio">Combinamos com o cliente. O serviço já está na sua agenda, '
         + 'com o bairro e a distância.</p>'
-        + '<div class="aviso roxo" style="text-align:left;margin:4px 0 0">🔒<div>'
-        +   '<b>A rua e o número já podem aparecer</b>'
-        +   'Eles vão aparecer no detalhe do serviço, que chega em breve no app.</div></div>'
+        + '<div class="aviso roxo" style="text-align:left;margin:4px 0 0">📍<div>'
+        +   '<b>A rua e o número já chegaram</b>'
+        +   'Estão no detalhe do serviço: é só tocar nele, na sua agenda.</div></div>'
       : jaTemARua
       ? '<p class="apoio">Combinamos com o cliente. O endereço completo já está na sua agenda.</p>'
       : '<p class="apoio">Combinamos com o cliente. O serviço já está na sua agenda, '
@@ -2415,23 +2510,20 @@ function botaoDeTestarOSom(){
       : "");
 }
 
-/* A grade "meus dias de trabalho" diz se este período serve para ela. */
+/* A grade "meus dias de trabalho" diz se este período serve para ela (a
+   regra pura, periodoNaGrade, mora no dados.js). Na maquete, quem usa é
+   todasAsOportunidades(); no app, o servidor já manda a resposta pronta em
+   cada oportunidade (na_grade, entrega 6c). */
 function periodoServeParaEla(dataIso, periodoId){
-  const d = euSouDiarista();
-  const grade = d.diasDeTrabalho || {};
-  if(!Object.keys(grade).length) return true;      // nada marcado = tudo serve
-  const partes = dataIso.split("-");
-  const dia = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2])).getDay();
-  const doDia = grade[dia];
-  if(!doDia || !doDia.length) return false;
-  return doDia.indexOf(periodoId) >= 0;
+  return periodoNaGrade(euSouDiarista().diasDeTrabalho, dataIso, periodoId);
 }
 
 /* O que pode virar alerta: cabe na agenda, cabe na grade dela, e ela ainda
-   não viu. */
+   não viu. A grade vem pronta em cada oportunidade (naGrade): o que não
+   diz que está na grade, não toca. */
 function proximaParaAlertar(){
   return oportunidadesDaRegiao().filter(function(o){
-    return periodoServeParaEla(o.data, o.periodo)
+    return o.naGrade === true
         && (E.jaAlertadas || []).indexOf(o.id) < 0;
   })[0] || null;
 }
@@ -2822,7 +2914,7 @@ TELAS.diaristaDisponibilidade = {
       let botoes = "";
       PERIODOS.forEach(function(p){
         const on = tudoAberto || marcados.indexOf(p.id) >= 0;
-        botoes += '<button onclick="alternarPeriodoDoDia(' + Number(dia) + ',\'' + idSeguro(p.id) + '\')" '
+        botoes += '<button onclick="alternarPeriodoDoDia(' + Number(dia) + ',\'' + idSeguro(p.id) + '\',this)" '
           + 'style="flex:1;min-height:44px;border-radius:10px;font-family:inherit;font-size:12.5px;'
           + 'font-weight:700;cursor:pointer;border:1.5px solid '
           + (on ? "var(--roxo)" : "var(--borda)") + ';'
@@ -2843,6 +2935,7 @@ TELAS.diaristaDisponibilidade = {
     +   '<p class="apoio">Só chega alerta nos dias e períodos que você marcar. '
     +     'Dá para mudar quando quiser.</p>'
     +   linhas
+    +   erroDaGradeAgora()
     +   (tudoAberto
       ? '<div class="aviso roxo">✨<div><b>Está tudo aberto</b>'
         + 'Você recebe alerta em qualquer dia e período. Desmarque o que não '
@@ -2858,25 +2951,35 @@ TELAS.diaristaDisponibilidade = {
   }
 };
 
-function alternarPeriodoDoDia(dia, periodoId){
-  const d = euSouDiarista();
-  if(!d.diasDeTrabalho) d.diasDeTrabalho = {};
+/* No app, um toque de cada vez: a grade inteira vai ao servidor a cada
+   toque, e um segundo toque antes da resposta partiria da grade velha e
+   apagaria o primeiro. Enquanto a resposta não chega, o botão tocado diz
+   "Enviando…" (rede.js) e os outros esperam. Vale só nesta visita à tela:
+   quem sai no meio não volta com a grade presa. Na maquete a gravação é
+   na hora, e isto nunca fica de pé. */
+let GRADE_SALVANDO = null;             // { navegacao }
+let ERRO_DA_GRADE = null;              // { frase, navegacao }
 
-  /* Se nada estava marcado, tudo estava valendo — então o primeiro toque
-     precisa partir de "tudo ligado", senão ela toca para DESmarcar um
-     período e o app entende que ela marcou só aquele. */
-  if(!Object.keys(d.diasDeTrabalho).length){
-    DIAS_SEMANA.forEach(function(_, i){
-      d.diasDeTrabalho[i] = PERIODOS.map(function(p){ return p.id; });
-    });
-  }
+function alternarPeriodoDoDia(dia, periodoId, botao){
+  if(GRADE_SALVANDO && GRADE_SALVANDO.navegacao === NAVEGACAO) return;
+  /* a regra do primeiro toque ("tudo aberto" vira "tudo ligado, menos
+     este") mora no dados.js: gradeAlternada */
+  const nova = gradeAlternada(euSouDiarista().diasDeTrabalho, dia, periodoId);
+  ERRO_DA_GRADE = null;
+  GRADE_SALVANDO = { navegacao: NAVEGACAO };
+  FONTE.salvarDiasDeTrabalho({ dias: nova }, function(r){
+    GRADE_SALVANDO = null;
+    if(r.destino) return seguirPeloErro(r);
+    /* não salvou: a tela continua com a grade que está guardada, e diz
+       por quê */
+    if(!r.ok) ERRO_DA_GRADE = { frase: r.erro || "", navegacao: NAVEGACAO };
+    desenhar();
+  }, { botao: botao || null });
+}
 
-  const lista = d.diasDeTrabalho[dia] || [];
-  const i = lista.indexOf(periodoId);
-  if(i >= 0) lista.splice(i, 1); else lista.push(periodoId);
-  d.diasDeTrabalho[dia] = lista;
-  salvar();
-  desenhar();
+function erroDaGradeAgora(){
+  if(!ERRO_DA_GRADE || ERRO_DA_GRADE.navegacao !== NAVEGACAO || !ERRO_DA_GRADE.frase) return "";
+  return '<div class="erro-do-campo" style="margin:-2px 0 10px">' + esc(ERRO_DA_GRADE.frase) + '</div>';
 }
 
 /* --------------------------------------------------------------------------
@@ -3167,32 +3270,61 @@ function detalhesDoServico(s){
   };
 }
 
-/* NO APP (6a), o serviço vem pronto do servidor, e só com o que ela pode
-   ver agora: nada da rua (a rua chega pela tela do serviço, entrega 6b; o
-   servidor diz só se as 18h da véspera já passaram), nada do recado, do
-   cliente nem da conversa (entrega 8). O valor é o combinado no aceite. */
+/* NO APP, o serviço vem pronto do servidor, e só com o que ela pode ver
+   agora. Na agenda (6a), nada da rua: o servidor diz só se ela já pode
+   sair (ruaLiberada). No detalhe (6b, s.detalhado), "Carla M." e — só se o
+   servidor mandou, a partir das 18h da véspera, com o serviço confirmado e
+   antes do fim — a rua, o complemento, o CEP e o recado (já filtrado lá).
+   Quem decide é o servidor; a tela só não mostra o que não veio. A
+   conversa é a entrega 8. O valor é o combinado no aceite. */
+const FRASE_DA_RUA_ESPERANDO_A_SEGUNDA =
+  "A rua e o número aparecem quando o serviço for confirmado.";
+
 function detalhesDoServidor(s){
   const terminou = s.terminou === true;
+  const x = (s.extratoDoServidor && typeof s.extratoDoServidor === "object") ? s.extratoDoServidor : null;
+  const esperaASegunda = s.situacao === "aguardando_segunda";
+  const casa = (s.detalhado && s.ruaLiberada && !terminou && s.endereco) ? String(s.endereco) : "";
+  /* a frase de quando a rua chega. Esperando a segunda, depois das 18h da
+     véspera, ela chega quando o serviço confirmar (o relógio do celular só
+     escolhe a frase: quem manda a rua é o servidor) */
+  let ruaDepois = "";
+  if(!terminou && !s.ruaLiberada){
+    ruaDepois = (esperaASegunda && enderecoLiberado(s, relogioDaAgenda()))
+      ? FRASE_DA_RUA_ESPERANDO_A_SEGUNDA : fraseDaRuaNaVespera(s);
+  }
   return {
     oportunidadeId: s.oportunidadeId,
     data: s.data, inicio: s.inicio, fim: s.fim,
     janela: s.janela || ("das " + s.inicio + "h às " + s.fim + "h"),
     horasDaJanela: s.fim - s.inicio,
     bairro: s.bairro || "",
-    endereco: "",
-    ruaDepois: (!s.ruaLiberada && !terminou) ? fraseDaRuaNaVespera(s) : "",
-    ruaNoDetalhe: !!s.ruaLiberada && !terminou,
-    ruaSaiu: false,
-    recado: "", recadoDepois: false,
+    endereco: casa,
+    complemento: casa ? String(s.complemento || "") : "",
+    cep: casa ? String(s.cep || "") : "",
+    destinoDoMapa: casa ? String(s.destinoDoMapa || "") : "",
+    ruaDepois: ruaDepois,
+    /* o cartão da agenda aponta o detalhe, onde a rua está */
+    ruaNoDetalhe: !s.detalhado && !!s.ruaLiberada && !terminou,
+    /* depois do serviço, no detalhe: a rua saiu (A18-14) */
+    ruaSaiu: !!s.detalhado && terminou,
+    recado: casa ? String(s.recado || "") : "",
+    recadoDepois: !casa && !terminou && s.temRecado === true,
     conversaAberta: false, conversaSituacao: "antes",
-    cliente: "", pedido: null,
+    cliente: String(s.cliente || ""), pedido: s.pedidoDaTela || null,
     km: s.km,
     resumo: s.resumo || "",
-    extrato: null,
+    /* as linhas do extrato (a diária e a parte dela em cada adicional) vêm
+       com os ganhos e com o detalhe (7), só quando fecham com o valor
+       combinado: o servidor diz. Sem elas, o valor combinado no aceite */
+    extrato: x ? { diaria: x.diaria, adicionais: x.adicionais, total: Number(s.receber) || 0 } : null,
     adicionaisDoServidor: Array.isArray(s.adicionais) ? s.adicionais : [],
-    linhasFecham: false,
+    linhasFecham: !!x,
     valor: Number(s.receber) || 0,
     exemplo: false,
+    doServidor: true,
+    /* o detalhe só existe para o que está na agenda dela (6b): o servidor diz */
+    abreDetalhe: s.abreDetalhe === true,
     situacao: s.situacao || "confirmado",
     caiAs: s.caiAs || null,
   };
@@ -3246,23 +3378,30 @@ function agendaPorDia(){
   return dias;
 }
 
-/* O que ela já fez: os exemplos e os da agenda cuja janela terminou, do mais
-   recente ao mais antigo. Só para quem já foi aprovada. */
+/* O que ela já fez, do mais recente ao mais antigo. Só para quem já foi
+   aprovada. Vem da tomada (FONTE.ler.ganhos): na maquete, os exemplos e os
+   da agenda cuja janela terminou; no app, o que o servidor mandou (7). */
 function servicosFeitos(){
   /* a tabela de estados decide (R24), não o sim/não antigo */
   if(!situacaoDaDiarista().podeAceitar) return [];
-  const d = euSouDiarista();
-  const exemplos = SERVICOS_FEITOS_DE_EXEMPLO.map(function(c){
-    const conta = calcularPedido(c.pedido);
-    const janela = janelaDoServico(c.periodo, conta.horas);
-    return { data: isoDeHaDias(c.haDias), inicio: janela.inicio, fim: janela.fim,
-             bairro: c.bairro, km: c.km, endereco: c.rua, pedido: c.pedido, exemplo: true };
-  });
-  const daAgenda = (d.agenda || []).filter(servicoJaTerminou);
-  return exemplos.concat(daAgenda).map(detalhesDoServico)
+  const g = FONTE.ler.ganhos();
+  return ((g && g.feitos) || []).map(detalhesDoServico)
     .sort(function(a, b){
       if(a.data !== b.data) return a.data < b.data ? 1 : -1;
       return b.inicio - a.inicio;
+    });
+}
+
+/* O que ela aceitou e ainda não fez, para os ganhos e o extrato. Na
+   maquete é o mesmo da agenda (servicosAgendados); no app, o que o
+   servidor mandou junto com os ganhos (7): só os confirmados — o pedido de
+   duas que ainda espera a segunda não é diária combinada (A16). */
+function agendadosDosGanhos(){
+  const g = FONTE.ler.ganhos();
+  return ((g && g.aReceber) || []).map(detalhesDoServico)
+    .sort(function(a, b){
+      if(a.data !== b.data) return a.data < b.data ? -1 : 1;
+      return a.inicio - b.inicio;
     });
 }
 
@@ -3321,6 +3460,9 @@ function escolherRecorte(id){
    por "a caminho" e só depois cai. */
 function situacaoDoPagamento(s){
   const e = situacaoDaDiarista();
+  /* no app, sem o pagamento de verdade (7): nada caiu, nada está a
+     caminho, e o selo diz isso */
+  if(e.semPagamento) return { chave:"semPagamento", selo:"", texto:e.pixSelo, cai:"" };
   if(e.pixFalta) return { chave:"semPix", selo:"ambar", texto:e.pixSelo, cai:"" };
   let cai = dataDoRepasse(s.data);
   if(e.pixDesde){
@@ -3346,9 +3488,11 @@ function prazoDoPix(){
    o conjunto é o que faz a diária avulsa virar "minha agenda da semana" na
    cabeça dela. A soma é exatamente o que ela recebe pelos aceitos — o
    teste 22 confere. */
-function rendaDoConjunto(){
+function rendaDoConjunto(agendados){
   /* o pedido de duas que ainda espera a segunda não é diária combinada (A16) */
-  const lista = servicosAgendados().filter(function(s){ return s.situacao !== "aguardando_segunda"; });
+  const lista = (agendados || servicosAgendados()).filter(function(s){
+    return s.situacao !== "aguardando_segunda";
+  });
   return { quantidade: lista.length, total: somarValores(lista) };
 }
 
@@ -3423,10 +3567,12 @@ function avisoACaminho(lista){
 /* O app não cobra nada dela para trabalhar (antipadrões, Bloco 7 do
    TELAS.md) — e a tela diz, em vez de deixar ela desconfiar. */
 function avisoSemMensalidade(){
+  /* a frase do Pix vem da tabela de estados (R24): no app, sem o pagamento
+     de verdade, "vai cair" (7) */
   return '<div class="aviso verde">' + icone("escudo", 18)
     + '<div><b>Sem mensalidade, sem desconto</b>'
-    + 'O aplicativo não cobra nada de você para trabalhar. O valor que aparece '
-    + 'aqui é o que cai no seu Pix.</div></div>';
+    + 'O aplicativo não cobra nada de você para trabalhar. '
+    + esc(situacaoDaDiarista().semMensalidadeFrase) + '</div></div>';
 }
 
 function avisoDosExemplos(lista){
@@ -3508,10 +3654,10 @@ function cartaoDaAgenda(s){
     +   (s.endereco ? '<b>' + esc(s.endereco) + '</b> · ' : "") + esc(s.bairro)
     +   (s.km != null ? ' · ' + kmEscrito(s.km) : "") + '</div>'
     + (s.ruaDepois ? '<div class="servico-rua">🔒 ' + esc(s.ruaDepois) + '</div>' : "")
-    /* no app, depois das 18h da véspera: a rua vai aparecer no detalhe do
-       serviço, que ainda está sendo construído (6b) */
-    + (s.ruaNoDetalhe ? '<div class="servico-rua">🔒 A rua e o número vão aparecer no detalhe do '
-      + 'serviço, que chega em breve no app.</div>' : "")
+    /* no app, depois das 18h da véspera: a rua não vem na agenda, ela está
+       no detalhe do serviço (6b), a um toque */
+    + (s.ruaNoDetalhe ? '<div class="servico-rua">📍 A rua e o número estão no detalhe do '
+      + 'serviço.</div>' : "")
     + (faltaASegunda ? '<div class="servico-rua">⏳ Ainda não está confirmado. '
       + esc(fraseDaSegunda(s)) + '</div>' : "")
     + marcaDeMensagemNova(s)
@@ -3609,9 +3755,9 @@ TELAS.diaristaAgenda = {
           + '<button class="btn btn-principal" style="margin-top:14px" '
           +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades</button>';
 
-      /* os dias de trabalho (a grade) no app são a entrega 6c */
-      miolo += soNaMaquete('<button class="btn btn-texto" style="min-height:44px;margin-top:10px" '
-        +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>')
+      /* os dias de trabalho (a grade): no app, desde a entrega 6c */
+      miolo += '<button class="btn btn-texto" style="min-height:44px;margin-top:10px" '
+        +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
         + '<button class="btn btn-texto" style="min-height:44px" '
         +   'onclick="ir(\'diaristaGanhos\')">Os que já passaram estão em Meus ganhos ›</button>';
     }
@@ -3746,6 +3892,13 @@ function abrirServicoDaAgenda(id, data){
 function servicoAberto(){
   const a = E.servicoAberto;
   if(!a) return null;
+  /* no app, o detalhe vem do servidor (6b), que confere a dona e decide se a
+     rua já vai; a agenda da memória nunca tem a rua */
+  if(!FONTE.ehMaquete){
+    const d = FONTE.ler.servicoAberto();
+    return (d && !d.naoEstaMais && d.oportunidadeId === a.oportunidadeId && d.data === a.data)
+      ? detalhesDoServico(d) : null;
+  }
   const s = (euSouDiarista().agenda || []).filter(function(x){
     return x.oportunidadeId === a.oportunidadeId && x.data === a.data;
   })[0];
@@ -3799,7 +3952,9 @@ function blocoComoChegar(s){
   /* s.endereco chega vazio antes das 18h da véspera (detalhesDoServico):
      sem rua, não há link — nem escondido */
   if(!s.endereco) return "";
-  const destino = s.endereco + ", " + s.bairro + ", " + CIDADE_DAS_OPORTUNIDADES;
+  /* no app, o destino vem montado do endereço que o servidor mandou (sem
+     posição nenhuma); na maquete, a cidade de exemplo */
+  const destino = s.destinoDoMapa || (s.endereco + ", " + s.bairro + ", " + CIDADE_DAS_OPORTUNIDADES);
   return '<div class="rotulo">Como chegar 🧭</div>'
     + '<div class="como-chegar">' + COMO_CHEGAR.map(function(m){
         return '<a class="btn btn-claro" href="' + esc(m.link(destino)) + '" '
@@ -3813,7 +3968,11 @@ function blocoDoCliente(s){
   const primeiro = nome ? nome.split(" ")[0] : "";
   /* mensagem nova do cliente aparece no próprio botão */
   const novas = novasDoServico(s);
-  const conversa = s.conversaAberta
+  /* no app, a conversa é a entrega 8: a tela não promete hora nenhuma */
+  const conversa = !FONTE.ehMaquete
+    ? '<div class="servico-rua" style="margin-top:12px">💬 A conversa com '
+      + esc(primeiro || "o cliente") + ' pelo app chega em breve.</div>'
+    : s.conversaAberta
     ? '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirConversaComOCliente()">'
       + '💬 Conversar com ' + esc(primeiro || "o cliente")
       + (novas ? ' · ' + novas + (novas > 1 ? ' novas' : ' nova') : "") + '</button>'
@@ -3850,7 +4009,10 @@ function blocoDoDinheiro(s, e){
      frase do cartão do extrato (situacaoDoPagamento). Antes o detalhe
      continuava no futuro ("fica guardado até o serviço terminar") dias
      depois, ao lado de um extrato que dizia que já tinha caído. */
-  const pagamento = servicoJaTerminou(s) ? situacaoDoPagamento(s) : null;
+  const terminou = servicoJaTerminou(s);
+  /* no app, o Pix dela é a entrega 7: depois do serviço, nada de dizer que
+     caiu */
+  const pagamento = (terminou && FONTE.ehMaquete) ? situacaoDoPagamento(s) : null;
   return '<div class="rotulo">Quanto você recebe</div>'
     + '<div class="cartao extrato">'
     +   linhas
@@ -3859,9 +4021,10 @@ function blocoDoDinheiro(s, e){
     +   (pagamento
       ? '<div class="extrato-sub" style="margin-top:8px">Sem desconto nenhum. '
         + '<span class="selo ' + pagamento.selo + '">' + esc(pagamento.texto) + '</span></div>'
-      : '<div class="extrato-sub" style="margin-top:8px">Sem desconto nenhum. O cliente já pagou: '
-        + 'o valor fica guardado com a gente até o serviço terminar e cai no seu Pix '
-        + esc(e.pixQuando) + '.</div>')
+      : terminou
+      ? '<div class="extrato-sub" style="margin-top:8px">Sem desconto nenhum.</div>'
+      : '<div class="extrato-sub" style="margin-top:8px">Sem desconto nenhum. '
+        + esc(e.antesDeTerminarFrase) + '</div>')
     + '</div>';
 }
 
@@ -3872,6 +4035,12 @@ TELAS.diaristaServico = {
     if(!e.podeAceitar){
       return cabecalho("Detalhes do serviço")
         + '<div class="corpo">' + blocoAntesDeTrabalhar(e) + '</div>';
+    }
+
+    /* no app, enquanto o detalhe não chegou do servidor (ou sem internet) */
+    if(!FONTE.ehMaquete && E.servicoAberto && !servicoJaChegou()){
+      return cabecalho("Detalhes do serviço")
+        + '<div class="corpo">' + servicoAindaNao() + '</div>';
     }
 
     const s = servicoAberto();
@@ -3918,6 +4087,16 @@ TELAS.diaristaServico = {
         ? '<div class="linha"><span class="rot">Endereço</span><span class="val">'
           + esc(s.endereco) + '</span></div>'
         : "")
+    /* no app, o complemento e o CEP vêm separados da rua (6b); na maquete,
+       a rua já vem com tudo */
+    +     (s.endereco && s.complemento
+        ? '<div class="linha"><span class="rot">Complemento</span><span class="val">'
+          + esc(s.complemento) + '</span></div>'
+        : "")
+    +     (s.endereco && s.cep
+        ? '<div class="linha"><span class="rot">CEP</span><span class="val">'
+          + esc(s.cep) + '</span></div>'
+        : "")
     +     (s.ruaDepois
         ? '<div class="servico-rua">🔒 ' + esc(s.ruaDepois) + '</div>'
           + '<div class="servico-pausa">É para proteger a casa do cliente. Junto com elas chega o '
@@ -3927,8 +4106,12 @@ TELAS.diaristaServico = {
        deixar o lugar vazio como se faltasse alguma coisa */
     +     (s.ruaSaiu
         ? '<div class="servico-rua">🔒 A rua e o número saíram daqui quando o serviço terminou.</div>'
-          + '<div class="servico-pausa">É para proteger a casa do cliente. A conversa com '
-          + esc((s.cliente || "o cliente").split(" ")[0]) + ' continua aqui embaixo.</div>'
+          + '<div class="servico-pausa">É para proteger a casa do cliente.'
+          /* no app, a conversa é a entrega 8 */
+          + (s.conversaSituacao !== "antes"
+            ? ' A conversa com ' + esc((s.cliente || "o cliente").split(" ")[0]) + ' continua aqui embaixo.'
+            : "")
+          + '</div>'
         : "")
     +   '</div>'
     +   blocoComoChegar(s)
@@ -3969,9 +4152,69 @@ TELAS.diaristaServico = {
   },
 
   /* Aberta na véspera, às 18h a rua, o recado e a conversa aparecem
-     sozinhos — o mesmo relógio da agenda, pelo agendar() */
-  aoEntrar: function(){ redesenharQuandoARuaChegar(); }
+     sozinhos — o mesmo relógio da agenda, pelo agendar(). No app, o
+     detalhe vem do servidor: uma vez por visita, e de novo às 18h. */
+  aoEntrar: function(){
+    if(FONTE.ehMaquete) return redesenharQuandoARuaChegar();
+    pedirOServicoNestaVisita();
+    perguntarOServicoQuandoARuaChegar();
+  }
 };
+
+/* NO APP, o detalhe vem do servidor (6b): uma vez a cada visita à tela. Sem
+   resposta, a frase e "Tentar de novo"; nada é pedido de novo sozinho (a
+   não ser às 18h da véspera, com o detalhe aberto). */
+let SERVICO_PEDIDO_NA_NAVEGACAO = -1;
+let ERRO_DO_SERVICO = null;              // { frase, navegacao }
+
+function servicoComErro(){
+  return (ERRO_DO_SERVICO && ERRO_DO_SERVICO.navegacao === NAVEGACAO) ? ERRO_DO_SERVICO.frase : "";
+}
+
+/* O detalhe do servidor já chegou para o serviço aberto (ou ele disse que
+   o serviço não está mais na agenda)? */
+function servicoJaChegou(){
+  const a = E.servicoAberto, d = FONTE.ler.servicoAberto();
+  if(!a || !d || d.oportunidadeId !== a.oportunidadeId) return false;
+  return !!d.naoEstaMais || d.data === a.data;
+}
+
+function pedirOServicoNestaVisita(){
+  if(!E.servicoAberto || SERVICO_PEDIDO_NA_NAVEGACAO === NAVEGACAO || servicoComErro()) return;
+  SERVICO_PEDIDO_NA_NAVEGACAO = NAVEGACAO;
+  FONTE.carregarServico(E.servicoAberto, depoisDoServico);
+}
+
+function depoisDoServico(r){
+  if(r.destino) return seguirPeloErro(r);
+  ERRO_DO_SERVICO = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+  desenhar();
+}
+
+function tentarOServicoDeNovo(){
+  ERRO_DO_SERVICO = null;
+  SERVICO_PEDIDO_NA_NAVEGACAO = -1;
+  desenhar();
+}
+
+function servicoAindaNao(){
+  const erro = servicoComErro();
+  if(!erro) return '<p class="apoio">Carregando o serviço…</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="tentarOServicoDeNovo()">Tentar de novo</button>';
+}
+
+/* Com o detalhe aberto antes das 18h da véspera, às 18h o servidor é
+   perguntado de novo (quem decide se a rua já vai é ele). Hora que já
+   passou (o relógio do celular adiantado) não arma nada: senão o detalhe
+   seria perguntado sem parar. */
+function perguntarOServicoQuandoARuaChegar(){
+  const s = servicoAberto();
+  if(!s || !s.ruaDepois) return;
+  const quando = momentoDoEndereco(s).getTime(), agora = relogioDaAgenda().getTime();
+  if(isNaN(quando) || quando <= agora) return;
+  agendar(tentarOServicoDeNovo, Math.min(ESPERA_MAXIMA_DO_RELOGIO_DA_RUA_MS, quando - agora + 1000));
+}
 
 
 /* --------------------------------------------------------------------------
@@ -3999,12 +4242,20 @@ TELAS.diaristaConversa = {
 TELAS.diaristaGanhos = {
   html: function(){
     const e = situacaoDaDiarista();
+    const g = e.podeAceitar ? FONTE.ler.ganhos() : null;
     let miolo = "";
 
     if(!e.podeAceitar){
       miolo = blocoAntesDeTrabalhar(e, true) + avisoSemMensalidade();
+    } else if(!g){
+      /* no app, enquanto os ganhos não chegaram do servidor (ou sem internet) */
+      miolo = ganhosAindaNao();
+    } else if(!g.pagamentoLigado){
+      /* no app, até o pagamento de verdade ser ligado: o recebido é zero, e a
+         tela diz por quê (7) */
+      miolo = ganhosSemOPagamento(e, g);
     } else {
-      const r = rendaDoConjunto();
+      const r = rendaDoConjunto(agendadosDosGanhos());
       /* o recorte (A9) só para o que já caiu e para a contagem; o que ainda
          é dela e não caiu aparece inteiro, de qualquer data */
       const feitos = feitosNoRecorte();          // a contagem: pela data do serviço
@@ -4017,20 +4268,7 @@ TELAS.diaristaGanhos = {
 
       /* A RECEBER — a renda do conjunto, e o que já terminou e vem a caminho */
       miolo += '<div class="rotulo">A receber</div>'
-        + '<div class="cartao destaque">'
-        + (r.quantidade
-          ? '<div style="font-size:13.5px;font-weight:600">' + esc(rotuloDaRendaDoConjunto(r)) + ':</div>'
-            + '<div class="valor-grande">' + moeda(r.total) + '</div>'
-            + '<div class="ajuda" style="margin:0">Cada diária fica guardada com a gente até o '
-            +   'serviço terminar, e cai no seu Pix ' + esc(e.pixQuando) + '.</div>'
-            + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
-            +   'onclick="ir(\'diaristaAgenda\')">Ver minha agenda ›</button>'
-          : '<b style="font-size:14.5px">Nenhuma diária agendada agora</b>'
-            + '<div class="ajuda">Quando você aceitar serviços, aparece aqui quanto você '
-            +   'recebe pelo conjunto.</div>'
-            + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
-            +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades ›</button>')
-        + '</div>'
+        + cartaoAReceber(r, e)
         + avisoACaminho(aCaminho);
 
       /* RECEBIDO — no recorte escolhido. A lista embaixo do título é SÓ do
@@ -4057,8 +4295,7 @@ TELAS.diaristaGanhos = {
               ? "O que já terminou e ainda não caiu está logo acima."
               : "Cada serviço aparece aqui quando o dinheiro cai.")
             + '</div>')
-        + '<button class="btn btn-claro" style="margin-top:4px" onclick="ir(\'diaristaExtrato\')">'
-        +   'Ver extrato serviço a serviço</button>'
+        + botaoDoExtrato()
         + avisoSemMensalidade()
         + avisoDosExemplos(feitos.concat(pagos, aCaminho, semPix));
     }
@@ -4067,11 +4304,143 @@ TELAS.diaristaGanhos = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Meus ganhos 💰</h2>'
     +   '<p class="apoio">Quanto você tem para receber e quanto já caiu no seu Pix.</p>'
+    +   (ganhosComErro() && g ? '<p class="ajuda">' + esc(ganhosComErro()) + '</p>' : "")
     +   miolo
     + '</div>'
     + abasDaDiarista("ganhos");
+  },
+
+  /* No app, os ganhos vêm do servidor, uma vez por visita (7). */
+  aoEntrar: function(){
+    if(!FONTE.ehMaquete) pedirOsGanhosNestaVisita();
   }
 };
+
+/* O cartão "A receber": a renda do conjunto (o que ela aceitou e ainda não
+   fez), ou o convite para aceitar. A frase de quando o dinheiro cai vem da
+   tabela de estados (R24): no app, sem o pagamento de verdade, ela diz isso. */
+function cartaoAReceber(r, e){
+  return '<div class="cartao destaque">'
+    + (r.quantidade
+      ? '<div style="font-size:13.5px;font-weight:600">' + esc(rotuloDaRendaDoConjunto(r)) + ':</div>'
+        + '<div class="valor-grande">' + moeda(r.total) + '</div>'
+        + '<div class="ajuda" style="margin:0">' + esc(e.aReceberFrase) + '</div>'
+        + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
+        +   'onclick="ir(\'diaristaAgenda\')">Ver minha agenda ›</button>'
+      : '<b style="font-size:14.5px">Nenhuma diária agendada agora</b>'
+        + '<div class="ajuda">Quando você aceitar serviços, aparece aqui quanto você '
+        +   'recebe pelo conjunto.</div>'
+        + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
+        +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades ›</button>')
+    + '</div>';
+}
+
+function botaoDoExtrato(){
+  return '<button class="btn btn-claro" style="margin-top:4px" onclick="ir(\'diaristaExtrato\')">'
+    +   'Ver extrato serviço a serviço</button>';
+}
+
+/* NO APP, ATÉ O PAGAMENTO DE VERDADE SER LIGADO (entrega 7, DECISOES A36).
+   O que ela tem a receber e o que já fez vêm do servidor, com as somas e a
+   contagem prontas (nada é somado aqui). O "Recebido" é o do servidor:
+   zero. Nada de "caiu no Pix" nem "a caminho": seria chamar de recebido o
+   que não caiu (A11). */
+const FRASE_DO_PAGAMENTO_DESLIGADO = "O pagamento pelo app ainda não está ligado.";
+
+function avisoDoPagamentoDesligado(g){
+  const n = g.feitosQuantidade;
+  const titulo = n
+    ? moeda(g.feitosTotal) + (n === 1 ? " pelo serviço que você já fez"
+                                      : " pelos " + n + " serviços que você já fez")
+    : FRASE_DO_PAGAMENTO_DESLIGADO;
+  const frase = n
+    ? FRASE_DO_PAGAMENTO_DESLIGADO + " Por enquanto nada cai no seu Pix por aqui. Cada serviço "
+      + "fica anotado, com o valor combinado no aceite."
+    : "Por enquanto nada cai no seu Pix por aqui. Os serviços que você fizer ficam anotados, "
+      + "com o valor combinado no aceite.";
+  return '<div class="aviso ambar">⏳<div><b>' + esc(titulo) + '</b>' + esc(frase) + '</div></div>';
+}
+
+function ganhosSemOPagamento(e, g){
+  const recorte = recorteAtual();
+  const noRecorte = g.recortes[recorte.id] || { servicosFeitos: 0, recebido: 0 };
+  /* o servidor manda só os confirmados, e a soma deles */
+  const r = { quantidade: g.aReceber.length, total: g.aReceberTotal };
+  const feitos = noRecorte.servicosFeitos;
+  return avisoDoPagamentoDesligado(g)
+    + '<div class="rotulo">A receber</div>'
+    + cartaoAReceber(r, e)
+    + '<div class="rotulo">Recebido</div>'
+    + seletorDeRecorte()
+    + '<div class="grade-2">'
+    +   '<div class="mini"><b>' + moeda(noRecorte.recebido) + '</b><span>caiu no seu Pix</span></div>'
+    +   '<div class="mini"><b>' + feitos + '</b><span>'
+    +     (feitos === 1 ? "serviço feito" : "serviços feitos") + '</span></div>'
+    + '</div>'
+    /* o aviso no alto já disse que o pagamento não está ligado: aqui, só o
+       que vai acontecer */
+    + '<div class="vazio" style="padding:18px 10px">Nada caiu no seu Pix nos '
+    +   esc(recorte.nome.toLowerCase()) + '.<br>Quando o pagamento pelo app for ligado, '
+    +   'cada serviço aparece aqui quando o dinheiro cair.</div>'
+    + botaoDoExtrato()
+    + avisoSemMensalidade();
+}
+
+function extratoSemOPagamento(e, g){
+  const agendados = agendadosDosGanhos();
+  const feitos = servicosFeitos();
+  return avisoDoPagamentoDesligado(g)
+    + comoODinheiroChega(e)
+    + '<div class="rotulo">Agendados · a receber</div>'
+    + (agendados.length
+      ? agendados.map(function(s){ return cartaoDoExtrato(s, null); }).join("")
+      : '<div class="vazio" style="padding:14px 10px">Nenhum serviço agendado agora.</div>')
+    + '<div class="rotulo">Feitos</div>'
+    + (feitos.length
+      ? feitos.map(function(s){ return cartaoDoExtrato(s, situacaoDoPagamento(s)); }).join("")
+      : '<div class="vazio" style="padding:14px 10px">Nenhum serviço feito ainda.</div>')
+    /* a lista leva os mais recentes; a soma lá em cima conta todos */
+    + (g.feitosQuantidade > feitos.length
+      ? '<p class="ajuda">Aqui estão os ' + feitos.length + ' mais recentes, de '
+        + g.feitosQuantidade + '. A soma lá em cima conta todos.</p>'
+      : "")
+    + avisoSemMensalidade();
+}
+
+/* NO APP, os ganhos vêm do servidor (7): uma vez a cada visita aos ganhos
+   ou ao extrato. Sem resposta, a frase e "Tentar de novo"; nada é pedido
+   de novo sozinho. */
+let GANHOS_PEDIDOS_NA_NAVEGACAO = -1;
+let ERRO_DOS_GANHOS = null;              // { frase, navegacao }
+
+function ganhosComErro(){
+  return (ERRO_DOS_GANHOS && ERRO_DOS_GANHOS.navegacao === NAVEGACAO) ? ERRO_DOS_GANHOS.frase : "";
+}
+
+function pedirOsGanhosNestaVisita(){
+  if(GANHOS_PEDIDOS_NA_NAVEGACAO === NAVEGACAO || ganhosComErro()) return;
+  GANHOS_PEDIDOS_NA_NAVEGACAO = NAVEGACAO;
+  FONTE.carregarGanhos(depoisDosGanhos);
+}
+
+function depoisDosGanhos(r){
+  if(r.destino) return seguirPeloErro(r);
+  ERRO_DOS_GANHOS = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+  desenhar();
+}
+
+function tentarOsGanhosDeNovo(){
+  ERRO_DOS_GANHOS = null;
+  GANHOS_PEDIDOS_NA_NAVEGACAO = -1;
+  desenhar();
+}
+
+function ganhosAindaNao(){
+  const erro = ganhosComErro();
+  if(!erro) return '<p class="apoio">Carregando seus ganhos…</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="tentarOsGanhosDeNovo()">Tentar de novo</button>';
+}
 
 
 /* --------------------------------------------------------------------------
@@ -4100,9 +4469,10 @@ function cartaoDoExtrato(s, pagamento){
   /* Serviço da agenda dela (os de exemplo não têm detalhe): o cartão leva
      ao detalhe, e de lá à conversa — "Ver a conversa" depois que ela fecha
      (A18-7). É o caminho para reler o que foi combinado, dias depois. */
-  const naAgenda = !s.exemplo && (euSouDiarista().agenda || []).some(function(x){
-    return x.oportunidadeId === s.oportunidadeId && x.data === s.data;
-  });
+  const naAgenda = s.doServidor ? s.abreDetalhe === true
+    : !s.exemplo && (euSouDiarista().agenda || []).some(function(x){
+      return x.oportunidadeId === s.oportunidadeId && x.data === s.data;
+    });
   return '<div class="cartao extrato">'
     + '<div class="extrato-cab"><b>' + esc(dataPorExtenso(s.data)) + '</b>'
     +   (pagamento
@@ -4130,7 +4500,9 @@ function comoODinheiroChega(e){
       + '<span style="font-size:12.5px;color:var(--suave);line-height:1.5;display:block;margin-top:2px">'
       + esc(frase) + '</span></div></div>';
   }
-  return '<div class="rotulo">Como o dinheiro chega até você</div>'
+  /* no app, até o pagamento de verdade ser ligado, é como VAI funcionar (7) */
+  return '<div class="rotulo">Como o dinheiro ' + (e.semPagamento ? "vai chegar" : "chega")
+    + ' até você</div>'
     + '<div class="cartao">'
     + passo("🔒", "O cliente paga antes",
             "O valor fica guardado com a gente até o serviço terminar.")
@@ -4144,12 +4516,19 @@ function comoODinheiroChega(e){
 TELAS.diaristaExtrato = {
   html: function(){
     const e = situacaoDaDiarista();
+    const g = e.podeAceitar ? FONTE.ler.ganhos() : null;
     let miolo = "";
 
     if(!e.podeAceitar){
       miolo = blocoAntesDeTrabalhar(e, true) + comoODinheiroChega(e) + avisoSemMensalidade();
+    } else if(!g){
+      /* no app, enquanto os ganhos não chegaram do servidor (ou sem internet) */
+      miolo = ganhosAindaNao();
+    } else if(!g.pagamentoLigado){
+      /* no app, até o pagamento de verdade ser ligado (7) */
+      miolo = extratoSemOPagamento(e, g);
     } else {
-      const agendados = servicosAgendados();
+      const agendados = agendadosDosGanhos();
       /* O que ainda não caiu aparece INTEIRO, de qualquer data; o recorte
          (A9) só filtra o que já caiu — senão o dinheiro devido a ela sumia
          do extrato quando ela trocava de "30" para "7 dias". */
@@ -4180,8 +4559,14 @@ TELAS.diaristaExtrato = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Serviço a serviço 🧾</h2>'
     +   '<p class="apoio">Cada valor sai da tabela de preços. Nenhum é descontado de você.</p>'
+    +   (ganhosComErro() && g ? '<p class="ajuda">' + esc(ganhosComErro()) + '</p>' : "")
     +   miolo
     + '</div>';
+  },
+
+  /* No app, os ganhos vêm do servidor, uma vez por visita (7). */
+  aoEntrar: function(){
+    if(!FONTE.ehMaquete) pedirOsGanhosNestaVisita();
   }
 };
 

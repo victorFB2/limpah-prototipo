@@ -254,6 +254,14 @@ const FONTE = {
     pronto({ ok:true });
   },
 
+  /* "Meus dias de trabalho": a grade inteira, a cada toque, fica neste
+     aparelho (no app, no servidor: entrega 6c). */
+  salvarDiasDeTrabalho: function(d, pronto){
+    FONTE.ler.diarista().diasDeTrabalho = JSON.parse(JSON.stringify((d && d.dias) || {}));
+    salvar();
+    pronto({ ok:true });
+  },
+
   /* O aceite, na maquete: confere outra vez a agenda deste aparelho (entre
      ver e tocar, ela pode ter aceitado outro pedido pelo alerta) e anota o
      serviço nela. É isto que faz o próximo pedido do mesmo horário parar de
@@ -282,6 +290,18 @@ const FONTE = {
 
   /* A agenda dela: na maquete, já está neste aparelho (ler.agenda). */
   carregarAgenda: function(pronto){
+    pronto({ ok:true });
+  },
+
+  /* Os ganhos dela (no app, 7, vêm do servidor): na maquete já estão neste
+     aparelho e nos exemplos (ler.ganhos). */
+  carregarGanhos: function(pronto){
+    pronto({ ok:true });
+  },
+
+  /* O detalhe de um serviço (no app, 6b, vem do servidor): na maquete a tela
+     o monta da agenda, que já está neste aparelho. */
+  carregarServico: function(a, pronto){
     pronto({ ok:true });
   },
 
@@ -446,6 +466,32 @@ const FONTE = {
     /* O que ela aceitou: a agenda deste aparelho (nunca "ainda não chegou"). */
     agenda: function(){
       return FONTE.ler.diarista().agenda || [];
+    },
+
+    /* Os ganhos dela: o que aceitou e ainda não fez (a agenda deste
+       aparelho) e o que já fez (os de exemplo, de dias atrás, e os da
+       agenda cuja janela terminou), no formato cru da agenda. Na maquete o
+       Pix existe (pagamentoLigado), e as somas e os recortes são contados
+       pelas telas. Nunca "ainda não chegou". */
+    ganhos: function(){
+      const agenda = FONTE.ler.agenda();
+      const exemplos = SERVICOS_FEITOS_DE_EXEMPLO.map(function(c){
+        const conta = calcularPedido(c.pedido);
+        const janela = janelaDoServico(c.periodo, conta.horas);
+        return { data: isoDeHaDias(c.haDias), inicio: janela.inicio, fim: janela.fim,
+                 bairro: c.bairro, km: c.km, endereco: c.rua, pedido: c.pedido, exemplo: true };
+      });
+      return {
+        pagamentoLigado: true,
+        aReceber: agenda.filter(function(s){ return !servicoJaTerminou(s); }),
+        feitos: exemplos.concat(agenda.filter(servicoJaTerminou)),
+      };
+    },
+
+    /* O detalhe pronto do servidor (no app, 6b). Na maquete não há: a tela
+       o monta da agenda (servicoAberto, no telas-diarista.js). */
+    servicoAberto: function(){
+      return null;
     },
 
     /* Onde o app atende (a tela "Onde atendemos" e a lista de bairros do

@@ -45,8 +45,12 @@ const FAIXAS_DE_PRECO = [
    tabela R15 + a parte dela nos adicionais (A2) — exatamente o que recebe.
    Ela vê bairro e distância ANTES de aceitar, e decide.
 
-   Quem segura o trajeto é o raio pequeno, e as ondas do alerta (ONDAS, R22)
+   Quem segura o trajeto é o raio, e as ondas do alerta (ONDAS, R22)
    chamam primeiro quem está mais perto (o porquê: DECISOES.md, R16).
+   O raio é de 15 km desde a R33 (14/10/2026: a cidade de São Paulo
+   inteira, sem trava de cobertura; o número é PROVISÓRIO). Era 7 km.
+   É o único lugar do número na maquete; o servidor tem o seu
+   (RAIO_MAXIMO_KM, app/limpah/regras.py) e um teste compara os dois.
 
    Só o raio manda. `gratisAteKm` e `valor` ficam aqui, neutros, apenas
    porque o teste cruzado do app de verdade (app/testes/motor_js.js) lê este
@@ -54,8 +58,8 @@ const FAIXAS_DE_PRECO = [
    mostrar a diferença. O servidor já segue a R16 revista; as constantes
    neutras saem dos dois lados juntas, com o teste cruzado (DECISOES, R16). */
 const DESLOCAMENTO = {
-  raioMaximoKm: 7,      // acima disso a plataforma nem oferece o serviço
-  gratisAteKm: 7,       // sem taxa em TODO o raio
+  raioMaximoKm: 15,     // acima disso a plataforma nem oferece o serviço (R33)
+  gratisAteKm: 15,      // sem taxa em TODO o raio
   valor: 0,             // nem o cliente paga, nem ela recebe à parte
 };
 
@@ -600,12 +604,16 @@ const DISPONIBILIDADE = {
    régua da busca que o cliente vê (REGUA_DA_BUSCA, em telas-cliente.js).
    Quem está mais perto é chamada primeiro — e isso pesa mais desde a R16
    revista (12/10/2026): o transporte é por conta dela, então perto é
-   dinheiro no bolso dela. */
+   dinheiro no bolso dela.
+
+   Estendidas pela R33 (14/10/2026, PROVISÓRIO): 3, 5, 7, 10 e 15 km. Dos
+   12 minutos até os 30 da régua o raio fica inteiro, e o alerta chama de
+   novo quem ainda não respondeu ("as ondas se repetem"). */
 const ONDAS = [
   { onda: 1, comecaAos:  0, raioKm: 3 },
   { onda: 2, comecaAos:  3, raioKm: 5 },
-  { onda: 3, comecaAos:  6, raioKm: DESLOCAMENTO.raioMaximoKm },
-  { onda: 4, comecaAos:  9, raioKm: DESLOCAMENTO.raioMaximoKm },
+  { onda: 3, comecaAos:  6, raioKm: 7 },
+  { onda: 4, comecaAos:  9, raioKm: 10 },
   { onda: 5, comecaAos: 12, raioKm: DESLOCAMENTO.raioMaximoKm },
 ];
 
@@ -616,8 +624,10 @@ const AGENDA = {
      Madalena e outro que começa às 16h30 em Guarulhos não se sobrepõem e
      mesmo assim são impossíveis. O deslocamento faz parte da agenda.
 
-     Fixo em 1 hora no protótipo. O raio de 7 km segura isso. Quando virar
-     cálculo por distância, muda só este número por uma função. */
+     Fixo em 1 hora no protótipo. O raio segurava isso com 7 km; com os
+     15 km da R33, dois serviços do mesmo dia podem ficar mais longe um do
+     outro (DECISOES, A33: a conferir com o dono). Quando virar cálculo por
+     distância, muda só este número por uma função. */
   folgaEntreServicosMinutos: 60,
 
   /* O teto legal (LC 150/2015) já vale por serviço. Aqui ele vale pelo DIA:
@@ -1383,4 +1393,40 @@ function situacaoPelaTrilha(trilha){
                texto: l.texto || "", emTexto: l.emTexto || "" };
     }),
   };
+}
+
+/* MEUS DIAS DE TRABALHO — a grade dela (R22; no app, a entrega 6c)
+
+   O dia da semana ("0" = domingo, como o getDay) -> os períodos marcados.
+   Nada marcado nunca = tudo serve. Com algum dia marcado, o dia que não
+   aparece (ou vem vazio) não serve. O serviço conta pelo período em que
+   COMEÇA. A mesma regra do servidor (regras.periodo_na_grade); um teste
+   cruzado do app compara as duas. */
+function periodoNaGrade(grade, dataIso, periodoId){
+  grade = grade || {};
+  if(!Object.keys(grade).length) return true;      // nada marcado = tudo serve
+  const partes = String(dataIso || "").split("-");
+  const dia = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2])).getDay();
+  const doDia = grade[dia];
+  if(!doDia || !doDia.length) return false;
+  return doDia.indexOf(periodoId) >= 0;
+}
+
+/* A grade depois de um toque num período de um dia: uma grade NOVA (a de
+   antes fica como estava). Se nada estava marcado, tudo estava valendo —
+   então o primeiro toque parte de "tudo ligado", senão ela toca para
+   DESmarcar um período e o app entende que ela marcou só aquele. */
+function gradeAlternada(grade, dia, periodoId){
+  grade = grade || {};
+  const tudoAberto = !Object.keys(grade).length;
+  const nova = {};
+  for(let i = 0; i < 7; i++){
+    const antes = tudoAberto ? PERIODOS.map(function(p){ return p.id; }) : (grade[i] || []);
+    nova[i] = antes.slice();
+  }
+  const lista = nova[dia] || [];
+  const achou = lista.indexOf(periodoId);
+  if(achou >= 0) lista.splice(achou, 1); else lista.push(periodoId);
+  nova[dia] = lista;
+  return nova;
 }

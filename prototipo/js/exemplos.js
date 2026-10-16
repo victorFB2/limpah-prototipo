@@ -25,9 +25,34 @@ const ESTADO_INICIAL_DE_EXEMPLO = {
 };
 
 
-/* Os bairros que a diarista pode escolher na maquete (passo "Onde você
-   quer trabalhar?"). No app, a lista vem do servidor. */
-const BAIRROS_DE_EXEMPLO = ["Vila Madalena", "Pinheiros", "Perdizes", "Lapa", "Butantã", "Pompeia"];
+/* Os bairros da maquete: o cliente escolhe o da casa, e a diarista marca
+   onde quer trabalhar. Desde a R32 (14/10/2026) são os 96 DISTRITOS da
+   cidade de São Paulo, em ordem alfabética — a mesma lista do servidor
+   (app/limpah/regras.py; um teste do app compara as duas). Os nomes são
+   públicos (a lista da Prefeitura); os centros de cada um ficam só no
+   servidor. No app, a lista vem do servidor. */
+const BAIRROS_DE_EXEMPLO = [
+  "Água Rasa", "Alto de Pinheiros", "Anhanguera", "Aricanduva",
+  "Artur Alvim", "Barra Funda", "Bela Vista", "Belém", "Bom Retiro", "Brás",
+  "Brasilândia", "Butantã", "Cachoeirinha", "Cambuci", "Campo Belo",
+  "Campo Grande", "Campo Limpo", "Cangaíba", "Capão Redondo", "Carrão",
+  "Casa Verde", "Cidade Ademar", "Cidade Dutra", "Cidade Líder",
+  "Cidade Tiradentes", "Consolação", "Cursino", "Ermelino Matarazzo",
+  "Freguesia do Ó", "Grajaú", "Guaianases", "Iguatemi", "Ipiranga",
+  "Itaim Bibi", "Itaim Paulista", "Itaquera", "Jabaquara", "Jaçanã",
+  "Jaguara", "Jaguaré", "Jaraguá", "Jardim Ângela", "Jardim Helena",
+  "Jardim Paulista", "Jardim São Luís", "José Bonifácio", "Lajeado", "Lapa",
+  "Liberdade", "Limão", "Mandaqui", "Marsilac", "Moema", "Mooca", "Morumbi",
+  "Parelheiros", "Pari", "Parque do Carmo", "Pedreira", "Penha", "Perdizes",
+  "Perus", "Pinheiros", "Pirituba", "Ponte Rasa", "Raposo Tavares",
+  "República", "Rio Pequeno", "Sacomã", "Santa Cecília", "Santana",
+  "Santo Amaro", "São Domingos", "São Lucas", "São Mateus", "São Miguel",
+  "São Rafael", "Sapopemba", "Saúde", "Sé", "Socorro", "Tatuapé", "Tremembé",
+  "Tucuruvi", "Vila Andrade", "Vila Curuçá", "Vila Formosa",
+  "Vila Guilherme", "Vila Jacuí", "Vila Leopoldina", "Vila Maria",
+  "Vila Mariana", "Vila Matilde", "Vila Medeiros", "Vila Prudente",
+  "Vila Sônia"
+];
 
 
 /* --------------------------------------------------------------------------
@@ -142,7 +167,7 @@ const CLIENTE_EXEMPLO = {
    `observacoes` é o recado do cliente, texto livre. Só aparece junto com a
    rua (A18, item 3): o da Butantã mostra por quê — ele traz o apartamento. */
 const OPORTUNIDADES = [
-  { emDias:1, periodo:"manha", bairro:"Vila Madalena", km:2.1, rua:"Rua dos Ipês, 48",
+  { emDias:1, periodo:"manha", bairro:"Pinheiros", km:2.1, rua:"Rua dos Ipês, 48",
     cliente:"Carla Mendes",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1,
       observacoes:"Tenho um gato bem tranquilo. Os produtos ficam embaixo da pia."}, adicionais:[] } },
@@ -160,7 +185,7 @@ const OPORTUNIDADES = [
   { emDias:3, periodo:"manha", bairro:"Lapa", km:4.2, rua:"Rua dos Girassóis, 152",
     cliente:"Luciana Rocha",
     pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:2}, adicionais:[] } },
-  { emDias:3, periodo:"tarde", bairro:"Pompeia", km:6.3, rua:"Rua das Hortênsias, 64",
+  { emDias:3, periodo:"tarde", bairro:"Perdizes", km:6.3, rua:"Rua das Hortênsias, 64",
     cliente:"Sandra Nunes",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
   { emDias:4, periodo:"tarde", bairro:"Perdizes", km:4.6, rua:"Rua Manacá, 301",
@@ -193,13 +218,13 @@ const CIDADE_DAS_OPORTUNIDADES = "São Paulo - SP";
 const SERVICOS_FEITOS_DE_EXEMPLO = [
   { haDias:2,  periodo:"manha", bairro:"Pinheiros",     km:3.1, rua:"Rua das Paineiras, 77",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:3, banheiros:1}, adicionais:["geladeira"] } },
-  { haDias:5,  periodo:"tarde", bairro:"Vila Madalena", km:2.4, rua:"Rua dos Ipês, 112",
+  { haDias:5,  periodo:"tarde", bairro:"Pinheiros",     km:2.4, rua:"Rua dos Ipês, 112",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:[] } },
   { haDias:9,  periodo:"manha", bairro:"Perdizes",      km:5.6, rua:"Rua Cambará, 45",
     pedido:{ categoria:"diarista", respostas:{tipo:"completa", comodos:3, banheiros:1}, adicionais:["passar"] } },
   { haDias:16, periodo:"manha", bairro:"Lapa",          km:4.0, rua:"Rua dos Girassóis, 18",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:4, banheiros:2}, adicionais:[] } },
-  { haDias:23, periodo:"tarde", bairro:"Pompeia",       km:6.1, rua:"Rua das Hortênsias, 230",
+  { haDias:23, periodo:"tarde", bairro:"Perdizes",      km:6.1, rua:"Rua das Hortênsias, 230",
     pedido:{ categoria:"diarista", respostas:{tipo:"padrao", comodos:2, banheiros:1}, adicionais:["armarios"] } },
 ];
 
