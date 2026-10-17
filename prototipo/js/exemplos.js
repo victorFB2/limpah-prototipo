@@ -54,6 +54,22 @@ const BAIRROS_DE_EXEMPLO = [
   "Vila Sônia"
 ];
 
+/* O CEP da casa dela (R34, 17/10/2026): na maquete, uma tabela PEQUENA de
+   exemplos, para o "Não sei meu CEP" achar alguma coisa e o início dizer
+   "Perto de Pinheiros". São começos de CEP de cada bairro, não endereço de
+   ninguém. Bairro fora da tabela: a maquete diz que não achou (no app, quem
+   acha é o localizador do servidor: ver R30). */
+const EXEMPLOS_DE_CEP = [
+  { bairro:"Pinheiros", cep:"05422-010" },
+  { bairro:"Perdizes",  cep:"05015-000" },
+  { bairro:"Lapa",      cep:"05065-000" },
+  { bairro:"Butantã",   cep:"05508-000" },
+  { bairro:"Moema",     cep:"04077-000" },
+  { bairro:"Tatuapé",   cep:"03310-000" },
+  { bairro:"Itaquera",  cep:"08210-000" },
+  { bairro:"Santana",   cep:"02020-000" },
+];
+
 
 /* --------------------------------------------------------------------------
    PROFISSIONAIS FICTÍCIAS (eram a parte 4 do dados.js)

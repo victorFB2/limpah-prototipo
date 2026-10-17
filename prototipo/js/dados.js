@@ -617,6 +617,46 @@ const ONDAS = [
   { onda: 5, comecaAos: 12, raioKm: DESLOCAMENTO.raioMaximoKm },
 ];
 
+/* O TEMPO ATÉ LÁ (R34, 17/10/2026). Ela não escolhe mais bairros: dá o CEP
+   da casa dela, e as ondas acima passam a ser medidas a partir dele. O
+   cartão da oportunidade diz, além do bairro e dos km, quanto tempo leva
+   de ônibus ou metrô — SEMPRE como estimativa ("a cerca de 40 min"),
+   nunca como promessa de horário.
+
+   A conta é PROVISÓRIA (DECISOES, A39), até o Google calcular o trajeto de
+   verdade no horário do serviço (R30): 15 minutos (andar até o ponto e
+   esperar) + 4 minutos por km, arredondado PARA CIMA de 10 em 10.
+   3 km → 30 min · 10 km → 1h · 15 km → 1h20.
+
+   O servidor tem a mesma conta (minutos_ate_la, app/limpah/regras.py), e um
+   teste compara as duas, como o preço. A conta é feita em DÉCIMOS inteiros,
+   pela distância com uma casa decimal (como a tela mostra): assim o
+   JavaScript e o Python nunca discordam por um "lixo" de ponto flutuante. */
+const TEMPO_ATE_LA = {
+  minutosFixos: 15,
+  minutosPorKm: 4,
+  arredondarEm: 10,
+};
+
+function minutosAteLa(km){
+  const decimosDeKm = Math.round(Number(km) * 10);
+  const decimosDeMinuto = TEMPO_ATE_LA.minutosFixos * 10 + TEMPO_ATE_LA.minutosPorKm * decimosDeKm;
+  return Math.ceil(decimosDeMinuto / (TEMPO_ATE_LA.arredondarEm * 10)) * TEMPO_ATE_LA.arredondarEm;
+}
+
+/* 40 → "40 min" · 60 → "1h" · 80 → "1h20" */
+function tempoAteLaEscrito(minutos){
+  const m = Math.max(0, Math.round(Number(minutos) || 0));
+  if(m < 60) return m + " min";
+  const resto = m % 60;
+  return Math.floor(m / 60) + "h" + (resto ? String(resto).padStart(2, "0") : "");
+}
+
+/* A frase inteira, a mesma no cartão, no detalhe e no alerta. */
+function fraseDoTempoAteLa(minutos){
+  return "a cerca de " + tempoAteLaEscrito(minutos) + " da sua casa, de ônibus ou metrô";
+}
+
 const AGENDA = {
   /* 1 hora entre um serviço e outro.
 

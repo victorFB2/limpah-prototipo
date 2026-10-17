@@ -35,7 +35,12 @@ function diaristaNova(){
     nome: "",
     telefone: "",
     regiao: "",
+    /* os bairros que ela marcava antes da R34 (17/10/2026); hoje é o CEP */
     bairros: [],
+    /* o CEP da casa dela, "05422-010" (R34): de onde ela sai. Nunca a rua
+       nem o número. moraPertoDe: o bairro do "Perto de …" do início */
+    cep: "",
+    moraPertoDe: "",
     situacao: "novo",        // novo · analise · aprovada
     disponivel: false,
 
@@ -622,170 +627,181 @@ function salvarDadosDaDiarista(botao){
   }, { botao: botao || null });
 }
 
-/* Os bairros como estão DESENHADOS na tela agora. O botão leva a POSIÇÃO
-   do bairro nesta lista, nunca o nome: o nome vem de fora do código e pode
-   ter apóstrofo ("D'Ávila"). E a posição é lida nesta lista, não numa
-   leitura nova: no app a lista vem do servidor, e se ela mudasse entre o
-   desenho e o toque (recarregou, ganhou um bairro, mudou de ordem), a
-   mesma posição marcaria outro bairro sem aviso. */
-let BAIRROS_NA_TELA = [];
+/* ==========================================================================
+   O CEP DA CASA DELA — o fim do Portão 1 (R34, decisão do dono, 17/10/2026)
 
-/* Os bairros que ela está marcando agora, nesta visita à tela. Só viram os
-   bairros dela no "Ver oportunidades na minha região" (terminarPortaoUm):
-   no app, é aí que vão ao servidor. Voltar sem tocar nele não muda nada.
-   Ficam na memória (nunca no aparelho), presos à navegação: entrar de novo
-   na tela começa dos bairros que ela já tem. */
-let BAIRROS_MARCADOS = null;      // { navegacao, lista }
+   Antes ela marcava os bairros onde queria trabalhar, numa lista de 96. O
+   dono testou a cadeia inteira no celular e viu o problema: "imagina só que
+   justo aonde ela escolheu não tenha ninguém". E: "conheço muitas delas que
+   mal sabem usar o celular".
 
-function bairrosMarcadosNaTela(){
-  if(!BAIRROS_MARCADOS || BAIRROS_MARCADOS.navegacao !== NAVEGACAO)
-    BAIRROS_MARCADOS = { navegacao: NAVEGACAO, lista: (euSouDiarista().bairros || []).slice() };
-  return BAIRROS_MARCADOS.lista;
-}
+   Agora é UM campo: o CEP da casa dela. O app manda primeiro o que está
+   mais perto (as ondas de 3, 5, 7, 10 e 15 km, medidas da casa dela), e o
+   cartão diz o tempo estimado de ônibus ou metrô.
 
-/* A frase de quando a lista dos bairros não chegou do servidor (só no
-   app), nesta visita à tela. */
-let ERRO_DA_REGIAO = null;        // { frase, navegacao }
+   Regra de desenho destas telas: poucas palavras, um assunto por tela,
+   botão grande, teclado de números, erro que nunca é bronca.
 
-/* A busca da lista (R32: 96 distritos é muito para rolar no celular). Vale
-   nesta visita à tela, e sobrevive ao redesenho de cada toque. */
-let BUSCA_DA_REGIAO = null;       // { navegacao, texto }
+   Só o CEP é guardado — nunca a rua nem o número da casa dela (LGPD). O
+   "Não sei meu CEP" usa a rua só para achar o CEP. O cliente não vê nada
+   disso (no app, um teste confere as respostas do cliente).
 
-function buscaDaRegiaoNaTela(){
-  return (BUSCA_DA_REGIAO && BUSCA_DA_REGIAO.navegacao === NAVEGACAO) ? BUSCA_DA_REGIAO.texto : "";
-}
+   A tela continua com o nome "diaristaRegiao": é o mesmo passo do Portão 1,
+   e o mesmo lugar em "Meu perfil" (o "mudei de casa").
+   ========================================================================== */
 
-/* "✓ 2 marcados: Itaquera, Tatuapé" — com 96 bairros, o que ela já marcou
-   pode estar fora da busca; esta linha mostra sempre. */
-function resumoDosMarcados(marcados, bairros){
-  /* na ordem da lista, e não na ordem dos toques */
-  const dela = bairros.filter(function(b){ return marcados.indexOf(b) >= 0; });
-  if(!dela.length) return 'Nenhum bairro marcado ainda.';
-  return '✓ ' + dela.length + (dela.length === 1 ? ' marcado: ' : ' marcados: ')
-    + dela.map(function(b){ return '<b>' + esc(b) + '</b>'; }).join(", ");
+/* O CEP que o "Não sei meu CEP" achou: volta para o campo, para ela
+   conferir e salvar. Só na memória, nunca no aparelho. */
+let CEP_ACHADO = "";
+
+/* A máscara 00000-000 enquanto ela digita (só números, no máximo 8). */
+function mascararCep(campo){
+  if(!campo) return;
+  const n = String(campo.value || "").replace(/[^0-9]/g, "").slice(0, 8);
+  const escrito = n.length > 5 ? n.slice(0, 5) + "-" + n.slice(5) : n;
+  if(campo.value !== escrito) campo.value = escrito;
 }
 
 TELAS.diaristaRegiao = {
   html: function(){
-    const area = FONTE.ler.areaAtendida();
-    const bairros = FONTE.ler.bairros();
-    const marcados = bairrosMarcadosNaTela();
-    const erro = (ERRO_DA_REGIAO && ERRO_DA_REGIAO.navegacao === NAVEGACAO) ? ERRO_DA_REGIAO.frase : "";
-    const busca = buscaDaRegiaoNaTela();
-    BAIRROS_NA_TELA = bairros.slice();
-    let lista = "", visiveis = 0;
-    bairros.forEach(function(b, i){
-      const marcado = marcados.indexOf(b) >= 0;
-      const bate = bairroBateComABusca(b, busca);
-      if(bate) visiveis++;
-      lista += '<button class="opcao ' + (marcado ? "marcada" : "") + '" '
-        + 'data-bairro="' + esc(b) + '"' + (bate ? '' : ' hidden') + ' '
-        + 'onclick="alternarBairro(' + Number(i) + ')">'
-        + '<div class="txt"><b>' + esc(b) + '</b></div>'
-        + (marcado ? '<div class="seta">✓</div>' : "") + '</button>';
-    });
-    if(area){
-      lista = '<div class="campo"><input id="reg-busca" class="busca-de-bairro" type="search" '
-        +   'autocomplete="off" placeholder="🔍 Procure um bairro" value="' + esc(busca) + '" '
-        +   'oninput="filtrarARegiao()"></div>'
-        + '<p class="marcados-da-regiao">' + resumoDosMarcados(marcados, bairros) + '</p>'
-        + '<div id="reg-lista">' + lista + '</div>'
-        + '<p class="apoio" id="reg-nenhum"' + (visiveis ? ' hidden' : '') + '>'
-        +   'Nenhum bairro com esse nome. A lista usa os nomes dos distritos da cidade.</p>';
-    }
-    /* no app, a lista vem do servidor: enquanto não chega, diz isso; sem
-       internet, diz o que houve e oferece tentar de novo */
-    if(!area){
-      lista = erro
-        ? '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
-          + '<button class="btn btn-contorno" onclick="tentarARegiaoDeNovo()">Tentar de novo</button>'
-        : '<p class="apoio">Carregando os bairros…</p>';
-    }
-    const algumMarcado = marcados.some(function(b){ return bairros.indexOf(b) >= 0; });
+    const d = euSouDiarista();
+    /* já tem CEP: é o "mudei de casa", que volta para onde ela estava */
+    const trocando = !!d.cep;
+    const valor = CEP_ACHADO || d.cep || "";
+    const acao = trocando ? "Salvar" : "Continuar";
 
     return ''
-    + cabecalho("", { passos:[2,5] })
+    + cabecalho("", trocando ? {} : { passos:[2,5] })
     + '<div class="corpo">'
-    +   '<h2 class="titulo">Onde você quer trabalhar? 📍</h2>'
-    +   '<p class="apoio">Escolha os bairros que ficam bons para você. Dá para mudar quando quiser.</p>'
-    +   lista
+    +   '<h2 class="titulo">Qual é o CEP da sua casa? 🏠</h2>'
+    +   '<p class="apoio">Assim mandamos primeiro os serviços mais perto de você.</p>'
+    +   '<div class="campo"><label for="cep-dela">CEP</label>'
+    +     '<input id="cep-dela" class="cep" type="text" inputmode="numeric" '
+    +       'autocomplete="postal-code" maxlength="9" placeholder="00000-000" '
+    +       'value="' + esc(valor) + '" oninput="mascararCep(this)" '
+    +       'onkeydown="if(event.key===\'Enter\'){event.preventDefault();salvarOCepDela();}">'
+    +     erroDoCampo("cep-erro", "diaristaRegiao", "cep")
+    +   '</div>'
+    +   (CEP_ACHADO
+      ? '<p class="cep-achado">✓ Achamos o seu CEP. Confira e toque em ' + acao + '.</p>' : '')
+    +   '<button class="btn btn-texto" onclick="ir(\'diaristaSemCep\')">Não sei meu CEP</button>'
+    +   '<div class="aviso roxo">🔒<div><b>Só o CEP</b>'
+    +     'Não pedimos a rua nem o número da sua casa. O cliente nunca vê o seu CEP.</div></div>'
     /* R16 revista (12/10/2026): o transporte é dela, e o valor da tela é o
        que ela recebe. Dito aqui, antes da primeira oportunidade, para ela
-       nunca esperar um acréscimo que não vem. */
-    /* R33 (14/10/2026): o raio passou a 15 km, e pedido de bairro vizinho
-       também chega a ela, pelas ondas (DECISOES, A33). */
-    +   '<div class="aviso roxo">🚶<div><b>Pedidos até '
+       nunca esperar um acréscimo que não vem. Sem <b> no meio da frase:
+       dentro do .aviso o <b> vira título, em linha própria. */
+    +   '<div class="aviso roxo">🚌<div><b>Pedidos até '
     +     DESLOCAMENTO.raioMaximoKm + ' km de você</b>'
-    +     'Quem está mais perto é chamada primeiro. Os bairros que você marca dizem de onde '
-    +     'você sai, e pedidos de bairros vizinhos também podem aparecer. '
-    /* sem <b> no meio da frase: dentro do .aviso o <b> vira título, em
-       linha própria (o "todo seu" de antes quebrava a frase assim) */
+    +     'Quem mora mais perto é chamada primeiro. '
     +     'O transporte é por sua conta, e o valor de cada oportunidade é '
-    +     'exatamente o que você recebe. Você vê o bairro e a distância '
-    +     'antes de aceitar.</div></div>'
+    +     'exatamente o que você recebe. Antes de aceitar, você vê o bairro, '
+    +     'a distância e o tempo até lá.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    /* desde a 3b, também no app: o botão salva e leva às oportunidades */
-    +   '<button class="btn btn-principal" ' + (algumMarcado ? "" : "disabled")
-    +     ' onclick="terminarPortaoUm(this)">Ver oportunidades na minha região</button>'
+    +   '<button class="btn btn-principal" onclick="salvarOCepDela(this)">' + acao + '</button>'
     +   erroDoCampo("reg-erro", "diaristaRegiao", "")
     + '</div>';
-  },
-  /* no app, a lista dos bairros pode ainda não ter chegado (a tela abriu
-     direto, depois do código ou de recarregar): pede, e desenha de novo
-     (aqui não há nada digitado para se perder) */
-  aoEntrar: function(){
-    if(FONTE.ler.areaAtendida() || (ERRO_DA_REGIAO && ERRO_DA_REGIAO.navegacao === NAVEGACAO)) return;
-    FONTE.carregarArea(function(r){
-      ERRO_DA_REGIAO = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
-      desenhar();
-    });
   }
 };
 
-function tentarARegiaoDeNovo(){
-  ERRO_DA_REGIAO = null;
-  desenhar();
-}
-
-/* A busca da lista: esconde os bairros que não batem, sem redesenhar (o
-   teclado continua aberto), e guarda o texto para o próximo redesenho. */
-function filtrarARegiao(){
-  const busca = document.getElementById("reg-busca");
-  const lista = document.getElementById("reg-lista");
-  if(!busca || !lista) return;
-  BUSCA_DA_REGIAO = { navegacao: NAVEGACAO, texto: busca.value };
-  let visiveis = 0;
-  Array.prototype.forEach.call(lista.children, function(item){
-    const bate = bairroBateComABusca(item.getAttribute("data-bairro") || "", busca.value);
-    item.hidden = !bate;
-    if(bate) visiveis++;
-  });
-  const nenhum = document.getElementById("reg-nenhum");
-  if(nenhum) nenhum.hidden = visiveis > 0;
-}
-
-function alternarBairro(posicao){
-  const b = BAIRROS_NA_TELA[Number(posicao)];
-  if(!b) return;
-  const marcados = bairrosMarcadosNaTela();
-  const i = marcados.indexOf(b);
-  if(i >= 0) marcados.splice(i, 1); else marcados.push(b);
-  desenhar();
-}
-
-/* Os bairros marcados viram os dela: na maquete, na hora; no app, no
-   servidor (que confere cada um contra a lista dos bairros atendidos). Só vão os que
-   estão na lista desenhada: um bairro que saiu da lista não volta. */
-function terminarPortaoUm(botao){
-  const bairros = bairrosMarcadosNaTela().filter(function(b){ return BAIRROS_NA_TELA.indexOf(b) >= 0; });
+/* O CEP vai para ela: na maquete, na hora; no app, o servidor acha onde
+   ele fica e confere que dá para trabalhar dali. Da primeira vez, ela vai
+   para o início (o fim do Portão 1); trocando, volta para onde estava. */
+function salvarOCepDela(botao){
+  const numeros = valorDoCampo("cep-dela").replace(/[^0-9]/g, "");
+  mostrarErro("cep-erro", "");
   mostrarErro("reg-erro", "");
-  if(!bairros.length) return;
-  FONTE.salvarBairros({ bairros: bairros }, function(r){
+  if(numeros.length !== 8)
+    return mostrarErro("cep-erro", "O CEP tem 8 números. Confira e tente de novo.");
+  const tinhaCep = !!euSouDiarista().cep;
+  FONTE.salvarCep({ cep: numeros.slice(0, 5) + "-" + numeros.slice(5) }, function(r){
     if(!r.ok && r.destino) return seguirPeloErro(r);
-    if(!r.ok) return mostrarErro("reg-erro", r.erro);
+    if(!r.ok) return mostrarErro(r.campo === "cep" ? "cep-erro" : "reg-erro", r.erro);
+    CEP_ACHADO = "";
+    if(tinhaCep) return voltar();
     ir("diaristaHome", { limparHistorico:true });
   }, { botao: botao || null });
+}
+
+
+/* "NÃO SEI MEU CEP" (R34): a rua e o bairro. O bairro é escolhido na mesma
+   lista com busca do endereço do cliente (os 96 distritos). O CEP achado
+   volta para a tela do CEP, para ela conferir. A rua não é guardada. */
+TELAS.diaristaSemCep = {
+  html: function(){
+    return ''
+    + cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Vamos achar o seu CEP 🔍</h2>'
+    +   '<p class="apoio">Digite a rua e o bairro da sua casa.</p>'
+    +   '<div class="campo"><label for="sem-cep-rua">Rua</label>'
+    +     '<input id="sem-cep-rua" type="text" autocomplete="address-line1" '
+    +       'placeholder="Nome da rua">'
+    +     erroDoCampo("sem-cep-rua-erro", "diaristaSemCep", "rua") + '</div>'
+    +   '<div class="campo"><label for="sem-cep-bairro">Bairro</label>'
+    +     '<input id="sem-cep-bairro-busca" class="busca-de-bairro" type="search" '
+    +       'autocomplete="off" placeholder="🔍 Digite para achar o bairro" '
+    +       'oninput="filtrarBairrosDaLista(\'sem-cep-bairro\')">'
+    +     '<div class="seletor"><select id="sem-cep-bairro">' + opcoesDeBairro("") + '</select></div>'
+    +     erroDoCampo("sem-cep-bairro-erro", "diaristaSemCep", "bairro")
+    +     '<p class="ajuda">Não achou? Escolha o bairro maior onde a sua rua fica.</p>'
+    +   '</div>'
+    +   '<div class="aviso roxo">🔒<div><b>Só para achar o CEP</b>'
+    +     'Não guardamos o nome da sua rua.</div></div>'
+    /* a maquete só conhece alguns bairros (a tabela pequena de exemplos) */
+    +   soNaMaquete(function(){
+          return '<p class="ajuda">Na maquete, experimente: '
+            + EXEMPLOS_DE_CEP.map(function(x){ return esc(x.bairro); }).join(", ") + '.</p>';
+        })
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="acharOCepDela(this)">Achar meu CEP</button>'
+    +   erroDoCampo("sem-cep-erro", "diaristaSemCep", "")
+    + '</div>';
+  },
+  /* no app, a lista dos bairros pode ainda não ter chegado (recarregou):
+     ela entra na lista, sem redesenhar a tela */
+  aoEntrar: function(){ pedirBairrosSeFaltar(); }
+};
+
+function acharOCepDela(botao){
+  const rua = valorDoCampo("sem-cep-rua").trim();
+  const bairro = valorDoCampo("sem-cep-bairro");
+  ["sem-cep-rua-erro", "sem-cep-bairro-erro", "sem-cep-erro"].forEach(function(id){
+    mostrarErro(id, "");
+  });
+  if(rua.length < 3) return mostrarErro("sem-cep-rua-erro", "Digite o nome da sua rua.");
+  if(!bairro) return mostrarErro("sem-cep-bairro-erro", "Escolha o bairro na lista.");
+  FONTE.procurarCep({ rua: rua, bairro: bairro }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok){
+      const lugar = r.campo === "rua" ? "sem-cep-rua-erro"
+                  : r.campo === "bairro" ? "sem-cep-bairro-erro" : "sem-cep-erro";
+      return mostrarErro(lugar, r.erro);
+    }
+    CEP_ACHADO = String(r.cep || "");
+    /* de volta à tela do CEP, sem empilhar outra */
+    if(E.historico[E.historico.length - 1] === "diaristaRegiao") return voltar();
+    ir("diaristaRegiao", { semHistorico:true });
+  }, { botao: botao || null });
+}
+
+/* "Falta o CEP da sua casa": no início de quem ainda não deu o CEP — a
+   conta de antes da R34, que marcou bairros (a distância continua por eles
+   até ela informar), e, no app, quem ainda não terminou o Portão 1. */
+function cartaoDoCep(){
+  return '<div class="aviso roxo">🏠<div><b>Falta o CEP da sua casa</b>'
+    + 'Com ele, mandamos primeiro os serviços mais perto de você.</div></div>'
+    + '<button class="btn btn-contorno" style="margin-bottom:14px" '
+    +   'onclick="ir(\'diaristaRegiao\')">Informar meu CEP</button>';
+}
+
+/* "a cerca de 40 min da sua casa, de ônibus ou metrô" (R34): a estimativa,
+   nunca promessa. Sem o CEP dela, a linha não aparece (a distância seria
+   do bairro, e não da casa). */
+function tempoAteLaDa(o){
+  return (o && Number(o.minutosAteLa) > 0) ? fraseDoTempoAteLa(o.minutosAteLa) : "";
 }
 
 
@@ -797,16 +813,20 @@ const NOME_DA_LIMPEZA = { padrao:"Limpeza padrão", completa:"Limpeza completa" 
 
 /* Monta a lista inteira, com data, horário e o veredito da agenda.
 
-   Só entra bairro que ela escolheu. Prometer "oportunidades na sua região" e
-   listar bairro que ela não marcou é quebrar a promessa na primeira tela. */
+   Desde a R34 (17/10/2026) ela dá o CEP da casa dela, e não escolhe
+   bairros: entram todas as de exemplo (as distâncias da maquete são de
+   exemplo, todas dentro dos 15 km), cada uma com o tempo estimado até lá.
+   A conta de antes da R34, com bairros e sem CEP, continua como era: só os
+   bairros que ela marcou, e sem o tempo (a distância não seria da casa). */
 function todasAsOportunidades(){
   const d = euSouDiarista();
   const meus = d.bairros || [];
+  const pelosBairros = !d.cep && meus.length > 0;
   const dias = proximosDias(8);
 
   return OPORTUNIDADES
     .map(function(c, i){ return { caso:c, id:i }; })
-    .filter(function(x){ return meus.length === 0 || meus.indexOf(x.caso.bairro) >= 0; })
+    .filter(function(x){ return !pelosBairros || meus.indexOf(x.caso.bairro) >= 0; })
     .map(function(x){
       const c = x.caso;
       const conta = calcularPedido(c.pedido);
@@ -823,6 +843,9 @@ function todasAsOportunidades(){
         fim: janela ? janela.fim : 12,
         bairro: c.bairro,
         km: c.km,
+        /* o tempo estimado de ônibus ou metrô da casa dela (R34), pela
+           mesma conta do servidor; sem o CEP, nada */
+        minutosAteLa: d.cep ? minutosAteLa(c.km) : null,
         janela: janela ? janela.texto : conta.horas + "h",
         horas: conta.horas,
         /* tabela + a parte dela nos adicionais, em qualquer distância (R16
@@ -903,19 +926,9 @@ function tentarAsOportunidadesDeNovo(){
    internet), com "Tentar de novo". */
 function oportunidadesAindaNao(){
   const erro = erroDasOportunidadesAgora();
-  if(!erro) return '<p class="apoio">Carregando os pedidos da sua região…</p>';
+  if(!erro) return '<p class="apoio">Carregando os pedidos perto de você…</p>';
   return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
     + '<button class="btn btn-contorno" onclick="tentarAsOportunidadesDeNovo()">Tentar de novo</button>';
-}
-
-/* No app, quem ainda não escolheu os bairros não tem pedido nenhum para
-   ver (só entra pedido dos bairros dela): o caminho para escolher, em vez
-   de "nada nos seus bairros". */
-function oportunidadesSemBairros(){
-  return '<div class="aviso roxo">📍<div><b>Escolha onde você quer trabalhar</b>'
-    + 'Os pedidos dos seus bairros aparecem aqui, com o dia, a distância e quanto '
-    + 'você ganha.</div></div>'
-    + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">Escolher meus bairros</button>';
 }
 
 /* Os adicionais do pedido, pelo nome (sem preço: o valor que ela vê é o
@@ -976,8 +989,12 @@ TELAS.diaristaHome = {
     const lista = oportunidadesDaRegiao();
     /* no app, a lista do servidor ainda pode não ter chegado */
     const listaLigada = FONTE.ler.oportunidades() !== null;
-    /* no app, só entra pedido dos bairros dela: sem bairro, o caminho */
-    const semBairros = !FONTE.ehMaquete && !(d.bairros || []).length;
+    /* R34: sem o CEP, o cartão "Falta o CEP da sua casa". No app, quem não
+       tem nem o CEP nem os bairros de antes não tem de onde sair: no lugar
+       da lista, só o cartão. A conta de antes (com bairros) vê o cartão E a
+       lista, que continua pelos bairros dela até ela informar o CEP. */
+    const semCep = !d.cep;
+    const semPartida = !FONTE.ehMaquete && semCep && !(d.bairros || []).length;
 
     let cards = "";
     lista.forEach(function(o){
@@ -997,6 +1014,10 @@ TELAS.diaristaHome = {
         +         moeda(o.receber) + '</div>'
         +     '</div>'
         +   '</div>'
+        /* R34: a estimativa de ônibus ou metrô, numa linha inteira (a 320px
+           ela não cabe ao lado do valor) */
+        +   (tempoAteLaDa(o)
+          ? '<div class="tempo-ate-la">🚌 ' + esc(tempoAteLaDa(o)) + '</div>' : '')
         +   (pode
           ? '<div style="display:flex;gap:8px;margin-top:12px">'
             + '<span class="btn btn-principal" style="padding:11px;font-size:14px">Ver detalhes</span></div>'
@@ -1029,23 +1050,24 @@ TELAS.diaristaHome = {
 
     +   agendaDela()
     +   cartaoDaRendaDoConjunto()
-    +   '<div class="rotulo">Oportunidades na sua região</div>'
-    +   (semBairros ? oportunidadesSemBairros()
+    +   (semCep && !semPartida ? cartaoDoCep() : "")
+    +   '<div class="rotulo">Oportunidades perto de você</div>'
+    +   (semPartida ? cartaoDoCep()
       : !listaLigada ? oportunidadesAindaNao()
       /* uma pergunta que não teve resposta, com a lista de antes já na
          tela: a frase em cima, e a lista de antes embaixo */
       : (erroDasOportunidadesAgora() ? oportunidadesAindaNao() : "")
         + (lista.length ? cards
+        /* R34: quem mora perto é chamada primeiro; sem ninguém perto, o
+           pedido chega a quem mora mais longe (as ondas) */
         : '<div class="aviso roxo">🔍<div><b>Nada perto de você agora</b>'
-          + 'Aparecem pedidos novos o dia inteiro. Marcar mais bairros aumenta '
-          + 'suas chances — dá para mudar quando quiser.</div></div>'
-          + '<button class="btn btn-contorno" onclick="ir(\'diaristaRegiao\')">'
-          + 'Escolher mais bairros</button>'))
+          + 'Aparecem pedidos novos o dia inteiro. Quem mora mais perto é chamada '
+          + 'primeiro, e depois o pedido chega a quem mora mais longe.</div></div>'))
     +   escondidasPorConflito()
     /* A13: não "quando você aceita". A frase vale para qualquer pedido —
        quem aceita depois das 18h da véspera já vê na hora. */
-    +   (listaLigada && !semBairros
-      ? '<div class="rodape-seguro">Estes são pedidos reais da sua região.<br>'
+    +   (listaLigada && !semPartida
+      ? '<div class="rodape-seguro">Estes são pedidos reais perto de você.<br>'
         + 'Depois do aceite, a rua e o número aparecem a partir das '
         + HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera.</div>'
       : '')
@@ -1334,6 +1356,11 @@ TELAS.diaristaOportunidade = {
     +     '<div class="linha"><span class="rot">Região</span><span class="val">' + esc(o.bairro) + '</span></div>'
     +     '<div class="linha"><span class="rot">Distância</span><span class="val">'
     +       String(o.km).replace(".", ",") + ' km</span></div>'
+    /* R34: a estimativa, nunca a promessa de um horário */
+    +     (tempoAteLaDa(o)
+      ? '<div class="linha ate-la"><span class="rot">Até lá</span><span class="val">'
+        + esc(tempoAteLaDa(o)) + '<small>É uma estimativa: o tempo muda com o trânsito.</small>'
+        + '</span></div>' : '')
     +   '</div>'
     +   (o.horas > 6
       ? '<div class="aviso roxo">☕<div><b>Janela de ' + o.horas + ' horas</b>'
@@ -1478,9 +1505,11 @@ TELAS.diaristaCadastro = {
     +   atalhoDeAprovacao()
 
     +   '<div class="rotulo">1 · Entrar e ver'
-    +     (d.feito.dados && d.feito.regiao ? ' <span class="selo verde">feito</span>' : '') + '</div>'
+    +     (d.feito.dados && d.feito.regiao && d.cep ? ' <span class="selo verde">feito</span>' : '') + '</div>'
     +   passo(d.feito.dados,  "Seus dados", "Nome e telefone", "diaristaCadastro", true)
-    +   passo(d.feito.regiao, "Onde você trabalha", d.regiao || "—", "diaristaRegiao")
+    /* R34: o CEP da casa dela no lugar dos bairros (a conta de antes, com
+       bairros e sem CEP, vê o que falta) */
+    +   passo(!!d.cep, "O CEP da sua casa", d.cep ? "CEP " + d.cep : "Falta informar", "diaristaRegiao")
 
     /* No app, os Portões 2 e 3 ainda não têm telas: o envio de documento e
        selfie espera a decisão de onde guardá-los, e o Pix espera o
@@ -2826,7 +2855,9 @@ function cartaoDoAlerta(){
     +   '<div style="flex:1;min-width:0;font-size:13px;line-height:1.6">'
     +     '<b>' + esc(o.quando) + ' · ' + esc(o.janela) + '</b><br>'
     +     esc(o.resumo) + '<br>\u{1F4CD} ' + esc(o.bairro) + ' · '
-    +     String(o.km).replace(".", ",") + ' km</div>'
+    +     String(o.km).replace(".", ",") + ' km'
+    /* R34: o tempo estimado até lá */
+    +     (tempoAteLaDa(o) ? '<br>🚌 ' + esc(tempoAteLaDa(o)) : '') + '</div>'
     +   '<div style="text-align:right;flex:none">'
     +     '<div style="font-size:11px;color:var(--suave)">você recebe</div>'
     +     '<div style="font-size:19px;font-weight:800;color:var(--verde)">'
@@ -2903,6 +2934,10 @@ TELAS.diaristaAlerta = {
     +       '<div class="linha"><span class="rot">Onde</span>'
     +         '<span class="val">' + esc(o.bairro) + ' · '
     +           String(o.km).replace(".", ",") + ' km</span></div>'
+    /* R34: o tempo estimado de ônibus ou metrô, como no cartão */
+    +       (tempoAteLaDa(o)
+      ? '<div class="linha ate-la"><span class="rot">Até lá</span>'
+        + '<span class="val">' + esc(tempoAteLaDa(o)) + '</span></div>' : '')
     /* A13: "Aceitar agora" é o caminho principal do aceite — ela fica
        sabendo AQUI, como na tela da oportunidade, o dia em que a rua chega.
        O trajeto pesa na decisão. A mesma frase, da mesma função. Fora da
@@ -3078,8 +3113,9 @@ TELAS.diaristaPerfil = {
     +     '<div class="txt"><b>Meu cadastro</b><span>' + p.pct + '% completo</span></div>'
     +     '<div class="seta">›</div></button>'
     +   '<button class="item" onclick="ir(\'diaristaRegiao\')">'
-    +     '<div class="txt"><b>Onde eu trabalho</b><span>'
-    +       esc(d.regiao || "nenhum bairro escolhido") + '</span></div>'
+    /* R34: o "mudei de casa" — a mesma tela do CEP */
+    +     '<div class="txt"><b>O CEP da minha casa</b><span>'
+    +       esc(d.cep ? "CEP " + d.cep : "Falta informar") + '</span></div>'
     +     '<div class="seta">›</div></button>'
     /* no app, o Pix chega com o pagamento, e o suporte com a entrega 9: o
        item diz que chega em breve, em vez de prometer */

@@ -196,7 +196,9 @@ const FONTE = {
     if(de === "cadastroCliente" || de === "cadastroDiarista") RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
   },
 
-  /* OS BAIRROS DELA (o fim do Portão 1): na maquete, nela mesma, na hora. */
+  /* OS BAIRROS DELA, o jeito de antes da R34: nenhuma tela usa mais (o fim
+     do Portão 1 é o CEP, logo abaixo). Fica para o contrato da tomada ser
+     igual ao do app, que ainda aceita as contas antigas. */
   salvarBairros: function(d, pronto){
     const dela = euSouDiarista();
     dela.bairros = d.bairros.slice();
@@ -204,6 +206,44 @@ const FONTE = {
     dela.feito.regiao = true;
     salvar();
     pronto({ ok:true });
+  },
+
+  /* O CEP DA CASA DELA (R34: o fim do Portão 1, e o "mudei de casa"). Na
+     maquete, qualquer CEP de 8 números serve, menos o 00000-000 (para ver a
+     frase do CEP que não existe). O bairro do "Perto de …" vem da tabela
+     pequena de exemplos; fora dela, o início diz o CEP. */
+  salvarCep: function(d, pronto){
+    const numeros = String((d && d.cep) || "").replace(/[^0-9]/g, "");
+    if(numeros.length !== 8)
+      return pronto({ ok:false, campo:"cep", erro:"O CEP tem 8 números, por exemplo 05435-000." });
+    if(numeros === "00000000")
+      return pronto({ ok:false, campo:"cep",
+                      erro:"Não achamos esse CEP. Confira os números, ou toque em “Não sei meu CEP”." });
+    const dela = euSouDiarista();
+    dela.cep = numeros.slice(0, 5) + "-" + numeros.slice(5);
+    const exemplo = EXEMPLOS_DE_CEP.filter(function(x){
+      return x.cep.slice(0, 5) === numeros.slice(0, 5);
+    })[0];
+    dela.moraPertoDe = exemplo ? exemplo.bairro : "";
+    dela.regiao = dela.moraPertoDe ? "Perto de " + dela.moraPertoDe : "CEP " + dela.cep;
+    dela.feito.regiao = true;
+    salvar();
+    pronto({ ok:true });
+  },
+
+  /* "Não sei meu CEP" (R34): na maquete, a tabela pequena de exemplos,
+     pelo bairro. A rua só precisa ter cara de rua (e "Inexistente" não
+     existe, como no localizador de mentira do app). Nada é guardado. */
+  procurarCep: function(d, pronto){
+    const rua = String((d && d.rua) || "").trim();
+    const bairro = String((d && d.bairro) || "");
+    if(rua.length < 3) return pronto({ ok:false, campo:"rua", erro:"Digite o nome da sua rua." });
+    if(!bairro) return pronto({ ok:false, campo:"bairro", erro:"Escolha o bairro na lista." });
+    const exemplo = EXEMPLOS_DE_CEP.filter(function(x){ return x.bairro === bairro; })[0];
+    if(!exemplo || semAcento(rua).indexOf("inexistente") >= 0)
+      return pronto({ ok:false, campo:"rua",
+                      erro:"Não achamos o CEP dessa rua. Confira o nome da rua e o bairro." });
+    pronto({ ok:true, cep:exemplo.cep });
   },
 
   /* AS CASAS. Na maquete elas moram na cliente, neste aparelho, e já estão

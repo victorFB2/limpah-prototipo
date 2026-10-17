@@ -725,7 +725,9 @@ function filtrarBairrosDaLista(id){
 }
 
 /* A lista de bairros de cada tela de endereço. */
-const LISTA_DE_BAIRROS_DA_TELA = { cadastroClienteEndereco:"ce-bairro", cadastrarCasa:"casa-bairro" };
+const LISTA_DE_BAIRROS_DA_TELA = { cadastroClienteEndereco:"ce-bairro", cadastrarCasa:"casa-bairro",
+                                   /* o "Não sei meu CEP" dela (R34) */
+                                   diaristaSemCep:"sem-cep-bairro" };
 
 /* No app, a lista dos bairros chega do servidor antes da tela (no
    "Continuar" do passo 1 e no "+ Cadastrar endereço"). Se ainda faltar

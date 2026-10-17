@@ -368,8 +368,15 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
    display:flex das linhas venceria o "hidden"). */
 .busca-de-bairro{-webkit-appearance:none;appearance:none;margin-bottom:8px}
 .lista-de-bairros[hidden],.lista-de-bairros div[hidden],.opcao[hidden]{display:none}
-.marcados-da-regiao{font-size:13px;color:var(--suave);margin:0 0 10px}
-.marcados-da-regiao b{color:var(--roxo)}
+/* O CEP da casa dela (R34): números grandes e espaçados, como o código do
+   celular — fáceis de conferir para quem tem pouca prática com o celular */
+.campo input.cep{font-size:22px;font-weight:700;letter-spacing:3px;text-align:center}
+.cep-achado{font-size:13.5px;font-weight:700;color:var(--verde);margin:-4px 0 6px;line-height:1.45}
+/* "🚌 a cerca de 40 min da sua casa, de ônibus ou metrô", no cartão */
+.tempo-ate-la{font-size:12.5px;color:var(--suave);margin-top:6px;line-height:1.45}
+/* a mesma frase no detalhe e no alerta: o "Até lá" numa linha só (a 320px
+   ele quebrava em "Até / lá"), e a frase quebra do lado */
+.linha.ate-la .rot{flex:none;white-space:nowrap}
 
 /* ---------- barra de abas ---------- */
 .abas{
