@@ -2040,10 +2040,11 @@ TELAS.confirmado = {
     +       esc(nomePeriodo(p.periodo).split(" ")[0].toLowerCase()) + '.</p>'
     +   '</div>'
 
-    /* o perfil dela, resumido */
+    /* o perfil dela, resumido. A foto: para conferir na porta quem chegou
+       (R35; na maquete, o rosto desenhado) */
     +   '<div class="cartao destaque">'
     +     '<div class="pessoa" style="margin-bottom:12px">'
-    +       avatar(prof.nome, prof.cor)
+    +       avatarDaDiarista(prof.nome, prof.cor, "", FONTE.ler.fotosDeQuemVai(p)[0])
     +       '<div class="info"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
     +       '<span>' + estrelas(prof.nota) + ' (' + prof.avaliacoes + ' avaliações)</span>'
     +       '<span>📍 ' + String(prof.distancia).replace(".", ",") + ' km de você</span></div></div>'
@@ -2071,16 +2072,19 @@ TELAS.confirmado = {
 
 /* "Diarista confirmada!" no app (6a): o mesmo desenho, só com o que é
    verdade agora. Quem vai ("Maria S.", ou as duas) vem pronto do servidor:
-   nunca o sobrenome, o telefone ou o endereço dela. */
+   nunca o sobrenome, o telefone ou o endereço dela. Desde a R35, também a
+   foto de perfil que a nossa equipe aprovou (o servidor diz quem vê e até
+   quando); sem ela, as iniciais. */
 function confirmadoNoApp(p){
   const nomes = FONTE.ler.quemVai(p);
+  const fotos = FONTE.ler.fotosDeQuemVai(p);
   const duas = nomes.length > 1;
   const quem = nomes.join(" e ");
   const primeiro = String(nomes[0] || "").split(" ")[0];
   let pessoas = "";
   nomes.forEach(function(nome, i){
     pessoas += '<div class="pessoa"' + (i ? ' style="margin-top:12px"' : "") + '>'
-      + avatar(nome, "", "") + '<div class="info"><b>' + esc(nome) + '</b>'
+      + avatarDaDiarista(nome, "", "", fotos[i]) + '<div class="info"><b>' + esc(nome) + '</b>'
       + '<span>Nova na Limpah</span></div></div>';
   });
   /* uma conversa com cada uma (8): no pedido de duas, uma linha para cada */
@@ -2312,17 +2316,19 @@ TELAS.detalhePedido = {
     if(prof && !FONTE.ehMaquete){
       /* no app (6a): quem vai, pelo nome curto do servidor. Sem nota, perfil
          e favoritas, que ainda não existem de verdade */
+      const fotos = FONTE.ler.fotosDeQuemVai(p);
       blocoProfissional = '<div class="rotulo">' + (FONTE.ler.quemVai(p).length > 1 ? "Profissionais" : "Profissional")
         + '</div><div class="cartao">'
         + FONTE.ler.quemVai(p).map(function(nome, i){
-            return '<div class="pessoa"' + (i ? ' style="margin-top:12px"' : "") + '>' + avatar(nome, "", "")
+            return '<div class="pessoa"' + (i ? ' style="margin-top:12px"' : "") + '>'
+              + avatarDaDiarista(nome, "", "", fotos[i])
               + '<div class="info"><b>' + esc(nome) + '</b><span>Nova na Limpah</span></div></div>';
           }).join("")
         + '</div>';
     } else if(prof){
       const ehFavorita = E.favoritos.indexOf(prof.id) >= 0;
       blocoProfissional = '<div class="rotulo">Profissional</div><div class="cartao">'
-        + '<div class="pessoa">' + avatar(prof.nome, prof.cor)
+        + '<div class="pessoa">' + avatarDaDiarista(prof.nome, prof.cor, "", FONTE.ler.fotosDeQuemVai(p)[0])
         + '<div class="info"><b>' + esc(nomeCurto(prof.nome)) + '</b>'
         + '<span>' + estrelas(prof.nota) + ' · ' + prof.servicos + ' serviços</span></div></div>'
         + '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirPerfil(' + Number(prof.id) + ')">'

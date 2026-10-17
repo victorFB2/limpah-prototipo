@@ -41,6 +41,38 @@ let RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
 const FRASE_MESMO_HORARIO_DO_ANTERIOR_NA_MAQUETE =
   "Este é o dia e o período do seu pedido de agora. Escolha outro dia ou outro período.";
 
+/* A VERIFICAÇÃO DELA NA MAQUETE (R35): nada é consultado de verdade, e nada
+   do que ela digita ou fotografa fica neste aparelho. Ficam só as marcas do
+   caminho (autorizou, informou o CPF, o documento conferiu, quantas
+   selfies não conferiram) e os 2 últimos números do CPF, para o "consta":
+   como no verificador de mentira do app, o CPF que termina em 00 dá
+   "consta" — e a tela dela é a mesma. O nome da mãe fica só na memória,
+   até a consulta (como no app). */
+let NOME_DA_MAE_NA_MAQUETE = "";
+/* "Simular: a selfie não confere": quantas das próximas não conferem */
+let ROSTOS_QUE_NAO_CONFEREM_NA_MAQUETE = 0;
+const FRASE_ROSTO_NAO_CONFERE_NA_MAQUETE = "Não conseguimos confirmar que é você. Tire outra selfie: "
+  + "rosto inteiro, com luz, sem óculos escuros nem boné.";
+const FRASE_ROSTO_PARA_A_EQUIPE_NA_MAQUETE = "Não conseguimos confirmar pela selfie. Tudo bem: agora "
+  + "uma pessoa da nossa equipe confere, e a gente avisa você por aqui.";
+
+function verificacaoNaMaquete(d){
+  if(!d.verificacao || typeof d.verificacao !== "object")
+    d.verificacao = { autorizada:false, cpfInformado:false, cpfFinal:"", documentoConferido:false,
+                      tentativasDoRosto:0 };
+  return d.verificacao;
+}
+
+/* Fechou o Portão 2 (as quatro marcas): na maquete, ela passa a "em análise". */
+function fecharOPortaoDoisNaMaquete(d){
+  const tudo = ETAPAS_DO_PORTAO_2.every(function(x){ return !!d.feito[x]; });
+  if(tudo && d.situacao === "novo") d.situacao = "analise";
+}
+
+function simularRostoQueNaoConfereNaMaquete(){
+  ROSTOS_QUE_NAO_CONFEREM_NA_MAQUETE = 1;
+}
+
 const FONTE = {
   ehMaquete: true,
 
@@ -191,9 +223,11 @@ const FONTE = {
 
   /* A pessoa mudou de tela. Na maquete, o cadastro de mentira fica
      guardado como sempre ficou; só a correção do número é esquecida quando
-     ela sai do passo 1. */
-  mudouDeTela: function(de){
+     ela sai do passo 1 — e o nome da mãe, quando ela sai da verificação. */
+  mudouDeTela: function(de, para){
     if(de === "cadastroCliente" || de === "cadastroDiarista") RASCUNHO_DA_CORRECAO_NA_MAQUETE = null;
+    if(TELAS_DA_VERIFICACAO.indexOf(de) >= 0 && TELAS_DA_VERIFICACAO.indexOf(para) < 0)
+      NOME_DA_MAE_NA_MAQUETE = "";
   },
 
   /* OS BAIRROS DELA, o jeito de antes da R34: nenhuma tela usa mais (o fim
@@ -244,6 +278,90 @@ const FONTE = {
       return pronto({ ok:false, campo:"rua",
                       erro:"Não achamos o CEP dessa rua. Confira o nome da rua e o bairro." });
     pronto({ ok:true, cep:exemplo.cep });
+  },
+
+  /* A VERIFICAÇÃO (R35): a autorização, os dados, o documento, a selfie, os
+     antecedentes e as regras. Na maquete, a conferência é de mentira e
+     sempre passa (menos o "Simular: a selfie não confere"); a foto não é
+     guardada, nem o CPF, nem o nome da mãe. */
+  autorizarVerificacao: function(d, pronto){
+    if(!(d && d.autorizo === true))
+      return pronto({ ok:false, campo:"autorizo", erro:FRASE_SEM_AUTORIZACAO });
+    verificacaoNaMaquete(FONTE.ler.diarista()).autorizada = true;
+    salvar();
+    pronto({ ok:true });
+  },
+
+  enviarDadosPessoais: function(d, pronto){
+    const dela = FONTE.ler.diarista();
+    const v = verificacaoNaMaquete(dela);
+    const cpf = String((d && d.cpf) || "").replace(/[^0-9]/g, "");
+    if(!v.autorizada) return pronto({ ok:false, erro:"Antes, precisamos da sua autorização." });
+    if(!cpfValido(cpf)) return pronto({ ok:false, campo:"cpf", erro:FRASE_DO_CPF });
+    if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String((d && d.nascimento) || "")))
+      return pronto({ ok:false, campo:"nascimento", erro:FRASE_DA_DATA });
+    const mae = String((d && d.nomeDaMae) || "").trim();
+    if(mae.length < 3) return pronto({ ok:false, campo:"nome_da_mae", erro:FRASE_DO_NOME_DA_MAE });
+    if(v.cpfFinal && v.cpfFinal !== cpf.slice(-2)) v.documentoConferido = false;
+    v.cpfInformado = true;
+    v.cpfFinal = cpf.slice(-2);
+    NOME_DA_MAE_NA_MAQUETE = mae;
+    salvar();
+    pronto({ ok:true });
+  },
+
+  enviarFotoDoDocumento: function(d, pronto){
+    const v = verificacaoNaMaquete(FONTE.ler.diarista());
+    if(!v.cpfInformado) return pronto({ ok:false, motivo:"sem_dados", erro:"Antes, digite o seu CPF." });
+    /* a foto (d.foto) não é olhada nem guardada: aqui ela some */
+    v.documentoConferido = true;
+    salvar();
+    pronto({ ok:true });
+  },
+
+  enviarSelfie: function(d, pronto){
+    const dela = FONTE.ler.diarista();
+    const v = verificacaoNaMaquete(dela);
+    if(!v.documentoConferido)
+      return pronto({ ok:false, motivo:"sem_documento", erro:"Antes, tire a foto do documento." });
+    if(ROSTOS_QUE_NAO_CONFEREM_NA_MAQUETE > 0 || v.cpfFinal === "11"){
+      ROSTOS_QUE_NAO_CONFEREM_NA_MAQUETE = Math.max(0, ROSTOS_QUE_NAO_CONFEREM_NA_MAQUETE - 1);
+      v.tentativasDoRosto = Math.min(SELFIES_QUE_NAO_CONFEREM_NO_MAXIMO,
+                                     Number(v.tentativasDoRosto || 0) + 1);
+      salvar();
+      const comAEquipe = v.tentativasDoRosto >= SELFIES_QUE_NAO_CONFEREM_NO_MAXIMO;
+      return pronto({ ok:false, campo:"foto", motivo:"rosto_nao_confere", comAEquipe:comAEquipe,
+                      erro: comAEquipe ? FRASE_ROSTO_PARA_A_EQUIPE_NA_MAQUETE
+                                       : FRASE_ROSTO_NAO_CONFERE_NA_MAQUETE });
+    }
+    dela.feito.documentos = true;
+    dela.feito.selfie = true;
+    salvar();
+    /* a consulta vai em seguida, com o nome que ficou na memória */
+    if(!NOME_DA_MAE_NA_MAQUETE) return pronto({ ok:true, faltaONomeDaMae:true });
+    FONTE.consultarAntecedentes({ nomeDaMae: NOME_DA_MAE_NA_MAQUETE }, pronto);
+  },
+
+  consultarAntecedentes: function(d, pronto){
+    const dela = FONTE.ler.diarista();
+    if(!dela.feito.selfie) return pronto({ ok:false, erro:"Antes, tire a selfie." });
+    if(String((d && d.nomeDaMae) || "").trim().length < 3)
+      return pronto({ ok:false, campo:"nome_da_mae", erro:FRASE_DO_NOME_DA_MAE });
+    /* "consta" ou "nada consta", a parte dela está feita (R35): quem vê o
+       resultado é a nossa equipe, e a tela dela é a mesma */
+    dela.feito.antecedentes = true;
+    NOME_DA_MAE_NA_MAQUETE = "";
+    fecharOPortaoDoisNaMaquete(dela);
+    salvar();
+    pronto({ ok:true });
+  },
+
+  aceitarRegras: function(d, pronto){
+    const dela = FONTE.ler.diarista();
+    dela.feito.termos = true;
+    fecharOPortaoDoisNaMaquete(dela);
+    salvar();
+    pronto({ ok:true });
   },
 
   /* AS CASAS. Na maquete elas moram na cliente, neste aparelho, e já estão
@@ -492,6 +610,23 @@ const FONTE = {
       return E.diarista;
     },
 
+    /* Em que passo da verificação ela está (R35), como o servidor diria. */
+    verificacao: function(){
+      const d = FONTE.ler.diarista();
+      const v = (d.verificacao && typeof d.verificacao === "object") ? d.verificacao : {};
+      const tentativas = Number(v.tentativasDoRosto || 0);
+      let etapa;
+      if(d.feito.selfie && d.feito.documentos) etapa = d.feito.antecedentes ? "feita" : "antecedentes";
+      else if(!v.autorizada) etapa = "autorizar";
+      else if(!v.cpfInformado) etapa = "dados";
+      else if(!v.documentoConferido) etapa = "documento";
+      else if(tentativas >= SELFIES_QUE_NAO_CONFEREM_NO_MAXIMO) etapa = "equipe";
+      else etapa = "selfie";
+      return { etapa: etapa, autorizada: !!v.autorizada, cpfInformado: !!v.cpfInformado,
+               documentoConferido: !!v.documentoConferido,
+               selfiesRestantes: Math.max(0, SELFIES_QUE_NAO_CONFEREM_NO_MAXIMO - tentativas) };
+    },
+
     /* O estado dela (R24): a regra pura do dados.js, a mesma do servidor.
        Na maquete o celular está confirmado e os termos em dia — a não ser
        que um teste diga o contrário (celularConfirmado / termosEmDia). */
@@ -628,6 +763,14 @@ const FONTE = {
     quemVai: function(p){
       const prof = FONTE.ler.profissionalDoPedido(p);
       return prof ? [nomeCurto(prof.nome)] : [];
+    },
+
+    /* A foto de quem vai (R35), na mesma ordem: na maquete, o rosto
+       desenhado ("exemplo"), com o pedido confirmado — a maquete não tem
+       foto de ninguém e não baixa imagem nenhuma. */
+    fotosDeQuemVai: function(p){
+      const confirmado = !!p && p.situacao === "confirmado";
+      return FONTE.ler.quemVai(p).map(function(){ return confirmado ? "exemplo" : ""; });
     },
 
     /* Na maquete, cancelar sempre pode (e é sempre sem custo). */

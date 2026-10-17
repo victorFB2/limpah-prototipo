@@ -1357,7 +1357,8 @@ function estadoDaDiarista(d, celularConfirmado, termosEmDia){
   const situacao = d && d.situacao;
   let chave;
   if(situacao === "aprovada" || situacao === "recusada" || situacao === "suspensa") chave = situacao;
-  else if(situacao === "analise" || feitos2 === ETAPAS_DO_PORTAO_2.length) chave = "analise";
+  else if(situacao === "analise" || feitos2 === ETAPAS_DO_PORTAO_2.length
+          || selfieComAEquipe(d)) chave = "analise";
   else chave = "incompleto";
 
   const liberada = chave === "aprovada" && celularConfirmado === true && termosEmDia === true;
@@ -1368,6 +1369,57 @@ function estadoDaDiarista(d, celularConfirmado, termosEmDia){
     faltaPix: chave === "aprovada" && !feito.recebimento,
     pct: pct,
   };
+}
+
+/* A VERIFICAÇÃO DELA (R35): o documento, a selfie e os antecedentes, por
+   uma empresa especializada. As regras são as do servidor (um teste do app
+   compara): a conta do CPF, a idade mínima e quantas selfies podem não
+   conferir antes de a nossa equipe olhar. */
+const SELFIES_QUE_NAO_CONFEREM_NO_MAXIMO = 3;
+/* O trabalho doméstico é proibido para menores de 18 anos: é lei
+   (Decreto 6.481/2008; LC 150/2015), não escolha do app. */
+const IDADE_MINIMA = 18;
+const ETAPAS_DA_VERIFICACAO = ["autorizar", "dados", "documento", "selfie", "antecedentes",
+                               "equipe", "feita"];
+
+/* Os dois dígitos do CPF conferem (a conta da Receita)? 11 números, não
+   todos iguais. A mesma conta do servidor (regras.cpf_valido). */
+function cpfValido(cpf){
+  const n = String(cpf || "");
+  if(!/^[0-9]{11}$/.test(n) || /^(\d)\1{10}$/.test(n)) return false;
+  for(let posicao = 9; posicao <= 10; posicao++){
+    let soma = 0;
+    for(let i = 0; i < posicao; i++) soma += Number(n[i]) * (posicao + 1 - i);
+    if((soma * 10) % 11 % 10 !== Number(n[posicao])) return false;
+  }
+  return true;
+}
+
+/* "17/05/1990" -> "1990-05-17", só se a data existe, já passou e a pessoa
+   tem de 18 a 100 anos. Senão, "". */
+function dataDigitadaEmIso(texto){
+  const m = /^([0-9]{2})\/([0-9]{2})\/([0-9]{4})$/.exec(String(texto || "").trim());
+  if(!m) return "";
+  const dia = Number(m[1]), mes = Number(m[2]), ano = Number(m[3]);
+  const d = new Date(ano, mes - 1, dia);
+  if(d.getFullYear() !== ano || d.getMonth() !== mes - 1 || d.getDate() !== dia) return "";
+  const idade = idadeNaData(ano, mes, dia, new Date());
+  if(idade < IDADE_MINIMA || idade > 100) return "";
+  return m[3] + "-" + m[2] + "-" + m[1];
+}
+
+function idadeNaData(ano, mes, dia, hoje){
+  let idade = hoje.getFullYear() - ano;
+  if(hoje.getMonth() + 1 < mes || (hoje.getMonth() + 1 === mes && hoje.getDate() < dia)) idade--;
+  return idade;
+}
+
+/* As selfies não conferiram as vezes todas, e a nossa equipe confere: ela
+   fica "em análise", como quem mandou tudo (o mesmo do servidor). */
+function selfieComAEquipe(d){
+  const v = (d && d.verificacao) || {};
+  return !(d && d.feito && d.feito.selfie)
+      && Number(v.tentativasDoRosto || 0) >= SELFIES_QUE_NAO_CONFEREM_NO_MAXIMO;
 }
 
 /* O QUE A EQUIPE DECIDE SOBRE ELA, E O DIREITO DE RESPOSTA (antipadrões do

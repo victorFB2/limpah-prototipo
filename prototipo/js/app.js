@@ -459,6 +459,84 @@ function avatar(nome, cor, classe){
        + esc(iniciais(nome)) + '</div>';
 }
 
+/* O ROSTO DE QUEM VAI, para a cliente conferir na porta (R35). Três jeitos:
+   - no app, o endereço da foto de perfil que a equipe aprovou, que veio
+     pronto do servidor (ele decide quem vê e até quando): a foto por cima
+     das iniciais. Se a foto não carregar, as iniciais continuam ali
+     embaixo (A6: o círculo é a reserva);
+   - na maquete, "exemplo": um rosto desenhado (emoji), porque a maquete
+     não tem foto de ninguém e não baixa imagem nenhuma (A6);
+   - sem foto (ainda não aprovada, ou o dia já passou): as iniciais, como
+     sempre. */
+function avatarDaDiarista(nome, cor, classe, foto){
+  /* o nome que a tela lê em voz alta é o curto ("Maria S."): nunca o
+     sobrenome, nem escondido num atributo */
+  const quem = esc(nomeCurto(nome));
+  if(foto === "exemplo"){
+    return '<div class="avatar com-foto-de-exemplo ' + (classe || "") + '" role="img" '
+         + 'aria-label="Foto de ' + quem + '">👩🏽</div>';
+  }
+  if(typeof foto === "string" && foto.charAt(0) === "/" && foto.charAt(1) !== "/"){
+    return '<div class="avatar com-foto ' + (classe || "") + '" style="background:' + (cor || "#6C3AD8") + '" '
+         + 'role="img" aria-label="Foto de ' + quem + '">' + esc(iniciais(nome))
+         + '<img src="' + esc(foto) + '" alt=""></div>';
+  }
+  return avatar(nome, cor, classe);
+}
+
+/* A FOTO DO CELULAR, REDUZIDA ANTES DE IR (R35): no máximo
+   LADO_MAXIMO_DA_FOTO pixels do lado maior, em JPEG, num <canvas>. Serve
+   ao documento e à selfie. Uma foto de câmera tem 3 a 6 MB; reduzida, umas
+   centenas de KB — chega rápido e o servidor não engasga (ele confere tudo
+   de novo: app/limpah/fotos.py, com o mesmo número; um teste compara).
+   A foto fica só na memória, o tempo de ir: nunca no aparelho
+   (localStorage), nunca no E. `pronto` recebe { ok, base64 } ou
+   { ok:false, erro }. */
+const LADO_MAXIMO_DA_FOTO = 1000;
+const QUALIDADE_DA_FOTO = 0.85;
+const FRASE_FOTO_NAO_ABRIU = "Não conseguimos abrir essa foto. Tire outra, por favor.";
+
+/* A foto é lida como "data:" (FileReader), e não como "blob:"
+   (URL.createObjectURL): a política de segurança das telas do app só deixa
+   imagem do próprio site e "data:" (rotas/telas.py, img-src). Achado no
+   navegador, na R35: com "blob:", o app recusava toda foto. */
+function reduzirFoto(arquivo, pronto){
+  const leitor = new FileReader();
+  leitor.addEventListener("error", function(){ pronto({ ok:false, erro:FRASE_FOTO_NAO_ABRIU }); });
+  leitor.addEventListener("load", function(){ desenharFotoReduzida(String(leitor.result || ""), pronto); });
+  try {
+    leitor.readAsDataURL(arquivo);
+  } catch(e){
+    pronto({ ok:false, erro:FRASE_FOTO_NAO_ABRIU });
+  }
+}
+
+function desenharFotoReduzida(endereco, pronto){
+  if(endereco.indexOf("data:image/") !== 0) return pronto({ ok:false, erro:FRASE_FOTO_NAO_ABRIU });
+  const imagem = new Image();
+  imagem.addEventListener("error", function(){ pronto({ ok:false, erro:FRASE_FOTO_NAO_ABRIU }); });
+  imagem.addEventListener("load", function(){
+    const largura = imagem.naturalWidth, altura = imagem.naturalHeight;
+    const escala = Math.min(1, LADO_MAXIMO_DA_FOTO / Math.max(largura, altura, 1));
+    const quadro = document.createElement("canvas");
+    quadro.width = Math.max(1, Math.round(largura * escala));
+    quadro.height = Math.max(1, Math.round(altura * escala));
+    let texto = "";
+    try {
+      quadro.getContext("2d").drawImage(imagem, 0, 0, quadro.width, quadro.height);
+      texto = quadro.toDataURL("image/jpeg", QUALIDADE_DA_FOTO);
+    } catch(e){
+      texto = "";
+    }
+    /* o quadro vazio solta a memória (celular com pouca memória) */
+    quadro.width = 0;
+    quadro.height = 0;
+    const base64 = texto.indexOf("base64,") >= 0 ? texto.split("base64,")[1] : "";
+    pronto(base64 ? { ok:true, base64:base64 } : { ok:false, erro:FRASE_FOTO_NAO_ABRIU });
+  });
+  imagem.src = endereco;
+}
+
 function cabecalho(titulo, extra){
   extra = extra || {};
   const botaoVoltar = extra.semVoltar ? "" :

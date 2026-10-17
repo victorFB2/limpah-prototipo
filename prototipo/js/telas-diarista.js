@@ -162,11 +162,10 @@ function situacaoDaDiarista(){
   /* a chave vem da tomada (estadoDela: na maquete, a regra pura do
      dados.js; no app, o servidor); daqui para baixo, só as frases. */
   const estado = estadoDela();
-  /* O que o app de verdade ainda não tem (a maquete tem tudo): o envio dos
-     documentos do Portão 2 (decisão 43) e a chave Pix do Portão 3 (chega
-     com o pagamento). Sem eles, a tabela não promete o que leva a "chega em
-     breve" (revisão da 3a; DECISOES A26, provisória). */
-  const envioDosDocumentos = FONTE.ehMaquete;
+  /* O que o app de verdade ainda não tem (a maquete tem tudo): a chave Pix
+     do Portão 3 (chega com o pagamento). Sem ela, a tabela não promete o
+     que leva a "chega em breve" (revisão da 3a; DECISOES A26, provisória).
+     O envio dos documentos do Portão 2 existe no app desde a R35. */
   const chavePix = FONTE.ehMaquete;
   /* e ficar disponível e aceitar serviços (entrega 6a) */
   const aceitarPeloApp = FONTE.ehMaquete;
@@ -415,6 +414,7 @@ function situacaoDaDiarista(){
 
   /* EM ANÁLISE — mandou tudo, espera a gente */
   if(estado.chave === "analise"){
+    const selfieComAEquipeNaAnalise = verificacaoDela().etapa === "equipe";
     return Object.assign({
       chave: "analise",
       podeAceitar: false,
@@ -433,22 +433,19 @@ function situacaoDaDiarista(){
       botaoDestino: "diaristaAnalise",
       botaoContorno: true,
       noCartao: "Você poderá aceitar assim que aprovarmos",
-      /* no app, o Portão 2 não é mandado pelo aplicativo (decisão 43): é
-         combinado com a equipe, e a frase não diz "enviado" */
-      mapaFrase: envioDosDocumentos
-        ? "Está tudo enviado. Agora é com a gente — e a gente avisa você."
-        : "Seu cadastro está completo. Agora é com a gente — e a gente avisa você.",
+      mapaFrase: "Está tudo enviado. Agora é com a gente — e a gente avisa você.",
       telaDaSituacao: "diaristaAnalise",
-      situacaoTitulo: "Seu cadastro está em análise",
-      situacaoApoio: envioDosDocumentos
-        ? "Uma pessoa da nossa equipe está conferindo seus documentos. Costuma levar algumas "
-          + "horas — a gente avisa assim que terminar."
-        : "Uma pessoa da nossa equipe está conferindo o seu cadastro. Quando terminar, a gente "
-          + "avisa você — e a resposta aparece aqui no aplicativo.",
-      situacaoAvisoTitulo: envioDosDocumentos ? "" : "Seus documentos",
-      situacaoAvisoFrase: envioDosDocumentos ? ""
-        : "Por enquanto, a conferência dos documentos é combinada com a nossa equipe, fora do "
-          + "aplicativo. O envio pelo aplicativo chega em breve.",
+      /* o fim do Portão 2 (R35): "Recebemos!" e quem confere agora. A
+         selfie que não conferiu as 3 vezes diz isso; o "consta" dos
+         antecedentes, NUNCA (a frase é a de todo mundo) */
+      situacaoTitulo: "Recebemos! ✅",
+      situacaoApoio: selfieComAEquipeNaAnalise
+        ? "Não conseguimos confirmar pela selfie. Tudo bem: agora uma pessoa da nossa equipe "
+          + "confere, e a gente avisa você por aqui."
+        : "Agora a nossa equipe confere o seu cadastro. Costuma levar algumas horas — a gente "
+          + "avisa assim que terminar, e a resposta aparece aqui no aplicativo.",
+      situacaoAvisoTitulo: "",
+      situacaoAvisoFrase: "",
       oportunidadeTitulo: "Seu cadastro está em análise",
       oportunidadeFrase: "Você não precisa fazer mais nada. Assim que aprovarmos, "
                        + "este botão libera sozinho.",
@@ -480,24 +477,15 @@ function situacaoDaDiarista(){
     faixaDestino: "diaristaCadastro",
     interruptorTravado: true,
     interruptorFrase: "Liga quando seu cadastro for aprovado.",
-    /* no app o segundo passo ainda não tem o que fazer: o mapa só diz o que
-       vem (e que a equipe fala com ela) */
-    botaoTexto: envioDosDocumentos ? "Continuar meu cadastro" : "Ver meu cadastro",
+    botaoTexto: "Continuar meu cadastro",
     botaoDestino: "diaristaCadastro",
-    /* no app, a oportunidade (3b) não pede o que ainda não tem como mandar:
-       o envio dos documentos chega depois, e o mapa diz o que vem */
-    oportunidadeBotao: envioDosDocumentos ? "Completar meu cadastro" : "Ver meu cadastro",
+    oportunidadeBotao: "Completar meu cadastro",
     noCartao: "Complete seu cadastro para aceitar",
     mapaFrase: "Complete o segundo passo para começar a aceitar serviços.",
     oportunidadeTitulo: "Falta pouco para você aceitar",
-    oportunidadeFrase: envioDosDocumentos
-      ? "Envie seus documentos e, assim que a gente aprovar, este botão libera."
-      : "Assim que seu cadastro for aprovado, este botão libera. Veja no seu cadastro "
-        + "o que vem agora.",
+    oportunidadeFrase: "Envie seus documentos e, assim que a gente aprovar, este botão libera.",
     trabalhoTitulo: "Falta pouco para sua agenda começar",
-    /* no app, o envio dos documentos chega depois: a frase não pede */
-    trabalhoFrase: (envioDosDocumentos ? "Envie seus documentos. " : "")
-                 + "Depois da aprovação, cada serviço que você "
+    trabalhoFrase: "Envie seus documentos. Depois da aprovação, cada serviço que você "
                  + "aceitar aparece aqui, com o dia, o bairro e quanto você recebe. "
                  + "A rua e o número chegam na véspera, a partir das "
                  + HORA_DO_ENDERECO_NA_VESPERA + "h.",
@@ -506,7 +494,7 @@ function situacaoDaDiarista(){
                + "fizer aparece aqui, com quanto você recebe"
                /* no app, o Pix dela chega com o pagamento de verdade (7) */
                + (chavePix ? " e quando cai no seu Pix." : "."),
-    trabalhoBotao: envioDosDocumentos ? "Continuar meu cadastro" : "Ver meu cadastro",
+    trabalhoBotao: "Continuar meu cadastro",
     trabalhoDestino: "diaristaCadastro",
     telaDaSituacao: "diaristaCadastro",
     pct: p.pct,
@@ -1511,48 +1499,53 @@ TELAS.diaristaCadastro = {
        bairros e sem CEP, vê o que falta) */
     +   passo(!!d.cep, "O CEP da sua casa", d.cep ? "CEP " + d.cep : "Falta informar", "diaristaRegiao")
 
-    /* No app, os Portões 2 e 3 ainda não têm telas: o envio de documento e
-       selfie espera a decisão de onde guardá-los, e o Pix espera o
-       pagamento. A tela diz isso, em vez de levar a quatro "Chega em
-       breve" — e não promete uma verificação que o app não faz. */
-    +   (FONTE.ehMaquete ? portoesDoisETresNaMaquete(d) : portoesDoisETresNoApp(d, est))
+    /* O Portão 2 é o mesmo na maquete e no app desde a R35 (17/10/2026):
+       ela manda tudo pelo aplicativo. O Portão 3 (o Pix) ainda espera o
+       pagamento de verdade, no app. */
+    +   portaoDoisDoMapa(d, passo)
+    +   (FONTE.ehMaquete ? portaoTresNaMaquete(d) : portaoTresNoApp(est))
 
-    +   soNaMaquete('<div class="aviso roxo">🔒<div><b>Por que só agora pedimos documento</b>'
+    +   '<div class="aviso roxo">🔒<div><b>Por que só agora pedimos documento</b>'
     +     'Você já viu quanto pode ganhar aqui. Agora sim faz sentido a gente '
     +     'conferir quem você é — é o que dá segurança ao cliente e o que '
-    +     'permite você entrar na casa dele.</div></div>')
+    +     'permite você entrar na casa dele.</div></div>'
     + '</div>';
 
-    function portoesDoisETresNaMaquete(d){
-      return '<div class="rotulo">2 · Para poder aceitar</div>'
-      +   passo(d.feito.documentos,   "Documento com foto", "RG ou CNH, e CPF", "diaristaDocumentos")
-      +   passo(d.feito.selfie,       "Selfie", "Para conferir que é você mesma", "diaristaSelfie")
-      +   passo(d.feito.antecedentes, "Antecedentes", "A gente consulta, você não faz nada", "diaristaAntecedentes")
-      +   passo(d.feito.termos,       "Termos e regras", "Leitura rápida", "diaristaTermos")
-
-      +   '<div class="rotulo">3 · Para poder receber</div>'
+    function portaoTresNaMaquete(d){
+      return '<div class="rotulo">3 · Para poder receber</div>'
       +   passo(d.feito.recebimento, "Onde você recebe", "Pix ou conta bancária", "diaristaRecebimento")
       +   passo(d.feito.experiencia, "Sua experiência", "Melhora sua posição na fila", "diaristaExperiencia");
     }
   }
 };
 
-/* No app, o Portão 2 ainda não é mandado pelo aplicativo (decisão 43).
-   Enquanto falta, a tela diz que a equipe combina com ela; depois de
-   marcado (pela equipe, fora do aplicativo), diz isso — e não "enviado". */
-function portoesDoisETresNoApp(d, est){
+/* O Portão 2 no mapa (R35): a autorização, os dados, o documento, a
+   selfie, os antecedentes e as regras, cada um levando à tela dele. O que
+   ela já fez aparece "feito" — com "consta" ou "nada consta", os
+   antecedentes estão feitos do lado dela (o resultado é da nossa equipe). */
+function portaoDoisDoMapa(d, passo){
+  const v = verificacaoDela();
   const feito2 = ETAPAS_DO_PORTAO_2.every(function(x){ return !!(d.feito && d.feito[x]); });
-  /* a aprovada não lê "depois da aprovação" (achado no navegador, 5a) */
-  const aprovada = !!est && (est.chave === "aprovada" || est.chave === "termos");
+  const depoisDe = function(etapa){ return passoJaPassou(etapa); };
   return '<div class="rotulo">2 · Para poder aceitar'
     +   (feito2 ? ' <span class="selo verde">feito</span>' : '') + '</div>'
-    + (feito2
-      ? '<div class="aviso verde">' + icone("escudo", 18) + '<div><b>Feito com a nossa equipe</b>'
-        + 'Esta parte foi combinada com a nossa equipe, fora do aplicativo.</div></div>'
-      : '<div class="aviso roxo">📄<div><b>O envio dos documentos chega em breve</b>'
-        + 'Ainda estamos preparando esta parte do aplicativo. Nossa equipe vai falar com '
-        + 'você para combinar os próximos passos.</div></div>')
-    + '<div class="rotulo">3 · Para poder receber</div>'
+    + passo(depoisDe("autorizar"), "Sua autorização", "Para conferir quem você é", "diaristaAutorizacao")
+    + passo(depoisDe("dados"), "CPF e data de nascimento", "Como estão no documento",
+            "diaristaDadosPessoais")
+    + passo(depoisDe("documento"), "Documento com foto", "RG ou CNH", "diaristaDocumentos")
+    + passo(depoisDe("selfie") && v.etapa !== "equipe", "Selfie",
+            v.etapa === "equipe" ? "A nossa equipe está conferindo" : "Para conferir que é você mesma",
+            "diaristaSelfie")
+    + passo(!!d.feito.antecedentes, "Antecedentes", "A gente consulta, você não faz nada",
+            "diaristaAntecedentes")
+    + passo(!!d.feito.termos, "Termos e regras", "Leitura rápida", "diaristaTermos");
+}
+
+/* No app, o Portão 3 (a chave Pix) ainda espera o pagamento de verdade. */
+function portaoTresNoApp(est){
+  /* a aprovada não lê "depois da aprovação" (achado no navegador, 5a) */
+  const aprovada = !!est && (est.chave === "aprovada" || est.chave === "termos");
+  return '<div class="rotulo">3 · Para poder receber</div>'
     + (aprovada
       ? '<div class="aviso roxo">🔑<div><b>Cadastrar a chave Pix chega em breve</b>'
         + 'Assim que o pagamento pelo aplicativo começar, você cadastra a sua chave aqui.</div></div>'
@@ -1591,129 +1584,421 @@ function cartaoDoQueAEquipeEscreveu(decisao){
     + '</div>';
 }
 
-/* A ORDEM DO PORTÃO 2 — cada etapa emenda na seguinte.
+/* ==========================================================================
+   A VERIFICAÇÃO DELA — o Portão 2 de verdade (R35, decisão do dono, 17/10/2026)
 
-   Voltar ao mapa do cadastro depois de cada etapa custaria quatro toques a
-   mais no meio do caminho mais frágil do aplicativo. Ela segue direto, e só
-   cai no mapa quando o portão inteiro termina. */
-const ORDEM_DO_PORTAO_2 = [
-  { etapa:"documentos",   tela:"diaristaDocumentos"   },
-  { etapa:"selfie",       tela:"diaristaSelfie"       },
-  { etapa:"antecedentes", tela:"diaristaAntecedentes" },
-  { etapa:"termos",       tela:"diaristaTermos"       },
-];
+   "Imagina chegar na casa da cliente uma pessoa que não condiz com os
+   documentos." Uma empresa especializada confere tudo de uma vez, sem
+   papel: o documento com foto, a selfie (com prova de vida) e os
+   antecedentes. Ela só autoriza, digita o CPF, fotografa o documento e
+   tira a selfie.
 
-function proximaEtapaDoPortaoDois(){
-  const d = euSouDiarista();
-  const falta = ORDEM_DO_PORTAO_2.filter(function(x){ return !d.feito[x.etapa]; })[0];
-  return falta ? falta.tela : null;
+   UMA COISA POR TELA (R34: simples para quem lê pouco): a autorização, os
+   dados, a foto do documento, a selfie. Os antecedentes são consultados
+   sozinhos, logo depois da selfie; só quando o nome da mãe se perdeu (ela
+   recarregou a página no meio) a tela deles pede o nome de novo. Por
+   último, as regras ("Como funciona aqui"), e ela vai para a análise.
+
+   O QUE O APARELHO NUNCA GUARDA: a foto (vai reduzida, direto para a
+   conferência: reduzirFoto, no app.js), o CPF e o nome da mãe (só na
+   memória da tomada, o tempo da consulta). No app, quem decide cada passo
+   é o servidor (a "etapa" que vem no /eu); na maquete, a tomada dela finge
+   a conferência.
+
+   "Consta" nos antecedentes nunca recusa sozinho, e a tela dela não muda:
+   diz "em análise", como em qualquer cadastro completo. Quem vê o porquê é
+   a nossa equipe.
+   ========================================================================== */
+const FRASE_SEM_AUTORIZACAO = "Para seguir, precisamos da sua autorização. Sem ela, não dá para "
+                            + "conferir quem entra na casa da cliente.";
+const FRASE_DO_CPF = "Confira o CPF: algum número está diferente.";
+const FRASE_DA_DATA = "Confira a data de nascimento: dia, mês e ano.";
+const FRASE_DO_NOME_DA_MAE = "Digite o nome da sua mãe, como está no documento.";
+
+/* A tela de cada passo da verificação (a "etapa": regras.etapa_da_verificacao
+   no servidor; verificacaoNaMaquete na maquete). "equipe" e "feita" não têm
+   tela própria: ela espera a nossa equipe. */
+const TELA_DA_ETAPA_DA_VERIFICACAO = {
+  autorizar: "diaristaAutorizacao",
+  dados: "diaristaDadosPessoais",
+  documento: "diaristaDocumentos",
+  selfie: "diaristaSelfie",
+  antecedentes: "diaristaAntecedentes",
+};
+/* A ordem dos passos, para saber o que já ficou para trás (a mesma lista
+   do servidor: regras.ETAPAS_DA_VERIFICACAO, no dados.js). */
+const ORDEM_DA_VERIFICACAO = ETAPAS_DA_VERIFICACAO;
+/* As telas do caminho: quem sai delas (para o início, o perfil...) deixa
+   para trás o nome da mãe que estava na memória da tomada. */
+const TELAS_DA_VERIFICACAO = ["diaristaAutorizacao", "diaristaDadosPessoais", "diaristaDocumentos",
+                              "diaristaSelfie", "diaristaAntecedentes", "diaristaTermos"];
+
+function verificacaoDela(){
+  return FONTE.ler.verificacao();
 }
 
+/* O passo `etapa` já ficou para trás? */
+function passoJaPassou(etapa){
+  const v = verificacaoDela();
+  return ORDEM_DA_VERIFICACAO.indexOf(v.etapa) > ORDEM_DA_VERIFICACAO.indexOf(etapa);
+}
+
+/* A ORDEM DO PORTÃO 2 — cada passo emenda no seguinte. Voltar ao mapa do
+   cadastro depois de cada um custaria toques a mais no meio do caminho mais
+   frágil do aplicativo. Ela segue direto, e só cai no mapa (ou na análise)
+   quando o portão inteiro termina. */
+function proximaEtapaDoPortaoDois(){
+  const d = euSouDiarista();
+  const tela = TELA_DA_ETAPA_DA_VERIFICACAO[verificacaoDela().etapa];
+  if(tela) return tela;
+  if(!d.feito.termos) return "diaristaTermos";
+  return null;
+}
+
+function seguirNoPortaoDois(){
+  const seguinte = proximaEtapaDoPortaoDois();
+  if(seguinte) return ir(seguinte);
+  if(situacaoDaDiarista().chave === "analise") return ir("diaristaAnalise", { limparHistorico:true });
+  ir("diaristaCadastro");
+}
+
+/* O Portão 3 (e o atalho de quem quer marcar direto) continua por aqui. */
 function marcarEtapa(nome, destino){
   const d = euSouDiarista();
   if(nome === "recebimento") anotarChavePix(d);   // guarda também o dia da chave
   d.feito[nome] = true;
   salvar();
-
   if(destino){ ir(destino); return; }
-
-  /* Ainda falta alguma etapa do Portão 2? Emenda direto nela. */
-  const seguinte = proximaEtapaDoPortaoDois();
-  if(seguinte && ORDEM_DO_PORTAO_2.some(function(x){ return x.etapa === nome; })){
-    ir(seguinte);
-    return;
-  }
-
-  /* Terminou o Portão 2 inteiro? Vai para análise. */
-  if(d.situacao === "novo" && !seguinte){
-    d.situacao = "analise";
-    salvar();
-    ir("diaristaAnalise", { limparHistorico:true });
-    return;
-  }
-
+  if(ETAPAS_DO_PORTAO_2.indexOf(nome) >= 0) return seguirNoPortaoDois();
   ir("diaristaCadastro");
 }
 
-/* --- documentos --- */
+/* A tela de um passo que ainda não chegou: diz o que vem antes, e leva lá. */
+function antesDestePasso(){
+  const tela = proximaEtapaDoPortaoDois() || "diaristaCadastro";
+  return cabecalho("")
+    + '<div class="centro">'
+    +   '<div class="emojao">📋</div>'
+    +   '<h2 class="titulo">Falta um passo antes</h2>'
+    +   '<p class="apoio">Vamos na ordem: é rapidinho.</p>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(tela) + '\')">Continuar</button>'
+    + '</div>';
+}
+
+/* A tela de um passo que já foi feito. */
+function passoJaFeito(titulo){
+  return cabecalho("")
+    + '<div class="centro">'
+    +   '<div class="circulo-ok">✓</div>'
+    +   '<h2 class="titulo">' + esc(titulo) + '</h2>'
+    +   '<p class="apoio">Esta parte já foi enviada.</p>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="seguirNoPortaoDois()">Continuar</button>'
+    + '</div>';
+}
+
+/* As 3 selfies não conferiram: quem confere agora é a nossa equipe. */
+function telaDaSelfieComAEquipe(){
+  return cabecalho("")
+    + '<div class="centro">'
+    +   '<div class="emojao">🔎</div>'
+    +   '<h2 class="titulo">A nossa equipe confere</h2>'
+    +   '<p class="apoio">Não conseguimos confirmar pela selfie. Tudo bem: uma pessoa da nossa '
+    +     'equipe confere, e a gente avisa você por aqui.</p>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="ir(\'diaristaAnalise\',{limparHistorico:true})">'
+    +     'Ver como está meu cadastro</button>'
+    + '</div>';
+}
+
+/* As dicas da foto, em três linhas curtas, com emoji. */
+function dicasDaFoto(dicas){
+  return '<div class="cartao">' + dicas.map(function(d, i){
+    return '<div style="display:flex;align-items:center;gap:12px;padding:9px 0;font-size:15px;'
+      + (i ? 'border-top:1px solid var(--borda)' : '') + '">'
+      + '<span style="font-size:24px;width:30px;text-align:center">' + d[0] + '</span>'
+      + '<b>' + esc(d[1]) + '</b></div>';
+  }).join("") + '</div>';
+}
+
+/* O botão grande abre a câmera do celular: o campo de arquivo fica
+   escondido (.campo-de-foto), e é ele que o navegador entende. */
+function abrirACamera(id){
+  const campo = document.getElementById(id);
+  if(campo && typeof campo.click === "function") campo.click();
+}
+
+/* A foto escolhida (o documento ou a selfie): reduzida no aparelho
+   (reduzirFoto, app.js) e mandada. O campo é esvaziado logo depois: a foto
+   não fica em lugar nenhum da tela. */
+function fotoEscolhida(campo, qual){
+  const arquivo = campo && campo.files && campo.files[0];
+  if(!arquivo) return;
+  const lugar = (qual === "selfie") ? "selfie-erro" : "doc-erro";
+  const botao = document.querySelector(".rodape .btn-principal");
+  mostrarErro(lugar, "");
+  reduzirFoto(arquivo, function(f){
+    try { campo.value = ""; } catch(e){ /* o navegador antigo não deixa: tudo bem */ }
+    if(!f.ok) return mostrarErro(lugar, f.erro);
+    (qual === "selfie" ? mandarASelfie : mandarOFotoDoDocumento)(f.base64, botao);
+  });
+}
+
+function mandarOFotoDoDocumento(base64, botao){
+  FONTE.enviarFotoDoDocumento({ foto: base64 }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok && (r.motivo === "sem_dados" || r.motivo === "sem_autorizacao")) return seguirNoPortaoDois();
+    if(!r.ok) return mostrarErro("doc-erro", r.erro);
+    seguirNoPortaoDois();
+  }, { botao: botao || null });
+}
+
+function mandarASelfie(base64, botao){
+  FONTE.enviarSelfie({ foto: base64 }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok && r.comAEquipe) return ir("diaristaAnalise", { limparHistorico:true });
+    if(!r.ok && r.motivo === "rosto_nao_confere"){
+      /* a tela mostra quantas ainda dá para tirar, com a frase embaixo */
+      avisarNaTela({ tela:"diaristaSelfie", campo:"foto", erro:r.erro });
+      return desenhar();
+    }
+    if(!r.ok) return mostrarErro("selfie-erro", r.erro);
+    /* o rosto conferiu; a consulta dos antecedentes já foi (ou pede o nome) */
+    if(r.faltaONomeDaMae) return ir("diaristaAntecedentes");
+    seguirNoPortaoDois();
+  }, { botao: botao || null });
+}
+
+/* --- 1. a autorização (LGPD) --- */
+TELAS.diaristaAutorizacao = {
+  html: function(){
+    const v = verificacaoDela();
+    if(passoJaPassou("dados")) return passoJaFeito("Sua autorização");
+    function linha(emoji, titulo, detalhe){
+      return '<div style="display:flex;align-items:center;gap:12px;padding:9px 0">'
+        + '<span style="font-size:24px;width:30px;text-align:center">' + emoji + '</span>'
+        + '<div><b style="display:block;font-size:15px">' + esc(titulo) + '</b>'
+        + '<span style="font-size:13px;color:var(--suave)">' + esc(detalhe) + '</span></div></div>';
+    }
+    return cabecalho("", { passos:[1,4] })
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Antes, sua autorização 🔒</h2>'
+    +   '<p class="apoio">Para a segurança da cliente e a sua, conferimos quem você é.</p>'
+    +   '<div class="cartao">'
+    +     linha("🪪", "A foto do seu documento", "RG ou CNH")
+    +     linha("🤳", "Uma selfie", "Para ver que é você mesma")
+    +     linha("🔎", "Seus antecedentes", "A gente consulta pelo CPF")
+    +   '</div>'
+    +   '<div class="aviso roxo">🛡️<div><b>Quem confere</b>'
+    +     'Uma empresa especializada em segurança, contratada por nós.</div></div>'
+    +   '<div class="aviso roxo">🔒<div><b>O que guardamos</b>'
+    +     'Só o resultado e a sua foto de perfil. A foto do documento não fica com a gente.</div></div>'
+    +   '<div class="chave' + (v.autorizada ? ' ligada' : '') + '" id="chave-autorizo" '
+    +     'onclick="alternarChaveVisual(this)">'
+    +     '<div class="txt"><b>Autorizo</b>'
+    +     '<span>A conferência do meu documento, do meu rosto e dos meus antecedentes.</span></div>'
+    +     '<div class="botao"></div></div>'
+    +   erroDoCampo("autorizo-erro", "diaristaAutorizacao", "autorizo")
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="autorizarAVerificacao(this)">Continuar</button>'
+    +   erroDoCampo("aut-erro", "diaristaAutorizacao", "")
+    + '</div>';
+  }
+};
+
+/* Sem a chave, ela não segue — e a frase diz por quê, sem bronca. A chave
+   é separada dos Termos: o rosto é dado pessoal sensível (LGPD). */
+function autorizarAVerificacao(botao){
+  mostrarErro("autorizo-erro", "");
+  mostrarErro("aut-erro", "");
+  if(!chaveLigada("chave-autorizo")) return mostrarErro("autorizo-erro", FRASE_SEM_AUTORIZACAO);
+  FONTE.autorizarVerificacao({ autorizo:true }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro(r.campo === "autorizo" ? "autorizo-erro" : "aut-erro", r.erro);
+    seguirNoPortaoDois();
+  }, { botao: botao || null });
+}
+
+/* --- 2. o CPF, a data de nascimento e o nome da mãe --- */
+
+/* As máscaras enquanto ela digita (só números): 000.000.000-00 e dd/mm/aaaa. */
+function mascararCpf(campo){
+  if(!campo) return;
+  const n = String(campo.value || "").replace(/[^0-9]/g, "").slice(0, 11);
+  let escrito = n.slice(0, 3);
+  if(n.length > 3) escrito += "." + n.slice(3, 6);
+  if(n.length > 6) escrito += "." + n.slice(6, 9);
+  if(n.length > 9) escrito += "-" + n.slice(9);
+  if(campo.value !== escrito) campo.value = escrito;
+}
+
+function mascararData(campo){
+  if(!campo) return;
+  const n = String(campo.value || "").replace(/[^0-9]/g, "").slice(0, 8);
+  let escrito = n.slice(0, 2);
+  if(n.length > 2) escrito += "/" + n.slice(2, 4);
+  if(n.length > 4) escrito += "/" + n.slice(4);
+  if(campo.value !== escrito) campo.value = escrito;
+}
+
+TELAS.diaristaDadosPessoais = {
+  html: function(){
+    if(!passoJaPassou("autorizar")) return antesDestePasso();
+    if(passoJaPassou("selfie")) return passoJaFeito("Seus dados");
+    return cabecalho("", { passos:[2,4] })
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Seus dados 📋</h2>'
+    +   '<p class="apoio">Como estão no seu documento.</p>'
+    +   '<div class="campo"><label for="dia-cpf">CPF</label>'
+    +     '<input id="dia-cpf" class="numeros-grandes" type="text" inputmode="numeric" '
+    +       'autocomplete="off" maxlength="14" placeholder="000.000.000-00" oninput="mascararCpf(this)">'
+    +     erroDoCampo("dia-cpf-erro", "diaristaDadosPessoais", "cpf") + '</div>'
+    +   '<div class="campo"><label for="dia-nascimento">Data de nascimento</label>'
+    +     '<input id="dia-nascimento" class="numeros-grandes" type="text" inputmode="numeric" '
+    +       'autocomplete="bday" maxlength="10" placeholder="dd/mm/aaaa" oninput="mascararData(this)">'
+    +     erroDoCampo("dia-nascimento-erro", "diaristaDadosPessoais", "nascimento") + '</div>'
+    +   '<div class="campo"><label for="dia-mae">Nome da sua mãe</label>'
+    +     '<input id="dia-mae" type="text" autocomplete="off" autocapitalize="words" maxlength="120" '
+    +       'placeholder="Nome completo">'
+    +     erroDoCampo("dia-mae-erro", "diaristaDadosPessoais", "nome_da_mae") + '</div>'
+    +   '<div class="aviso roxo">🔒<div><b>Só para a conferência</b>'
+    +     'O cliente nunca vê o seu CPF. O nome da sua mãe vai só para a consulta e não fica '
+    +     'guardado.</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="enviarOsDadosPessoais(this)">Continuar</button>'
+    +   erroDoCampo("dados-erro", "diaristaDadosPessoais", "")
+    + '</div>';
+  }
+};
+
+/* Os dígitos do CPF e a data são conferidos aqui (para a frase vir na
+   hora) e de novo no servidor. O CPF e o nome da mãe nunca vão para o E:
+   seguem direto para a tomada. */
+function enviarOsDadosPessoais(botao){
+  ["dia-cpf-erro", "dia-nascimento-erro", "dia-mae-erro", "dados-erro"].forEach(function(id){
+    mostrarErro(id, "");
+  });
+  const cpf = valorDoCampo("dia-cpf").replace(/[^0-9]/g, "");
+  const nascimento = dataDigitadaEmIso(valorDoCampo("dia-nascimento"));
+  const mae = valorDoCampo("dia-mae").trim();
+  if(!cpfValido(cpf)) return mostrarErro("dia-cpf-erro", FRASE_DO_CPF);
+  if(!nascimento) return mostrarErro("dia-nascimento-erro", FRASE_DA_DATA);
+  if(mae.length < 3) return mostrarErro("dia-mae-erro", FRASE_DO_NOME_DA_MAE);
+  FONTE.enviarDadosPessoais({ cpf:cpf, nascimento:nascimento, nomeDaMae:mae }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok){
+      const lugar = { cpf:"dia-cpf-erro", nascimento:"dia-nascimento-erro",
+                      nome_da_mae:"dia-mae-erro" }[r.campo] || "dados-erro";
+      return mostrarErro(lugar, r.erro);
+    }
+    seguirNoPortaoDois();
+  }, { botao: botao || null });
+}
+
+/* --- 3. a foto do documento --- */
 TELAS.diaristaDocumentos = {
   html: function(){
-    const docs = [
-      { nome:"RG ou CNH", detalhe:"Documento oficial com foto", chave:"documento" },
-      { nome:"CPF", detalhe:"Se não estiver no documento acima", chave:"cpf" },
-      { nome:"Comprovante de endereço", detalhe:"Conta de luz, água ou telefone", chave:"comprovante" },
-    ];
-    let lista = "";
-    docs.forEach(function(x){
-      lista += '<div class="opcao" style="cursor:default">'
-        + '<div class="icone">' + icone("documento", 21) + '</div>'
-        + '<div class="txt"><b>' + esc(x.nome) + '</b><span>' + esc(x.detalhe) + '</span></div>'
-        + '<div style="font-size:20px;color:var(--roxo)">📷</div></div>';
-    });
-    return ''
-    + cabecalho("", { passos:[3,5] })
+    if(!passoJaPassou("dados")) return antesDestePasso();
+    if(passoJaPassou("documento")) return passoJaFeito("Foto do documento");
+    return cabecalho("", { passos:[3,4] })
     + '<div class="corpo">'
-    +   '<h2 class="titulo">Envie seus documentos</h2>'
-    +   '<p class="apoio">São conferidos por uma pessoa da nossa equipe, não por robô.</p>'
-    +   lista
-    +   '<div class="aviso verde">' + icone("escudo", 18) + '<div><b>Seus documentos ficam guardados</b>'
-    +     'O cliente nunca vê seu documento. Ele vê apenas que você foi verificada.</div></div>'
+    +   '<h2 class="titulo">Foto do documento 🪪</h2>'
+    +   '<p class="apoio">Pode ser o RG ou a CNH: a frente, com a sua foto.</p>'
+    +   dicasDaFoto([["📄", "Em cima da mesa"], ["💡", "Com luz"], ["✨", "Sem reflexo"]])
+    +   '<div class="aviso verde">' + icone("escudo", 18) + '<div><b>O cliente nunca vê o seu documento</b>'
+    +     'A foto vai só para a conferência e não fica com a gente.</div></div>'
+    +   '<input type="file" id="dia-foto-documento" class="campo-de-foto" accept="image/*" '
+    +     'capture="environment" aria-label="Foto do documento" '
+    +     'onchange="fotoEscolhida(this, \'documento\')">'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="marcarEtapa(\'documentos\')">Enviei os três</button>'
+    +   '<button class="btn btn-principal" onclick="abrirACamera(\'dia-foto-documento\')">'
+    +     '📷 Tirar a foto</button>'
+    +   erroDoCampo("doc-erro", "diaristaDocumentos", "foto")
     + '</div>';
   }
 };
 
-/* --- selfie --- */
+/* --- 4. a selfie --- */
 TELAS.diaristaSelfie = {
   html: function(){
-    return ''
-    + cabecalho("", { passos:[4,5] })
+    const v = verificacaoDela();
+    if(!passoJaPassou("documento")) return antesDestePasso();
+    if(v.etapa === "equipe") return telaDaSelfieComAEquipe();
+    if(passoJaPassou("selfie")) return passoJaFeito("Selfie");
+    const restantes = v.selfiesRestantes;
+    return cabecalho("", { passos:[4,4] })
     + '<div class="corpo">'
     +   '<h2 class="titulo">Agora uma selfie 🤳</h2>'
-    +   '<p class="apoio">Comparamos com a foto do documento para confirmar que é você.</p>'
-    +   '<div class="cartao" style="text-align:center;padding:36px 16px">'
-    +     '<div style="color:var(--roxo);display:flex;justify-content:center;margin-bottom:12px">'
-    +       icone("rosto", 52) + '</div>'
-    +     '<div style="font-size:13.5px;color:var(--suave);line-height:1.6">'
-    +       'Fique num lugar claro,<br>sem boné e sem óculos escuros.</div>'
-    +   '</div>'
-    +   '<div class="aviso roxo">🔒<div><b>Esta foto não vira foto de perfil</b>'
-    +     'Ela serve só para a conferência. Sua foto de perfil você escolhe depois.</div></div>'
+    +   '<p class="apoio">Para conferir que é você mesma.</p>'
+    +   dicasDaFoto([["🙂", "Rosto inteiro"], ["🕶️", "Sem óculos escuros"], ["🧢", "Sem boné"]])
+    +   (restantes < SELFIES_QUE_NAO_CONFEREM_NO_MAXIMO
+      ? '<div class="aviso ambar">🔁<div><b>Vamos tentar de novo</b>'
+        + (restantes === 1 ? 'Você ainda pode tirar 1 selfie.' : 'Você ainda pode tirar '
+           + Number(restantes) + ' selfies.') + '</div></div>'
+      : '')
+    +   '<div class="aviso roxo">🔒<div><b>Esta foto vira a sua foto de perfil</b>'
+    +     'Depois que você aceitar um serviço, a cliente vê o seu rosto, para saber quem vai '
+    +     'chegar.</div></div>'
+    +   '<input type="file" id="dia-foto-selfie" class="campo-de-foto" accept="image/*" '
+    +     'capture="user" aria-label="Selfie" onchange="fotoEscolhida(this, \'selfie\')">'
+    +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+    +     '<div>A selfie sempre confere. Para ver o que acontece quando ela não confere:</div>'
+    +     '<button class="btn btn-contorno" onclick="simularSelfieQueNaoConfere()">'
+    +       'Simular: a selfie não confere</button></div>')
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="marcarEtapa(\'selfie\')">Tirar selfie</button>'
+    +   '<button class="btn btn-principal" onclick="abrirACamera(\'dia-foto-selfie\')">'
+    +     '🤳 Tirar a selfie</button>'
+    +   erroDoCampo("selfie-erro", "diaristaSelfie", "foto")
     + '</div>';
   }
 };
 
-/* --- antecedentes --- */
+/* --- 5. os antecedentes: só quando o nome da mãe se perdeu --- */
 TELAS.diaristaAntecedentes = {
   html: function(){
-    const itens = ["Consulta criminal", "Processos judiciais", "Restrições financeiras"];
-    let lista = "";
-    itens.forEach(function(i){
-      lista += '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;'
-        + 'border-bottom:1px solid var(--borda);font-size:14px">'
-        + '<span style="color:var(--verde)">' + icone("escudo", 18) + '</span>' + esc(i) + '</div>';
-    });
-    return ''
-    + cabecalho("", { passos:[5,5] })
+    if(!passoJaPassou("selfie")) return antesDestePasso();
+    if(passoJaPassou("antecedentes")) return passoJaFeito("A consulta de antecedentes");
+    return cabecalho("")
     + '<div class="corpo">'
-    +   '<h2 class="titulo">Verificação de antecedentes</h2>'
-    +   '<p class="apoio">Para a segurança de todos, verificamos seus antecedentes. '
-    +     'Você não precisa fazer nada — nós consultamos.</p>'
-    +   '<div class="cartao">' + lista + '</div>'
-    +   '<p class="ajuda">Esta etapa pode levar alguns minutos.</p>'
+    +   '<h2 class="titulo">Falta a consulta 🔎</h2>'
+    +   '<p class="apoio">Sua selfie conferiu! Para a consulta dos antecedentes, digite de novo '
+    +     'o nome da sua mãe.</p>'
+    +   '<div class="campo"><label for="dia-mae-de-novo">Nome da sua mãe</label>'
+    +     '<input id="dia-mae-de-novo" type="text" autocomplete="off" autocapitalize="words" '
+    +       'maxlength="120" placeholder="Nome completo">'
+    +     erroDoCampo("dia-mae-de-novo-erro", "diaristaAntecedentes", "nome_da_mae") + '</div>'
+    +   '<div class="aviso roxo">🔒<div><b>Não fica guardado</b>'
+    +     'O nome da sua mãe vai só para a consulta.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="marcarEtapa(\'antecedentes\')">Autorizar consulta</button>'
+    +   '<button class="btn btn-principal" onclick="consultarOsAntecedentes(this)">Continuar</button>'
+    +   erroDoCampo("antecedentes-erro", "diaristaAntecedentes", "")
     + '</div>';
   }
 };
 
-/* --- termos --- */
+function consultarOsAntecedentes(botao){
+  mostrarErro("dia-mae-de-novo-erro", "");
+  mostrarErro("antecedentes-erro", "");
+  const mae = valorDoCampo("dia-mae-de-novo").trim();
+  if(mae.length < 3) return mostrarErro("dia-mae-de-novo-erro", FRASE_DO_NOME_DA_MAE);
+  FONTE.consultarAntecedentes({ nomeDaMae: mae }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro(r.campo === "nome_da_mae" ? "dia-mae-de-novo-erro"
+                                                           : "antecedentes-erro", r.erro);
+    seguirNoPortaoDois();
+  }, { botao: botao || null });
+}
+
+/* --- 6. as regras (a última parte do Portão 2) --- */
 TELAS.diaristaTermos = {
   html: function(){
     const regras = [
@@ -1735,24 +2020,41 @@ TELAS.diaristaTermos = {
     +   '<h2 class="titulo">Como funciona aqui</h2>'
     +   '<p class="apoio">Quatro regras que valem dos dois lados.</p>'
     +   lista
-    +   '<div class="chave" id="chave-termos-dia" onclick="alternarChaveVisual(this)">'
+    +   '<div class="chave' + (euSouDiarista().feito.termos ? ' ligada' : '') + '" id="chave-termos-dia" '
+    +     'onclick="alternarChaveVisual(this)">'
     +     '<div class="txt"><b>Li e aceito os termos</b>'
-    +     '<span>Regras de conduta e política de cancelamento.</span></div>'
+    /* no app, a política de cancelamento ainda não foi decidida (R20, A26) */
+    +     '<span>' + (FONTE.ehMaquete ? 'Regras de conduta e política de cancelamento.'
+                                     : 'Regras de conduta.') + '</span></div>'
     +     '<div class="botao"></div></div>'
     +   '<div id="dia-termos-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="aceitarTermosDaDiarista()">Continuar</button>'
+    +   '<button class="btn btn-principal" onclick="aceitarTermosDaDiarista(this)">Continuar</button>'
     + '</div>';
   }
 };
 
-function aceitarTermosDaDiarista(){
+function aceitarTermosDaDiarista(botao){
   if(!chaveLigada("chave-termos-dia")){
     mostrarErro("dia-termos-erro", "Para continuar, aceite os termos.");
     return;
   }
-  marcarEtapa("termos");
+  FONTE.aceitarRegras({ aceito:true }, function(r){
+    if(!r.ok && r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("dia-termos-erro", r.erro);
+    seguirNoPortaoDois();
+  }, { botao: botao || null });
+}
+
+/* NA MAQUETE: a próxima selfie não confere (no app, quem decide é a
+   empresa que confere; no computador, a rota de teste do verificador). */
+function simularSelfieQueNaoConfere(){
+  if(!FONTE.ehMaquete) return;
+  simularRostoQueNaoConfereNaMaquete();
+  avisarNaTela({ tela:"diaristaSelfie", campo:"foto",
+                 erro:"Na maquete: a próxima selfie não vai conferir. Toque em Tirar a selfie." });
+  desenhar();
 }
 
 /* ==========================================================================
