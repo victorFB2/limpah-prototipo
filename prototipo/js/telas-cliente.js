@@ -2413,13 +2413,15 @@ TELAS.detalhePedido = {
   aoEntrar: function(){ pedirPedidosSeFaltar(); }
 };
 
-/* O PAGAMENTO DE TESTE, só no computador de quem está construindo o app:
-   o servidor diz quando ele existe (pode_pagar). Nada é cobrado; o pedido
-   vai para a busca, como vai acontecer quando o pagamento de verdade entrar.
+/* O PAGAMENTO DE TESTE, só no computador de quem está construindo o app
+   (e no celular dele pelo Wi-Fi de casa): o servidor diz quando ele existe
+   (pode_pagar). Nada é cobrado; o pedido vai para a busca, como vai
+   acontecer quando o pagamento de verdade entrar. O título diz "teste", e
+   não "computador": no Wi-Fi de casa ele aparece no celular.
    Na maquete nunca aparece (lá, o pagamento é a tela de Pix e cartão). */
 function pagamentoDeTeste(p){
   if(!FONTE.ler.podePagar(p)) return "";
-  return '<div class="cartao maquete"><b>🧪 SÓ NESTE COMPUTADOR</b>'
+  return '<div class="cartao maquete"><b>🧪 SÓ PARA TESTE</b>'
     + '<div>Pagamento de teste: nada é cobrado. O pedido vai para a busca, como vai acontecer '
     + 'quando o pagamento de verdade entrar.</div>'
     + '<button class="btn btn-contorno" onclick="pagarPedido(this)">Pagar (teste)</button>'
