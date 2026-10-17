@@ -1036,6 +1036,8 @@ TELAS.diaristaHome = {
        se atualiza sozinha e o pedido novo toca aqui) */
     +   (pode ? blocoDoDisponivel(d) : "")
 
+    /* o serviço de hoje leva ao dia do serviço (A41) */
+    +   cartaoDoDiaDeHoje()
     +   agendaDela()
     +   cartaoDaRendaDoConjunto()
     +   (semCep && !semPartida ? cartaoDoCep() : "")
@@ -4474,6 +4476,8 @@ TELAS.diaristaServico = {
     return ''
     + cabecalho("Detalhes do serviço")
     + '<div class="corpo">'
+    /* o dia do serviço (A41): a confirmação, a chegada e o fim */
+    +   botaoDoDiaDoServico(s)
     +   '<div style="text-align:center;padding:6px 0 14px">'
     +     (servicoAcontecendoAgora(s)
         ? '<div style="margin-bottom:8px"><span class="selo verde">acontecendo agora</span></div>'
@@ -4569,6 +4573,36 @@ TELAS.diaristaServico = {
     perguntarOServicoQuandoARuaChegar();
   }
 };
+
+/* O caminho até o dia do serviço (A41): em destaque no próprio dia; nos
+   outros, um botão claro (a tela explica quando cada passo abre). O pedido
+   de duas que ainda espera a segunda não tem dia: ainda pode cair. */
+function botaoDoDiaDoServico(s){
+  if(s.situacao === "aguardando_segunda") return "";
+  const data = String(s.data || "").replace(/[^0-9-]/g, "");
+  const hoje = data === hojeIso();
+  return '<button class="btn ' + (hoje ? "btn-principal" : "btn-claro") + '" style="margin:4px 0 12px" '
+    + 'onclick="abrirODiaDoServico(' + Number(s.oportunidadeId) + ',\'' + idSeguro(data) + '\')">'
+    + '☀️ ' + (hoje ? "Abrir o dia do serviço" : "O dia do serviço") + '</button>';
+}
+
+/* No início dela, o serviço de HOJE leva direto ao dia do serviço (A41). */
+function cartaoDoDiaDeHoje(){
+  if(!podeAceitarServico()) return "";
+  const hoje = hojeIso();
+  const lista = (FONTE.ler.agenda() || []).filter(function(s){
+    return s.data === hoje && s.situacao !== "aguardando_segunda";
+  }).map(detalhesDoServico);
+  if(!lista.length) return "";
+  return '<div class="rotulo">Hoje ☀️</div>' + lista.map(function(s){
+    return '<button class="item" onclick="abrirODiaDoServico(' + Number(s.oportunidadeId) + ',\''
+      + idSeguro(String(s.data || "").replace(/[^0-9-]/g, "")) + '\')">'
+      + '<div style="font-size:22px;width:26px;text-align:center">☀️</div>'
+      + '<div class="txt"><b>Hoje, ' + esc(s.janela) + '</b>'
+      + '<span>' + esc(s.bairro) + ' · Abra o dia do serviço</span></div>'
+      + '<div class="seta">›</div></button>';
+  }).join("");
+}
 
 /* NO APP, o detalhe vem do servidor (6b): uma vez a cada visita à tela. Sem
    resposta, a frase e "Tentar de novo"; nada é pedido de novo sozinho (a
@@ -4978,6 +5012,538 @@ TELAS.diaristaExtrato = {
     if(!FONTE.ehMaquete) pedirOsGanhosNestaVisita();
   }
 };
+
+
+/* ==========================================================================
+   O DIA DO SERVIÇO, DO LADO DELA (telas 50, 51 e 52) — A41, 17/10/2026
+
+   A confirmação da presença (R11, a partir das 7h), "Estou a caminho",
+   "Cheguei" com a selfie (R35, A40) e "Terminei", numa tela só, que mostra
+   o passo de agora e o botão dele. Depois, a avaliação da casa.
+
+   NENHUMA REGRA MORA AQUI: o que ela pode fazer agora e quando cada passo
+   abre vêm da tomada (FONTE.ler.diaDela): no app, do servidor; na maquete,
+   da mesma conta (estadoEmMinutos, no dados.js). A tela só escolhe a frase.
+
+   Dentro da janela, quem organiza o tempo é ELA (R9, regra de ouro 12): a
+   tela diz quando ela chegou e terminou — nunca quando pausar.
+   ========================================================================== */
+
+/* No app, com o dia aberto, o servidor é perguntado de novo a cada
+   SEGUNDOS_ENTRE_PERGUNTAS_DO_DIA (a equipe pode liberar a chegada, a
+   cliente pode confirmar). Quem conta é a hora, não o relógio: desenhar()
+   apaga os relógios. */
+const SEGUNDOS_ENTRE_PERGUNTAS_DO_DIA = 15;
+let DIA_PERGUNTADO_EM = 0;
+let DIA_PEDIDO_NA_NAVEGACAO = -1;
+let ERRO_DO_DIA = null;                  // { frase, navegacao }
+/* a frase de um passo que deu certo, ou do que não deu, só nesta visita */
+let AVISO_DO_DIA = null;                 // { frase, tipo, navegacao }
+
+function abrirODiaDoServico(id, data){
+  E.servicoAberto = { oportunidadeId: id, data: data };
+  salvar();
+  ir("diaristaDia");
+}
+
+function diaDelaAberto(){
+  return E.servicoAberto ? FONTE.ler.diaDela(E.servicoAberto) : null;
+}
+
+function erroDoDiaAgora(){
+  return (ERRO_DO_DIA && ERRO_DO_DIA.navegacao === NAVEGACAO) ? ERRO_DO_DIA.frase : "";
+}
+
+function avisoDoDiaAgora(){
+  if(!AVISO_DO_DIA || AVISO_DO_DIA.navegacao !== NAVEGACAO) return "";
+  return '<div class="aviso ' + (AVISO_DO_DIA.tipo === "ok" ? "verde" : "ambar") + '">'
+    + (AVISO_DO_DIA.tipo === "ok" ? "✅" : "⚠️") + '<div>' + esc(AVISO_DO_DIA.frase) + '</div></div>';
+}
+
+function avisarNoDia(frase, tipo){
+  AVISO_DO_DIA = { frase: frase, tipo: tipo || "atencao", navegacao: NAVEGACAO };
+}
+
+/* O título e a frase de cada passo dela. */
+function textoDoPassoDela(d){
+  const primeiro = String(d.cliente || "").split(" ")[0] || "a cliente";
+  const quando = d.hoje ? "hoje" : dataPorExtenso(d.data).toLowerCase();
+  const t = {
+    antes:      ["📅", "Seu serviço é " + quando,
+                 (d.hoje ? "A partir das " : "No dia, a partir das ") + d.abre.confirmar
+                 + ", confirme a sua presença por aqui."],
+    confirmar:  ["☀️", "Bom dia! Confirme a sua presença",
+                 "Assim " + primeiro + " fica tranquila. Confirme até as " + d.prazoDaConfirmacao + "."],
+    confirmado: ["✅", "Presença confirmada",
+                 "Quando sair de casa, toque em Estou a caminho: " + primeiro + " é avisada."],
+    a_caminho:  ["🚌", "Você está a caminho",
+                 "Chegando na porta, toque em Cheguei e tire uma selfie rápida."],
+    conferindo: ["🔎", "A nossa equipe confere",
+                 "As selfies não conferiram. Tudo bem: uma pessoa da nossa equipe confere quem é você, "
+                 + "e " + primeiro + " já foi avisada."],
+    chegou:     ["🏠", "Você chegou!",
+                 "Bom trabalho! Quando terminar, toque em Terminei."],
+    terminou:   ["🎉", "Serviço terminado",
+                 primeiro + " confere e confirma. Obrigada pelo seu trabalho!"],
+    concluido:  ["💜", "Serviço concluído",
+                 "O valor fica anotado em Meus ganhos."],
+    em_analise: ["📝", primeiro + " contou um problema",
+                 "A nossa equipe vai falar com você para entender o que houve. "
+                 + "Ninguém decide nada sem ouvir você."],
+  };
+  /* a janela acabou sem a chegada: nada mais abre por aqui, e ela sabe por quê */
+  if(janelaDoDiaAcabouSemChegada(d))
+    return ["⌛", "A janela deste serviço terminou",
+            "A sua chegada não ficou registrada. A nossa equipe vai falar com você para entender "
+            + "o que houve."];
+  return t[d.passo] || t.antes;
+}
+
+function janelaDoDiaAcabouSemChegada(d){
+  return !d.janelaAberta && ["antes", "confirmar", "confirmado", "a_caminho", "conferindo"]
+    .indexOf(d.passo) >= 0;
+}
+
+/* Os quatro passos, com a hora de cada um (o que já aconteceu fica verde). */
+function passosDoDia(horas, passo){
+  const ordem = ["confirmou", "aCaminho", "chegou", "terminou"];
+  const nomes = { confirmou:"Presença confirmada", aCaminho:"A caminho", chegou:"Chegou",
+                  terminou:"Terminou" };
+  const agora = { confirmar:"confirmou", confirmado:"aCaminho", a_caminho:"chegou",
+                  conferindo:"chegou", chegou:"terminou" }[passo];
+  return '<div class="cartao passos-do-dia">' + ordem.map(function(k, i){
+    const feito = !!horas[k];
+    return '<div class="passo-do-dia' + (feito ? " feito" : (k === agora ? " agora" : "")) + '">'
+      + '<span class="bolinha">' + (feito ? "✓" : String(i + 1)) + '</span>'
+      + '<span class="txt"><b>' + esc(nomes[k]) + '</b></span>'
+      + '<span class="hora">' + esc(horas[k] || "") + '</span></div>';
+  }).join("") + '</div>';
+}
+
+/* O problema que o relógio mostra (R11: 8h; A41: meia hora depois do início). */
+function avisoDoProblemaDela(d){
+  if(janelaDoDiaAcabouSemChegada(d)) return "";
+  if(d.problema === "nao_confirmou")
+    return '<div class="aviso ambar">⏰<div><b>O prazo para confirmar era ' + esc(d.prazoDaConfirmacao)
+      + '</b>Ainda dá para confirmar. A nossa equipe já foi avisada e pode estar procurando outra '
+      + 'profissional.</div></div>';
+  if(d.problema === "nao_chegou")
+    return '<div class="aviso ambar">⏰<div><b>O serviço já começou</b>A cliente foi avisada de que a '
+      + 'nossa equipe vai falar com ela. Se aconteceu alguma coisa, toque em Tive um imprevisto.</div></div>';
+  return "";
+}
+
+/* O botão principal do passo de agora (e o segundo, quando há dois). */
+function botoesDoDiaDela(d){
+  if(d.pode.confirmar)
+    return '<button class="btn btn-principal" onclick="passoDoDiaDela(\'confirmar\', this)">'
+      + '✅ Confirmar minha presença</button>'
+      + (d.pode.sair ? '<button class="btn btn-contorno" onclick="passoDoDiaDela(\'a-caminho\', this)">'
+        + 'Já estou a caminho</button>' : "");
+  if(d.pode.sair)
+    return '<button class="btn btn-principal" onclick="passoDoDiaDela(\'a-caminho\', this)">'
+      + '🚌 Estou a caminho</button>';
+  if(d.pode.chegar)
+    return '<button class="btn btn-principal" onclick="ir(\'diaristaSelfieDaChegada\')">'
+      + '🤳 Cheguei: tirar a selfie</button>';
+  if(d.pode.terminar)
+    return '<button class="btn btn-principal" onclick="passoDoDiaDela(\'terminei\', this)">'
+      + '✨ Terminei</button>';
+  if(d.pode.avaliar)
+    return '<button class="btn btn-principal" onclick="ir(\'diaristaAvaliar\')">⭐ Avaliar a casa</button>';
+  return '<button class="btn btn-contorno" onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">'
+    + 'Ver minha agenda</button>';
+}
+
+/* Quando abre o que ainda não abriu (para ela não ficar procurando o botão). */
+function quandoAbreOProximo(d){
+  if(!d.janelaAberta) return "";
+  if(d.passo === "antes" && !d.pode.sair)
+    return '<p class="ajuda" style="text-align:center">A confirmação abre às ' + esc(d.abre.confirmar)
+      + ' do dia do serviço. O "Estou a caminho", a partir das ' + esc(d.abre.sair) + '.</p>';
+  if((d.passo === "confirmado" || d.passo === "confirmar") && !d.pode.sair)
+    return '<p class="ajuda" style="text-align:center">O "Estou a caminho" abre às ' + esc(d.abre.sair) + '.</p>';
+  if(d.passo === "a_caminho" && !d.pode.chegar)
+    return '<p class="ajuda" style="text-align:center">A selfie da chegada abre às ' + esc(d.abre.chegar) + '.</p>';
+  return "";
+}
+
+TELAS.diaristaDia = {
+  html: function(){
+    const e = situacaoDaDiarista();
+    if(!e.podeAceitar){
+      return cabecalho("O dia do serviço")
+        + '<div class="corpo">' + blocoAntesDeTrabalhar(e) + '</div>';
+    }
+    const d = diaDelaAberto();
+    if(!d){
+      const erro = erroDoDiaAgora();
+      return cabecalho("O dia do serviço") + '<div class="corpo">'
+        + (FONTE.ehMaquete || erro === "sem_servico"
+          ? '<div class="vazio">Não achamos esse serviço na sua agenda.</div>'
+            + '<button class="btn btn-principal" onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">'
+            + 'Ver minha agenda</button>'
+          : erro
+          ? '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+            + '<button class="btn btn-contorno" onclick="tentarODiaDeNovo()">Tentar de novo</button>'
+          : '<p class="apoio">Carregando o dia do serviço…</p>')
+        + '</div>';
+    }
+    const t = textoDoPassoDela(d);
+    const primeiro = String(d.cliente || "").split(" ")[0] || "a cliente";
+    return ''
+    + cabecalho("O dia do serviço")
+    + '<div class="corpo">'
+    +   avisoDoDiaAgora()
+    +   '<div class="centro" style="flex:none;padding:8px 6px 14px;gap:8px">'
+    +     '<div class="emojao" style="font-size:52px">' + t[0] + '</div>'
+    +     '<h2 class="titulo">' + esc(t[1]) + '</h2>'
+    +     '<p class="apoio" style="margin:0">' + esc(t[2]) + '</p></div>'
+    +   avisoDoProblemaDela(d)
+    +   (d.chegadaPelaEquipe && d.passo === "chegou"
+      ? '<div class="aviso verde">✅<div><b>A nossa equipe confirmou a sua chegada</b>'
+        + esc(primeiro) + ' já foi avisada.</div></div>' : "")
+    +   (d.avisou.imprevisto
+      ? '<div class="aviso roxo">🙏<div><b>Você avisou um imprevisto</b>A nossa equipe vai falar com você '
+        + 'e com ' + esc(primeiro) + '.</div></div>' : "")
+    +   (d.avisou.clienteAusente
+      ? '<div class="aviso roxo">🔔<div><b>Avisamos ' + esc(primeiro) + '</b>Ela recebeu um aviso de que '
+        + 'você está na porta. A nossa equipe também foi avisada.</div></div>' : "")
+    +   passosDoDia(d.horas, d.passo)
+    +   (d.passo === "chegou"
+      ? '<div class="servico-pausa">☕ Dentro da janela, quem organiza o tempo é você, inclusive o '
+        + 'intervalo.</div>' : "")
+    +   '<div class="rotulo">Quando e onde</div>'
+    +   '<div class="cartao servico-ficha">'
+    +     '<div class="linha"><span class="rot">Dia</span><span class="val">' + esc(dataPorExtenso(d.data))
+    +       '</span></div>'
+    +     '<div class="linha"><span class="rot">Você fica na casa</span><span class="val">' + esc(d.janela)
+    +       '</span></div>'
+    +     '<div class="linha"><span class="rot">Bairro</span><span class="val">' + esc(d.bairro) + '</span></div>'
+    +     '<div class="linha"><span class="rot">Quem pediu</span><span class="val">' + esc(d.cliente || "Cliente")
+    +       '</span></div>'
+    +   '</div>'
+    +   '<button class="btn btn-texto" style="min-height:44px" onclick="ir(\'diaristaServico\')">'
+    +     'Ver detalhes do serviço ›</button>'
+    +   ((d.pode.imprevisto || d.pode.clienteAusente)
+      ? '<div class="rotulo">Precisa de ajuda?</div>'
+        + (d.pode.clienteAusente
+          ? '<button class="item" onclick="passoDoDiaDela(\'cliente-ausente\', this)">'
+            + '<div style="font-size:19px;width:26px;text-align:center">🔔</div>'
+            + '<div class="txt"><b>' + esc(primeiro) + ' não atende</b>'
+            + '<span>Avisamos ela e a nossa equipe.</span></div><div class="seta">›</div></button>' : "")
+        + (d.pode.imprevisto
+          ? '<button class="item" onclick="ir(\'diaristaImprevisto\')">'
+            + '<div style="font-size:19px;width:26px;text-align:center">🙏</div>'
+            + '<div class="txt"><b>Tive um imprevisto</b>'
+            + '<span>A nossa equipe fala com você.</span></div><div class="seta">›</div></button>' : "")
+      : "")
+    +   soNaMaquete(function(){ return quadroDoDiaNaMaquete(d); })
+    + '</div>'
+    + '<div class="rodape">'
+    +   botoesDoDiaDela(d)
+    +   quandoAbreOProximo(d)
+    +   '<div class="erro-do-campo" id="dia-erro"></div>'
+    + '</div>';
+  },
+  aoEntrar: function(){
+    if(FONTE.ehMaquete) return;
+    pedirODiaNestaVisita();
+    acompanharODiaDela();
+  }
+};
+
+function pedirODiaNestaVisita(){
+  if(!E.servicoAberto || DIA_PEDIDO_NA_NAVEGACAO === NAVEGACAO || erroDoDiaAgora()) return;
+  DIA_PEDIDO_NA_NAVEGACAO = NAVEGACAO;
+  DIA_PERGUNTADO_EM = Date.now();
+  FONTE.carregarDiaDela(E.servicoAberto, depoisDoDiaDela);
+}
+
+function depoisDoDiaDela(r){
+  if(r.destino) return seguirPeloErro(r);
+  ERRO_DO_DIA = r.ok ? null : { frase: r.motivo === "sem_servico" ? "sem_servico" : (r.erro || ""),
+                                navegacao: NAVEGACAO };
+  desenhar();
+}
+
+function tentarODiaDeNovo(){
+  ERRO_DO_DIA = null;
+  DIA_PEDIDO_NA_NAVEGACAO = -1;
+  desenhar();
+}
+
+/* A cada 15 s, com a tela à vista, o servidor de novo. Redesenha só se o
+   dia mudou (a tela não tem campo de escrever). */
+function acompanharODiaDela(){
+  repetir(function(){
+    if(document.hidden || !E.servicoAberto) return;
+    if(Date.now() - DIA_PERGUNTADO_EM < SEGUNDOS_ENTRE_PERGUNTAS_DO_DIA * 1000) return;
+    DIA_PERGUNTADO_EM = Date.now();
+    const antes = JSON.stringify(diaDelaAberto());
+    FONTE.carregarDiaDela(E.servicoAberto, function(r){
+      if(r.destino) return seguirPeloErro(r);
+      if(r.ok && JSON.stringify(diaDelaAberto()) !== antes) desenhar();
+    });
+  }, 1000);
+}
+
+/* Um passo dela (confirmar, a caminho, terminei, a cliente não atende): o
+   servidor confere a hora e a dona; a tela só diz o que houve. */
+function passoDoDiaDela(acao, botao){
+  mostrarErro("dia-erro", "");
+  FONTE.passoDoDia({ passo: String(acao || "") }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok){
+      mostrarErro("dia-erro", r.erro || "");
+      return;
+    }
+    if(acao === "cliente-ausente") avisarNoDia("Avisamos a cliente e a nossa equipe.", "ok");
+    if(acao === "terminei") avisarNoDia("Pronto! A cliente foi avisada para conferir.", "ok");
+    desenhar();
+  }, { botao: botao || null });
+}
+
+
+/* --- a selfie da chegada (R35, A40) --- */
+TELAS.diaristaSelfieDaChegada = {
+  html: function(){
+    const d = podeAceitarServico() ? diaDelaAberto() : null;
+    if(!d || !d.pode.chegar){
+      return cabecalho("") + '<div class="centro">'
+        + '<div class="emojao">🤳</div><h2 class="titulo">A selfie da chegada</h2>'
+        + '<p class="apoio">Ela abre quando você estiver a caminho, perto do horário do serviço.</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+    }
+    const restantes = Number(d.selfiesRestantes) || 0;
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Uma selfie rápida 🤳</h2>'
+    +   '<p class="apoio">Para ' + esc(String(d.cliente || "").split(" ")[0] || "a cliente")
+    +     ' saber que é você na porta.</p>'
+    +   dicasDaFoto([["🙂", "Rosto inteiro"], ["💡", "Com luz"], ["🧢", "Sem boné"]])
+    +   (restantes < DIA_DO_SERVICO.selfiesDaChegadaNoMaximo
+      ? '<div class="aviso ambar">🔁<div><b>Vamos tentar de novo</b>Você ainda pode tirar '
+        + (restantes === 1 ? '1 selfie.' : Number(restantes) + ' selfies.') + '</div></div>' : '')
+    +   '<div class="aviso roxo">🔒<div><b>A foto não fica guardada</b>'
+    +     'A gente só confere que é você, e a cliente fica sabendo que você chegou.</div></div>'
+    +   '<input type="file" id="dia-foto-chegada" class="campo-de-foto" accept="image/*" '
+    +     'capture="user" aria-label="Selfie da chegada" onchange="chegadaEscolhida(this)">'
+    +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+    +     '<div>A selfie da chegada sempre confere. Para ver o que acontece quando ela não confere:</div>'
+    +     '<button class="btn btn-contorno" onclick="simularChegadaQueNaoConfere()">'
+    +       'Simular: a selfie não confere</button></div>')
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="abrirACamera(\'dia-foto-chegada\')">'
+    +     '🤳 Tirar a selfie</button>'
+    +   erroDoCampo("chegada-erro", "diaristaSelfieDaChegada", "foto")
+    + '</div>';
+  }
+};
+
+/* A selfie escolhida: reduzida no aparelho (reduzirFoto, app.js) e mandada.
+   O campo é esvaziado logo depois: a foto não fica em lugar nenhum da tela. */
+function chegadaEscolhida(campo){
+  const arquivo = campo && campo.files && campo.files[0];
+  if(!arquivo) return;
+  const botao = document.querySelector(".rodape .btn-principal");
+  mostrarErro("chegada-erro", "");
+  reduzirFoto(arquivo, function(f){
+    try { campo.value = ""; } catch(e){ /* o navegador antigo não deixa: tudo bem */ }
+    if(!f.ok) return mostrarErro("chegada-erro", f.erro);
+    mandarAChegada(f.base64, botao);
+  });
+}
+
+function mandarAChegada(base64, botao){
+  FONTE.chegueiNoServico({ foto: base64 }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok && r.comAEquipe) return ir("diaristaDia");
+    if(!r.ok && r.motivo === "selfie_nao_confere"){
+      avisarNaTela({ tela:"diaristaSelfieDaChegada", campo:"foto", erro:r.erro });
+      return desenhar();
+    }
+    if(!r.ok) return mostrarErro("chegada-erro", r.erro);
+    voltar();
+  }, { botao: botao || null });
+}
+
+/* Na maquete, "Simular: a selfie não confere": as próximas não conferem. */
+function simularChegadaQueNaoConfere(){
+  if(!FONTE.ehMaquete) return;
+  simularChegadaQueNaoConfereNaMaquete();
+  avisarNaTela({ tela:"diaristaSelfieDaChegada", campo:"foto",
+                 erro:"Na maquete: as próximas selfies da chegada não vão conferir. Toque em Tirar a selfie." });
+  desenhar();
+}
+
+
+/* --- "Tive um imprevisto" --- */
+TELAS.diaristaImprevisto = {
+  html: function(){
+    const d = podeAceitarServico() ? diaDelaAberto() : null;
+    if(!d || !d.pode.imprevisto){
+      return cabecalho("") + '<div class="centro">'
+        + '<div class="emojao">🙏</div><h2 class="titulo">'
+        + (d && d.avisou.imprevisto ? 'Você já avisou a nossa equipe' : 'Este serviço já terminou') + '</h2>'
+        + '<p class="apoio">Precisa de algo? A nossa equipe fala com você pelo suporte.</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+    }
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Tive um imprevisto 🙏</h2>'
+    +   '<p class="apoio">Acontece. Avise por aqui: a nossa equipe e '
+    +     esc(String(d.cliente || "").split(" ")[0] || "a cliente") + ' ficam sabendo.</p>'
+    +   '<div class="campo"><label for="dia-imprevisto">O que houve? (se quiser contar)</label>'
+    +     '<textarea id="dia-imprevisto" maxlength="' + Number(DIA_DO_SERVICO.comentarioMaximo) + '" '
+    +       'placeholder="Ex.: meu filho ficou doente"></textarea>'
+    +     erroDoCampo("imprevisto-erro", "diaristaImprevisto", "texto") + '</div>'
+    +   '<div class="aviso roxo">🛟<div><b>Uma pessoa da nossa equipe fala com você</b>'
+    +     'O que acontece com o serviço, a nossa equipe combina com você e com a cliente.</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="enviarOImprevisto(this)">Avisar a nossa equipe</button>'
+    +   '<div class="erro-do-campo" id="imprevisto-geral"></div>'
+    + '</div>';
+  }
+};
+
+function enviarOImprevisto(botao){
+  mostrarErro("imprevisto-erro", "");
+  mostrarErro("imprevisto-geral", "");
+  const texto = valorDoCampo("dia-imprevisto").trim();
+  FONTE.passoDoDia({ passo: "imprevisto", texto: texto }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro(r.campo === "texto" ? "imprevisto-erro" : "imprevisto-geral", r.erro || "");
+    voltar();
+    avisarNoDia("Avisamos a nossa equipe e a cliente. Uma pessoa da nossa equipe fala com você.", "ok");
+    desenhar();
+  }, { botao: botao || null });
+}
+
+
+/* --- a avaliação, do lado dela (tela 70): a casa e a cliente --- */
+let NOTA_ESCOLHIDA = { tela: "", nota: 0 };
+
+function notaEscolhida(tela){
+  return NOTA_ESCOLHIDA.tela === tela ? NOTA_ESCOLHIDA.nota : 0;
+}
+
+/* As cinco estrelas, botões grandes (R21: 44 px ou mais). A nota escolhida
+   fica na memória da tela; o comentário, no campo (redesenhar o devolve). */
+function estrelasParaEscolher(tela){
+  const escolhida = notaEscolhida(tela);
+  let s = '<div class="notas" role="group" aria-label="Nota de 1 a 5">';
+  for(let n = 1; n <= 5; n++){
+    s += '<button class="' + (n <= escolhida ? "marcada" : "") + '" aria-label="' + n
+      + (n === 1 ? ' estrela' : ' estrelas') + '" onclick="escolherNota(\'' + idSeguro(tela) + '\','
+      + Number(n) + ')">' + (n <= escolhida ? "⭐" : "☆") + '</button>';
+  }
+  return s + '</div>';
+}
+
+function escolherNota(tela, n){
+  const comentario = valorDoCampo("avaliacao-comentario");
+  NOTA_ESCOLHIDA = { tela: String(tela || ""), nota: Number(n) || 0 };
+  desenhar();
+  const campo = document.getElementById("avaliacao-comentario");
+  if(campo) campo.value = comentario;
+}
+
+TELAS.diaristaAvaliar = {
+  html: function(){
+    const d = podeAceitarServico() ? diaDelaAberto() : null;
+    if(!d || !d.pode.avaliar){
+      return cabecalho("") + '<div class="centro">'
+        + '<div class="emojao">⭐</div><h2 class="titulo">'
+        + (d && d.avaliou ? 'Obrigada pela avaliação!' : 'A avaliação abre quando o serviço terminar') + '</h2>'
+        + '<p class="apoio">Ela ajuda a gente a cuidar de quem trabalha pelo app.</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+    }
+    const primeiro = String(d.cliente || "").split(" ")[0] || "a cliente";
+    const nota = notaEscolhida("diaristaAvaliar");
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Como foi o serviço? ⭐</h2>'
+    +   '<p class="apoio">Avalie a casa e ' + esc(primeiro) + '. Só a nossa equipe vê.</p>'
+    +   estrelasParaEscolher("diaristaAvaliar")
+    +   erroDoCampo("avaliacao-nota-erro", "diaristaAvaliar", "nota")
+    +   '<div class="campo"><label for="avaliacao-comentario">'
+    +     (nota && nota <= DIA_DO_SERVICO.notaQuePedeOMotivo ? 'Conte o que não foi bom' : 'Quer contar mais? (opcional)')
+    +     '</label>'
+    +     '<textarea id="avaliacao-comentario" maxlength="' + Number(DIA_DO_SERVICO.comentarioMaximo) + '" '
+    +       'placeholder="Ex.: a casa estava com os produtos separados"></textarea>'
+    +     erroDoCampo("avaliacao-comentario-erro", "diaristaAvaliar", "comentario") + '</div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="enviarAAvaliacaoDela(this)">Enviar avaliação</button>'
+    +   '<div class="erro-do-campo" id="avaliacao-erro"></div>'
+    + '</div>';
+  }
+};
+
+function enviarAAvaliacaoDela(botao){
+  ["avaliacao-nota-erro", "avaliacao-comentario-erro", "avaliacao-erro"].forEach(function(id){
+    mostrarErro(id, "");
+  });
+  const nota = notaEscolhida("diaristaAvaliar");
+  if(!nota) return mostrarErro("avaliacao-nota-erro", "Escolha de 1 a 5 estrelas.");
+  const comentario = valorDoCampo("avaliacao-comentario").trim();
+  FONTE.avaliarODia({ lado: "diarista", nota: nota, comentario: comentario }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok){
+      const lugar = { nota:"avaliacao-nota-erro", comentario:"avaliacao-comentario-erro" }[r.campo] || "avaliacao-erro";
+      return mostrarErro(lugar, r.erro || "");
+    }
+    NOTA_ESCOLHIDA = { tela: "", nota: 0 };
+    voltar();
+    avisarNoDia("Obrigada pela avaliação!", "ok");
+    desenhar();
+  }, { botao: botao || null });
+}
+
+
+/* --- NA MAQUETE: o relógio do dia, pelos botões --- */
+function quadroDoDiaNaMaquete(d){
+  return '<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+    + '<div>No app, cada passo só abre na hora certa, pelo relógio do servidor. Aqui, os botões '
+    + 'levam o relógio deste serviço para a hora de cada passo:</div>'
+    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'confirmar\')">⏩ ' + esc(d.abre.confirmar)
+    +   '05 do dia: confirmar</button>'
+    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'chegar\')">⏩ Perto do início: chegar</button>'
+    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'meio\')">⏩ No meio da janela</button>'
+    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'fim\')">⏩ Depois do fim</button>'
+    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'agora\')">Voltar ao relógio de verdade</button>'
+    /* no app, quem libera é a pessoa da equipe, na fila "Hoje" */
+    + (d.passo === "conferindo"
+      ? '<button class="btn btn-contorno" onclick="simularEquipeLiberaAChegada()">'
+        + 'Simular: a equipe conferiu e liberou a chegada</button>' : "")
+    + '</div>';
+}
+
+function simularEquipeLiberaAChegada(){
+  if(!FONTE.ehMaquete) return;
+  simularEquipeLiberaAChegadaNaMaquete(E.servicoAberto);
+  desenhar();
+}
+
+function pularODiaPara(qual){
+  const a = E.servicoAberto;
+  const s = a ? (euSouDiarista().agenda || []).find(function(x){
+    return x.oportunidadeId === a.oportunidadeId && x.data === a.data; }) : null;
+  if(!s) return;
+  if(qual === "agora"){ E.relogioDoDia = null; salvar(); return desenhar(); }
+  const minutos = { confirmar: DIA_DO_SERVICO.horaDaConfirmacao * 60 + 5,
+                    chegar: s.inicio * 60 - 20,
+                    meio: Math.round((s.inicio + s.fim) / 2 * 60),
+                    fim: s.fim * 60 + 5 }[qual];
+  if(minutos === undefined) return;
+  E.relogioDoDia = { chave: "servico:" + s.oportunidadeId + ":" + s.data, data: s.data,
+                     minutos: minutos, marcadoEm: Date.now() };
+  salvar();
+  desenhar();
+}
 
 
 /* --------------------------------------------------------------------------

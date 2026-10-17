@@ -2075,6 +2075,13 @@ TELAS.confirmado = {
    nunca o sobrenome, o telefone ou o endereço dela. Desde a R35, também a
    foto de perfil que a nossa equipe aprovou (o servidor diz quem vê e até
    quando); sem ela, as iniciais. */
+/* A nota dela, como o servidor mandou (a média, só a partir de 3
+   avaliações: A41); antes disso, "Nova na Limpah". */
+function notaDeQuemVai(p, i){
+  const n = FONTE.ler.notasDeQuemVai(p)[i];
+  return (n && n.nota) ? estrelas(n.nota) + " (" + Number(n.avaliacoes) + " avaliações)" : "Nova na Limpah";
+}
+
 function confirmadoNoApp(p){
   const nomes = FONTE.ler.quemVai(p);
   const fotos = FONTE.ler.fotosDeQuemVai(p);
@@ -2085,7 +2092,7 @@ function confirmadoNoApp(p){
   nomes.forEach(function(nome, i){
     pessoas += '<div class="pessoa"' + (i ? ' style="margin-top:12px"' : "") + '>'
       + avatarDaDiarista(nome, "", "", fotos[i]) + '<div class="info"><b>' + esc(nome) + '</b>'
-      + '<span>Nova na Limpah</span></div></div>';
+      + '<span>' + esc(notaDeQuemVai(p, i)) + '</span></div></div>';
   });
   /* uma conversa com cada uma (8): no pedido de duas, uma linha para cada */
   const acoes = nomes.map(function(nome, i){
@@ -2322,7 +2329,8 @@ TELAS.detalhePedido = {
         + FONTE.ler.quemVai(p).map(function(nome, i){
             return '<div class="pessoa"' + (i ? ' style="margin-top:12px"' : "") + '>'
               + avatarDaDiarista(nome, "", "", fotos[i])
-              + '<div class="info"><b>' + esc(nome) + '</b><span>Nova na Limpah</span></div></div>';
+              + '<div class="info"><b>' + esc(nome) + '</b><span>' + esc(notaDeQuemVai(p, i))
+              + '</span></div></div>';
           }).join("")
         + '</div>';
     } else if(prof){
@@ -2354,9 +2362,14 @@ TELAS.detalhePedido = {
       avisoDaSituacao = '<div class="aviso">📌<div><b>' + esc(p.situacaoTexto) + '</b></div></div>';
     }
 
+    /* o dia do serviço (A41): quem decide se aparece é a tomada (no app, o
+       servidor: do dia do serviço até a semana da avaliação) */
+    const acompanhar = FONTE.ler.acompanhar(p)
+      ? '<button class="btn btn-principal" onclick="abrirAcompanhamento(\'' + idSeguro(p.id) + '\')">'
+        + '☀️ Acompanhar o serviço</button>' : "";
     let acoes = "";
     if(p.situacao === "confirmado"){
-      acoes = botoesDaConversaDoPedido(p)
+      acoes = acompanhar + botoesDaConversaDoPedido(p, !!acompanhar)
         + '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
         + '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar serviço</button>';
     } else if(pedidoNaBusca(p)){
@@ -2371,7 +2384,11 @@ TELAS.detalhePedido = {
         ? '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar pedido</button>'
         : '<button class="btn btn-contorno" onclick="trocarAba(\'servicos\')">Ver meus serviços</button>';
     } else {
-      acoes = '<button class="btn btn-principal" onclick="comecarPedido()">Pedir novamente</button>';
+      /* o concluído: na semana da avaliação, o caminho até ela */
+      acoes = (acompanhar
+          ? '<button class="btn btn-claro" onclick="abrirAcompanhamento(\'' + idSeguro(p.id) + '\')">'
+            + '⭐ Ver e avaliar o serviço</button>' : "")
+        + '<button class="btn btn-principal" onclick="comecarPedido()">Pedir novamente</button>';
     }
 
     return ''
@@ -2423,14 +2440,16 @@ TELAS.detalhePedido = {
 };
 
 /* "Conversar com a profissional". No pedido de duas (só no app), um botão
-   para cada uma: cada uma tem a sua conversa (8). */
-function botoesDaConversaDoPedido(p){
+   para cada uma: cada uma tem a sua conversa (8). Com o "Acompanhar o
+   serviço" em cima (o dia do serviço, A41), a conversa vem em segundo. */
+function botoesDaConversaDoPedido(p, segundo){
   const nomes = FONTE.ehMaquete ? [] : FONTE.ler.quemVai(p);
   if(nomes.length < 2)
-    return '<button class="btn btn-principal" onclick="abrirConversaDoPedido(\'' + idSeguro(p.id) + '\')">'
+    return '<button class="btn ' + (segundo ? 'btn-contorno' : 'btn-principal') + '" '
+      + 'onclick="abrirConversaDoPedido(\'' + idSeguro(p.id) + '\')">'
       + 'Conversar com a profissional</button>';
   return nomes.map(function(nome, i){
-    return '<button class="btn ' + (i ? 'btn-contorno' : 'btn-principal') + '" '
+    return '<button class="btn ' + (i || segundo ? 'btn-contorno' : 'btn-principal') + '" '
       + 'onclick="abrirConversaDoPedido(\'' + idSeguro(p.id) + '\',' + Number(i + 1) + ')">'
       + 'Conversar com ' + esc(String(nome).split(" ")[0]) + '</button>';
   }).join("");
@@ -3628,6 +3647,387 @@ TELAS.chatSuporte = {
     + '</div></div>');
   }
 };
+
+
+/* ==========================================================================
+   O DIA DO SERVIÇO, DO LADO DA CLIENTE (telas 64, 65, 69) — A41, 17/10/2026
+
+   "Acompanhe o serviço": a profissional confirmou, está a caminho, chegou
+   (com a foto, para conferir na porta: R35), terminou. E o que fazer depois:
+   "Está tudo certo", "Algo não ficou bom", avaliar.
+
+   O que deu errado aparece aqui, sem esconder (R11, A40, A41): ela não
+   confirmou, não chegou, teve um imprevisto, a selfie não conferiu ("Aguarde
+   um pouquinho..."). O que isso custa a quem é a política de cancelamento
+   (R20), que ainda não foi decidida: a tela diz "a nossa equipe vai falar
+   com você", e o caso vai para a fila da equipe.
+
+   NENHUMA REGRA MORA AQUI: o passo, o que ela pode fazer e o prazo vêm da
+   tomada (FONTE.ler.diaDoPedido): no app, do servidor.
+   ========================================================================== */
+const SEGUNDOS_ENTRE_PERGUNTAS_DO_ACOMPANHAMENTO = 15;
+let ACOMPANHAMENTO_PERGUNTADO_EM = 0;
+let ACOMPANHAMENTO_PEDIDO_NA_NAVEGACAO = -1;
+let ERRO_DO_ACOMPANHAMENTO = null;       // { frase, navegacao }
+let AVISO_DO_ACOMPANHAMENTO = null;      // { frase, navegacao }
+
+function abrirAcompanhamento(id){
+  E.pedidoAtual = id;
+  E.vagaDoDia = 1;
+  salvar();
+  ir("acompanharServico");
+}
+
+/* Pelo número do pedido aberto (e não pela lista dos pedidos, que no app
+   pode ainda não ter chegado). */
+function diaDoPedidoAberto(){
+  return E.pedidoAtual ? FONTE.ler.diaDoPedido(E.pedidoAtual) : null;
+}
+
+/* A profissional de que se fala (a do "Avaliar" ou do "Algo não ficou bom"). */
+function profissionalDoDiaAberta(){
+  const d = diaDoPedidoAberto();
+  if(!d) return null;
+  return d.profissionais.find(function(x){ return x.vaga === Number(E.vagaDoDia || 1); })
+      || d.profissionais[0] || null;
+}
+
+function erroDoAcompanhamentoAgora(){
+  return (ERRO_DO_ACOMPANHAMENTO && ERRO_DO_ACOMPANHAMENTO.navegacao === NAVEGACAO)
+    ? ERRO_DO_ACOMPANHAMENTO.frase : "";
+}
+
+function avisarNoAcompanhamento(frase){
+  AVISO_DO_ACOMPANHAMENTO = { frase: frase, navegacao: NAVEGACAO };
+}
+
+/* O título e a frase de cada passo, para a cliente. */
+function textoDoPassoParaACliente(x, d){
+  const nome = String(x.nome || "").split(" ")[0] || "A profissional";
+  const quando = d.hoje ? "hoje" : dataPorExtenso(d.data).toLowerCase();
+  if(x.contestou || x.passo === "em_analise")
+    return ["📝", "Você contou um problema", "A nossa equipe vai falar com você para resolver."];
+  if(x.avisou.imprevisto && !x.horas.chegou && x.passo !== "terminou" && x.passo !== "concluido")
+    return ["🙏", nome + " teve um imprevisto", "Ela avisou a nossa equipe, que vai falar com você."];
+  if(x.problema === "nao_confirmou")
+    return ["⏰", nome + " ainda não confirmou",
+            "A nossa equipe já está cuidando: vamos procurar outra profissional e falar com você. "
+            + "Se não acharmos, você escolhe: remarcar ou receber todo o valor de volta."];
+  if(x.problema === "nao_chegou")
+    return ["⏰", nome + " ainda não chegou", "A nossa equipe já foi avisada e vai falar com você."];
+  const t = {
+    antes:      ["📅", "Seu serviço é " + quando,
+                 (d.hoje ? "A partir das " : "No dia, a partir das ") + d.abreAConfirmacao + ", " + nome
+                 + " confirma a presença. Você acompanha tudo por aqui."],
+    confirmar:  ["⏳", "Esperando " + nome + " confirmar", "Ela confirma a presença até as "
+                 + d.prazoDaConfirmacao + "."],
+    confirmado: ["✅", nome + " confirmou a presença", "Quando ela sair de casa, você recebe um aviso."],
+    a_caminho:  ["🚌", nome + " está a caminho", "Você recebe um aviso quando ela chegar."],
+    /* a frase da A40, inteira */
+    conferindo: ["🔎", "Conferindo a chegada",
+                 "Aguarde um pouquinho: estamos confirmando a identidade da profissional."],
+    chegou:     ["🏠", nome + " chegou!", x.chegadaPelaEquipe
+                 ? "A nossa equipe confirmou a identidade dela. Confira na porta: é ela na foto."
+                 : "Confira na porta: é ela na foto."],
+    terminou:   ["🎉", nome + " terminou!", "Confira se está tudo certo."],
+    concluido:  ["💜", "Serviço concluído", "Obrigado por usar a Limpah!"],
+  };
+  return t[x.passo] || t.antes;
+}
+
+function cartaoDaProfissionalNoDia(x, d, p){
+  const nome = String(x.nome || "").split(" ")[0] || "a profissional";
+  const t = textoDoPassoParaACliente(x, d);
+  return '<div class="cartao destaque">'
+    + '<div class="pessoa" style="margin-bottom:12px">' + avatarDaDiarista(x.nome, "", "", x.foto)
+    +   '<div class="info"><b>' + esc(x.nome) + '</b><span>' + esc(d.janela) + '</span></div></div>'
+    + '<div style="text-align:center;padding:4px 0 10px">'
+    +   '<div style="font-size:40px;line-height:1">' + t[0] + '</div>'
+    +   '<b style="display:block;font-size:17px;margin-top:6px">' + esc(t[1]) + '</b>'
+    +   '<div class="apoio" style="margin:6px 0 0">' + esc(t[2]) + '</div></div>'
+    + (x.avisou.clienteAusente && x.passo !== "terminou" && x.passo !== "concluido"
+      ? '<div class="aviso ambar">🔔<div><b>' + esc(nome) + ' está na porta</b>'
+        + 'Ela não conseguiu falar com você. Responda pela conversa.</div></div>' : "")
+    + passosDoDia(x.horas, x.passo)
+    + (x.pode.contestar && x.prazoParaContestar
+      ? '<p class="ajuda">Algo não ficou bom? Conte até ' + esc(x.prazoParaContestar) + '.</p>' : "")
+    + (x.pode.avaliar
+      ? '<button class="btn btn-claro" style="margin-top:10px" onclick="abrirAvaliacao(' + Number(x.vaga) + ')">'
+        + '⭐ Avaliar ' + esc(nome) + '</button>' : "")
+    + (p && p.situacao === "confirmado" && (x.passo !== "concluido")
+      ? '<button class="btn btn-texto" style="min-height:44px" onclick="abrirConversaDoPedido(\''
+        + idSeguro(p.id) + '\',' + Number(x.vaga) + ')">💬 Conversar com ' + esc(nome) + '</button>' : "")
+    + '</div>';
+}
+
+/* O botão do rodapé: o "Está tudo certo" da primeira que terminou. */
+function rodapeDoAcompanhamento(d){
+  const x = d.profissionais.find(function(y){ return y.pode.confirmarOFim; });
+  if(x){
+    const nome = String(x.nome || "").split(" ")[0];
+    return '<button class="btn btn-principal" onclick="confirmarOFim(' + Number(x.vaga) + ', this)">'
+      + '✓ Está tudo certo' + (d.profissionais.length > 1 ? ' com ' + esc(nome) : '') + '</button>'
+      + '<button class="btn btn-contorno" onclick="abrirContestacao(' + Number(x.vaga) + ')">'
+      + 'Algo não ficou bom</button>';
+  }
+  return '<button class="btn btn-contorno" onclick="ir(\'detalhePedido\')">Ver detalhes do pedido</button>';
+}
+
+TELAS.acompanharServico = {
+  html: function(){
+    const p = pedidoAtual();
+    const d = diaDoPedidoAberto();
+    if(!d){
+      const erro = erroDoAcompanhamentoAgora();
+      return cabecalho("Acompanhe o serviço") + '<div class="corpo">'
+        + (FONTE.ehMaquete || erro === "sem_servico"
+          ? '<div class="vazio">Este pedido ainda não tem uma profissional confirmada.</div>'
+            + '<button class="btn btn-principal" onclick="trocarAba(\'servicos\')">Ver meus serviços</button>'
+          : erro
+          ? '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+            + '<button class="btn btn-contorno" onclick="tentarOAcompanhamentoDeNovo()">Tentar de novo</button>'
+          : '<p class="apoio">Carregando o seu serviço…</p>')
+        + '</div>';
+    }
+    const aviso = (AVISO_DO_ACOMPANHAMENTO && AVISO_DO_ACOMPANHAMENTO.navegacao === NAVEGACAO)
+      ? '<div class="aviso verde">✅<div>' + esc(AVISO_DO_ACOMPANHAMENTO.frase) + '</div></div>' : "";
+    return ''
+    + cabecalho("Acompanhe o serviço")
+    + '<div class="corpo">'
+    +   aviso
+    +   '<p class="apoio" style="margin-top:0">' + esc(dataPorExtenso(d.data)) + ' · ' + esc(d.janela) + '</p>'
+    +   d.profissionais.map(function(x){ return cartaoDaProfissionalNoDia(x, d, p); }).join("")
+    +   soNaMaquete(function(){ return quadroDoAcompanhamentoNaMaquete(); })
+    +   '<div class="erro-do-campo" id="acompanhar-erro"></div>'
+    + '</div>'
+    + '<div class="rodape">' + rodapeDoAcompanhamento(d) + '</div>';
+  },
+  aoEntrar: function(){
+    if(FONTE.ehMaquete) return;
+    pedirOAcompanhamentoNestaVisita();
+    acompanharOPedido();
+  }
+};
+
+function pedirOAcompanhamentoNestaVisita(){
+  if(!E.pedidoAtual || ACOMPANHAMENTO_PEDIDO_NA_NAVEGACAO === NAVEGACAO || erroDoAcompanhamentoAgora()) return;
+  ACOMPANHAMENTO_PEDIDO_NA_NAVEGACAO = NAVEGACAO;
+  ACOMPANHAMENTO_PERGUNTADO_EM = Date.now();
+  FONTE.carregarDiaDoPedido(E.pedidoAtual, depoisDoAcompanhamento);
+}
+
+function depoisDoAcompanhamento(r){
+  if(r.destino) return seguirPeloErro(r);
+  ERRO_DO_ACOMPANHAMENTO = r.ok ? null
+    : { frase: r.motivo === "sem_servico" ? "sem_servico" : (r.erro || ""), navegacao: NAVEGACAO };
+  desenhar();
+}
+
+function tentarOAcompanhamentoDeNovo(){
+  ERRO_DO_ACOMPANHAMENTO = null;
+  ACOMPANHAMENTO_PEDIDO_NA_NAVEGACAO = -1;
+  desenhar();
+}
+
+/* A cada 15 s, com a tela à vista, o servidor de novo; redesenha só se o
+   dia mudou (esta tela não tem campo de escrever). */
+function acompanharOPedido(){
+  repetir(function(){
+    if(document.hidden || !E.pedidoAtual) return;
+    if(Date.now() - ACOMPANHAMENTO_PERGUNTADO_EM < SEGUNDOS_ENTRE_PERGUNTAS_DO_ACOMPANHAMENTO * 1000) return;
+    ACOMPANHAMENTO_PERGUNTADO_EM = Date.now();
+    const antes = JSON.stringify(diaDoPedidoAberto());
+    FONTE.carregarDiaDoPedido(E.pedidoAtual, function(r){
+      if(r.destino) return seguirPeloErro(r);
+      if(r.ok && JSON.stringify(diaDoPedidoAberto()) !== antes) desenhar();
+    });
+  }, 1000);
+}
+
+function confirmarOFim(vaga, botao){
+  if(!E.pedidoAtual) return;
+  mostrarErro("acompanhar-erro", "");
+  FONTE.passoDaCliente({ pedidoId: E.pedidoAtual, vaga: Number(vaga) || 1, passo: "tudo-certo" }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("acompanhar-erro", r.erro || "");
+    avisarNoAcompanhamento("Obrigado! O serviço está concluído.");
+    desenhar();
+  }, { botao: botao || null });
+}
+
+function abrirAvaliacao(vaga){
+  E.vagaDoDia = Number(vaga) || 1;
+  salvar();
+  ir("avaliarServico");
+}
+
+function abrirContestacao(vaga){
+  E.vagaDoDia = Number(vaga) || 1;
+  salvar();
+  ir("contestarServico");
+}
+
+/* A avaliação da cliente (tela 69): a média vai para as outras clientes,
+   nunca o nome nem o comentário de ninguém. */
+TELAS.avaliarServico = {
+  html: function(){
+    const x = profissionalDoDiaAberta();
+    if(!x || !x.pode.avaliar){
+      return cabecalho("") + '<div class="centro">'
+        + '<div class="emojao">⭐</div><h2 class="titulo">'
+        + (x && x.avaliou ? 'Obrigado pela avaliação!' : 'A avaliação abre quando o serviço terminar') + '</h2>'
+        + '<p class="apoio">Ela ajuda outras clientes a escolher, e a profissional a melhorar.</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+    }
+    const nota = notaEscolhida("avaliarServico");
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Como foi o serviço? ⭐</h2>'
+    +   '<p class="apoio">Avalie ' + esc(String(x.nome || "").split(" ")[0] || "a profissional")
+    +     '. As outras clientes veem só a média das notas, '
+    +     'sem o seu nome nem o seu comentário.</p>'
+    +   estrelasParaEscolher("avaliarServico")
+    +   erroDoCampo("avaliacao-nota-erro", "avaliarServico", "nota")
+    +   '<div class="campo"><label for="avaliacao-comentario">'
+    +     (nota && nota <= DIA_DO_SERVICO.notaQuePedeOMotivo ? 'Conte o que não ficou bom' : 'Quer contar mais? (opcional)')
+    +     '</label>'
+    +     '<textarea id="avaliacao-comentario" maxlength="' + Number(DIA_DO_SERVICO.comentarioMaximo) + '" '
+    +       'placeholder="Ex.: caprichou na cozinha"></textarea>'
+    +     erroDoCampo("avaliacao-comentario-erro", "avaliarServico", "comentario") + '</div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="enviarAAvaliacaoDaCliente(this)">Enviar avaliação</button>'
+    +   '<div class="erro-do-campo" id="avaliacao-erro"></div>'
+    + '</div>';
+  }
+};
+
+function enviarAAvaliacaoDaCliente(botao){
+  ["avaliacao-nota-erro", "avaliacao-comentario-erro", "avaliacao-erro"].forEach(function(id){
+    mostrarErro(id, "");
+  });
+  const nota = notaEscolhida("avaliarServico");
+  if(!E.pedidoAtual) return;
+  if(!nota) return mostrarErro("avaliacao-nota-erro", "Escolha de 1 a 5 estrelas.");
+  const comentario = valorDoCampo("avaliacao-comentario").trim();
+  FONTE.avaliarODia({ lado: "cliente", pedidoId: E.pedidoAtual, vaga: Number(E.vagaDoDia || 1), nota: nota,
+                      comentario: comentario }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok){
+      const lugar = { nota:"avaliacao-nota-erro", comentario:"avaliacao-comentario-erro" }[r.campo] || "avaliacao-erro";
+      return mostrarErro(lugar, r.erro || "");
+    }
+    NOTA_ESCOLHIDA = { tela: "", nota: 0 };
+    voltar();
+    avisarNoAcompanhamento("Obrigado pela avaliação!");
+    desenhar();
+  }, { botao: botao || null });
+}
+
+/* "Algo não ficou bom" (A41): vai para a nossa equipe. O que acontece com o
+   pagamento depende da política de cancelamento (R20), que ainda não foi
+   decidida: a tela não promete nada além de "vamos falar com você". */
+TELAS.contestarServico = {
+  html: function(){
+    const x = profissionalDoDiaAberta();
+    if(!x || !x.pode.contestar){
+      return cabecalho("") + '<div class="centro">'
+        + '<div class="emojao">📝</div><h2 class="titulo">'
+        + (x && x.contestou ? 'A nossa equipe já recebeu' : 'Por aqui, não dá mais') + '</h2>'
+        + '<p class="apoio">' + (x && x.contestou ? 'Uma pessoa da nossa equipe vai falar com você.'
+          : 'Precisa de algo? Fale com a nossa equipe pelo suporte.') + '</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+    }
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Algo não ficou bom? 😕</h2>'
+    +   '<p class="apoio">Conte o que houve. A nossa equipe vai falar com você para resolver.</p>'
+    +   '<div class="campo"><label for="contestar-texto">O que não ficou bom</label>'
+    +     '<textarea id="contestar-texto" maxlength="' + Number(DIA_DO_SERVICO.comentarioMaximo) + '" '
+    +       'placeholder="Ex.: o banheiro ficou sem limpar"></textarea>'
+    +     erroDoCampo("contestar-erro", "contestarServico", "texto") + '</div>'
+    +   '<div class="aviso roxo">🛟<div><b>Uma pessoa vê cada caso</b>'
+    +     'A nossa equipe fala com você e com a profissional antes de decidir qualquer coisa.</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" onclick="enviarAContestacao(this)">Enviar para a nossa equipe</button>'
+    +   '<div class="erro-do-campo" id="contestar-geral"></div>'
+    + '</div>';
+  }
+};
+
+function enviarAContestacao(botao){
+  mostrarErro("contestar-erro", "");
+  mostrarErro("contestar-geral", "");
+  const texto = valorDoCampo("contestar-texto").trim();
+  if(!E.pedidoAtual) return;
+  if(texto.length < 3) return mostrarErro("contestar-erro", "Conte o que não ficou bom, para a nossa equipe ajudar.");
+  FONTE.passoDaCliente({ pedidoId: E.pedidoAtual, vaga: Number(E.vagaDoDia || 1), passo: "contestar", texto: texto },
+                       function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro(r.campo === "texto" ? "contestar-erro" : "contestar-geral", r.erro || "");
+    voltar();
+    avisarNoAcompanhamento("Recebemos. A nossa equipe vai falar com você.");
+    desenhar();
+  }, { botao: botao || null });
+}
+
+/* NA MAQUETE: o dia da profissional de mentira, pelos botões. */
+function quadroDoAcompanhamentoNaMaquete(){
+  return '<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
+    + '<div>No app, quem conta cada passo é a profissional (e o relógio do servidor). Aqui:</div>'
+    + '<button class="btn btn-contorno" onclick="simularPassoDaProfissional()">⏩ O próximo passo dela</button>'
+    + '<button class="btn btn-contorno" onclick="simularODiaDoPedido(\'conferindo\')">Simular: a selfie dela não confere</button>'
+    + '<button class="btn btn-contorno" onclick="simularODiaDoPedido(\'nao_confirmou\')">Simular: ela não confirmou</button>'
+    + '<button class="btn btn-contorno" onclick="simularODiaDoPedido(\'nao_chegou\')">Simular: ela não chegou</button>'
+    + '<button class="btn btn-contorno" onclick="simularODiaDoPedido(\'do_zero\')">Começar o dia de novo</button>'
+    + '</div>';
+}
+
+function relogioDoPedidoNaMaquete(p, minutos){
+  E.relogioDoDia = { chave: "pedido:" + p.id, data: dataDoPedidoNaMaquete(p), minutos: minutos,
+                     marcadoEm: Date.now() };
+}
+
+function simularPassoDaProfissional(){
+  const p = pedidoAtual();
+  if(!p || !FONTE.ehMaquete) return;
+  const r = p.diaNaMaquete = (p.diaNaMaquete && typeof p.diaNaMaquete === "object") ? p.diaNaMaquete : {};
+  const j = janelaDoServico(p.periodo, p.horas) || { inicio: 8, fim: 12 };
+  const em = function(min){ return momentoDoDiaNaMaquete(dataDoPedidoNaMaquete(p), min); };
+  let minutos;
+  if(!r.confirmou){ minutos = DIA_DO_SERVICO.horaDaConfirmacao * 60 + 5; r.confirmou = em(minutos); }
+  else if(!r.aCaminho){ minutos = j.inicio * 60 - 40; r.aCaminho = em(minutos); }
+  else if(!r.chegou){ minutos = j.inicio * 60 - 5; r.chegou = em(minutos); r.tentativas = 0; }
+  else if(!r.terminou){ minutos = j.fim * 60 - 20; r.terminou = em(minutos); }
+  else return;
+  relogioDoPedidoNaMaquete(p, minutos);
+  salvar();
+  desenhar();
+}
+
+function simularODiaDoPedido(qual){
+  const p = pedidoAtual();
+  if(!p || !FONTE.ehMaquete) return;
+  const j = janelaDoServico(p.periodo, p.horas) || { inicio: 8, fim: 12 };
+  const em = function(min){ return momentoDoDiaNaMaquete(dataDoPedidoNaMaquete(p), min); };
+  p.diaNaMaquete = {};
+  if(qual === "conferindo"){
+    p.diaNaMaquete = { confirmou: em(7 * 60 + 5), aCaminho: em(j.inicio * 60 - 40),
+                       tentativas: DIA_DO_SERVICO.selfiesDaChegadaNoMaximo };
+    relogioDoPedidoNaMaquete(p, j.inicio * 60);
+  } else if(qual === "nao_confirmou"){
+    relogioDoPedidoNaMaquete(p, DIA_DO_SERVICO.horaLimiteDaConfirmacao * 60 + 1);
+  } else if(qual === "nao_chegou"){
+    p.diaNaMaquete = { confirmou: em(7 * 60 + 5) };
+    relogioDoPedidoNaMaquete(p, j.inicio * 60 + DIA_DO_SERVICO.minutosDeToleranciaDaChegada + 1);
+  } else {
+    E.relogioDoDia = null;
+  }
+  if(p.situacao === "concluido") p.situacao = "confirmado";
+  salvar();
+  desenhar();
+}
 
 
 /* --------------------------------------------------------------------------

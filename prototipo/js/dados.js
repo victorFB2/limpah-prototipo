@@ -1522,3 +1522,105 @@ function gradeAlternada(grade, dia, periodoId){
   nova[dia] = lista;
   return nova;
 }
+
+
+/* ==========================================================================
+   O DIA DO SERVIÇO (A41; R11, R35, A40)
+
+   Os passos de cada vaga: confirmar a presença → "Estou a caminho" →
+   "Cheguei" (com a selfie) → "Terminei" → a cliente confirma (ou o prazo
+   dela passa) → concluído. E a avaliação, dos dois lados.
+
+   A MESMA CONTA do servidor (regras.estado_em_minutos, no app/limpah/
+   regras.py): um teste cruzado compara as duas em milhares de momentos.
+   As contas são em MINUTOS DO DIA DO SERVIÇO (0 = meia-noite do dia; antes
+   do dia é negativo, depois passa de 1440): assim o fuso de quem roda não
+   muda nada.
+
+   Dentro da janela, quem administra o tempo é ELA (R9, regra de ouro 12): os
+   passos dizem quando ela chegou e terminou, nunca quando ela pausa.
+   ========================================================================== */
+const DIA_DO_SERVICO = {
+  horaDaConfirmacao: 7,             // R11: a confirmação abre às 7h do dia
+  horaLimiteDaConfirmacao: 8,       // R11: sem resposta até as 8h, a equipe procura outra
+  horasAntesParaSair: 2,            // "Estou a caminho", até 2h antes do início (A41)
+  minutosAntesParaChegar: 60,       // "Cheguei", até 1h antes do início (A41)
+  minutosDeToleranciaDaChegada: 30, // sem chegada meia hora depois do início: a equipe (A41)
+  selfiesDaChegadaNoMaximo: 2,      // R35/A40: tenta mais uma vez; na segunda, a equipe
+  horasParaAClienteContestar: 24,   // o prazo da cliente, depois do fim (A41)
+  diasParaAvaliar: 7,               // a avaliação, até 7 dias depois (A41)
+  notaQuePedeOMotivo: 3,            // nota baixa vem com motivo (antipadrões do Bloco 7)
+  comentarioMaximo: 500,
+  avaliacoesParaMostrarAMedia: 3,   // a cliente vê a média dela só a partir de 3
+};
+
+/* r: o que já aconteceu, em minutos do dia (null = ainda não): aceito,
+   confirmou, aCaminho, chegou, tentativas, terminou, concluido, contestou. */
+function estadoEmMinutos(r, inicioHora, fimHora, agora){
+  r = r || {};
+  const D = DIA_DO_SERVICO;
+  const tem = function(x){ return x !== null && x !== undefined; };
+  const inicio = inicioHora * 60, fim = fimHora * 60;
+  const abreConfirmar = D.horaDaConfirmacao * 60;
+  const prazo = D.horaLimiteDaConfirmacao * 60;
+  const abreSair = inicio - D.horasAntesParaSair * 60;
+  const abreChegar = inicio - D.minutosAntesParaChegar;
+  const tolerancia = inicio + D.minutosDeToleranciaDaChegada;
+  const tentativas = Number(r.tentativas) || 0;
+  const confirmou = tem(r.confirmou) || tem(r.aCaminho) || (tem(r.aceito) && r.aceito >= abreConfirmar);
+  const conferindo = !tem(r.chegou) && tentativas >= D.selfiesDaChegadaNoMaximo;
+  let terminou = tem(r.terminou) ? r.terminou : null;
+  if(terminou === null && tem(r.chegou) && agora >= fim) terminou = fim;
+  const prazoParaContestar = terminou !== null ? terminou + D.horasParaAClienteContestar * 60 : null;
+  const concluido = terminou !== null && !r.contestou && (tem(r.concluido) || agora >= prazoParaContestar);
+  const fimDaAvaliacao = (D.diasParaAvaliar + 1) * 1440;
+
+  let passo;
+  if(terminou !== null && r.contestou) passo = "em_analise";
+  else if(concluido) passo = "concluido";
+  else if(terminou !== null) passo = "terminou";
+  else if(tem(r.chegou)) passo = "chegou";
+  else if(conferindo) passo = "conferindo";
+  else if(tem(r.aCaminho)) passo = "a_caminho";
+  else if(confirmou) passo = "confirmado";
+  else if(agora >= abreConfirmar) passo = "confirmar";
+  else passo = "antes";
+
+  const naJanela = agora < fim;
+  const abertoParaACliente = terminou !== null && !concluido && !r.contestou && agora < prazoParaContestar;
+  let problema = null;
+  if(!tem(r.chegou) && terminou === null && !conferindo){
+    if(!confirmou && agora >= prazo) problema = "nao_confirmou";
+    else if(agora >= tolerancia) problema = "nao_chegou";
+  }
+  return {
+    passo: passo,
+    pode: {
+      confirmar: !confirmou && abreConfirmar <= agora && naJanela,
+      sair: !tem(r.aCaminho) && !tem(r.chegou) && abreSair <= agora && naJanela,
+      chegar: tem(r.aCaminho) && !tem(r.chegou) && !conferindo && abreChegar <= agora && naJanela,
+      terminar: tem(r.chegou) && !tem(r.terminou) && naJanela,
+      imprevisto: terminou === null && naJanela,
+      clienteAusente: tem(r.aCaminho) && terminou === null && naJanela,
+      confirmarOFim: abertoParaACliente,
+      contestar: abertoParaACliente,
+      avaliar: terminou !== null && agora < fimDaAvaliacao,
+    },
+    abre: { confirmar: abreConfirmar, sair: abreSair, chegar: abreChegar },
+    prazoDaConfirmacao: prazo,
+    toleranciaDaChegada: tolerancia,
+    terminou: terminou,
+    prazoParaContestar: prazoParaContestar,
+    fimDaAvaliacao: fimDaAvaliacao,
+    problema: problema,
+    selfiesRestantes: Math.max(0, D.selfiesDaChegadaNoMaximo - tentativas),
+  };
+}
+
+/* Minutos do dia -> "7h", "7h05" (a mesma do regras.hora_escrita). */
+function horaEscrita(minutos){
+  if(minutos === null || minutos === undefined || isNaN(Number(minutos))) return "";
+  const m = ((Math.floor(Number(minutos)) % 1440) + 1440) % 1440;
+  const hora = Math.floor(m / 60), minuto = m % 60;
+  return minuto ? hora + "h" + String(minuto).padStart(2, "0") : hora + "h";
+}

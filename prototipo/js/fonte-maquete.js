@@ -574,6 +574,106 @@ const FONTE = {
     pronto({ ok:true });
   },
 
+  /* O DIA DO SERVIÇO (A41). Na maquete, os passos moram neste aparelho: os
+     dela no serviço da agenda (s.dia), os da profissional de mentira no
+     pedido da cliente (p.diaNaMaquete). A hora de cada passo é a do relógio
+     do dia (relogioDoDiaNaMaquete): o de verdade, ou o que os botões ⏩ do
+     quadro NA MAQUETE escolheram. A conta de o que pode agora é a mesma do
+     servidor (estadoEmMinutos, no dados.js). A selfie da chegada não é
+     olhada nem guardada: aqui ela some. */
+  carregarDiaDela: function(a, pronto){
+    pronto({ ok:true });
+  },
+
+  passoDoDia: function(d, pronto){
+    const s = servicoDaAgendaNaMaquete(E.servicoAberto);
+    if(!s) return pronto({ ok:false, erro:"Não achamos esse serviço." });
+    const r = registroDoDiaNaMaquete(s);
+    const e = estadoDoDiaNaMaquete(s);
+    const agora = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
+    const acao = String((d && d.passo) || "");
+    const pode = { "confirmar":"confirmar", "a-caminho":"sair", "terminei":"terminar",
+                   "imprevisto":"imprevisto", "cliente-ausente":"clienteAusente" }[acao];
+    if(!pode) return pronto({ ok:false, erro:"Não entendemos o que foi enviado." });
+    if(acao === "imprevisto" && r.imprevisto) return pronto({ ok:true });
+    if(acao === "cliente-ausente" && r.clienteAusente) return pronto({ ok:true });
+    if(!e.pode[pode]) return pronto({ ok:false, erro:fraseDoPassoQueNaoAbriu(acao, r, e) });
+    if(acao === "confirmar") r.confirmou = agora;
+    if(acao === "a-caminho"){ r.aCaminho = agora; r.confirmou = r.confirmou || agora; }
+    if(acao === "terminei") r.terminou = agora;
+    if(acao === "imprevisto") r.imprevisto = agora;
+    if(acao === "cliente-ausente") r.clienteAusente = agora;
+    salvar();
+    pronto({ ok:true });
+  },
+
+  chegueiNoServico: function(d, pronto){
+    const s = servicoDaAgendaNaMaquete(E.servicoAberto);
+    if(!s) return pronto({ ok:false, erro:"Não achamos esse serviço." });
+    const r = registroDoDiaNaMaquete(s);
+    const e = estadoDoDiaNaMaquete(s);
+    if(r.chegou) return pronto({ ok:true });
+    if(!e.pode.chegar) return pronto({ ok:false, erro:fraseDoPassoQueNaoAbriu("cheguei", r, e) });
+    /* a foto (d.foto) não é olhada nem guardada: aqui ela some */
+    if(CHEGADAS_QUE_NAO_CONFEREM_NA_MAQUETE > 0){
+      CHEGADAS_QUE_NAO_CONFEREM_NA_MAQUETE--;
+      r.tentativas = Math.min(DIA_DO_SERVICO.selfiesDaChegadaNoMaximo, Number(r.tentativas || 0) + 1);
+      salvar();
+      const comAEquipe = r.tentativas >= DIA_DO_SERVICO.selfiesDaChegadaNoMaximo;
+      return pronto({ ok:false, campo:"foto", motivo:"selfie_nao_confere", comAEquipe:comAEquipe,
+                      erro: comAEquipe ? FRASE_DA_CHEGADA_PARA_A_EQUIPE : FRASE_DA_CHEGADA_QUE_NAO_CONFERE });
+    }
+    r.chegou = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
+    salvar();
+    pronto({ ok:true });
+  },
+
+  avaliarODia: function(d, pronto){
+    const nota = Number(d && d.nota);
+    if(!(nota >= 1 && nota <= 5)) return pronto({ ok:false, campo:"nota", erro:"Escolha de 1 a 5 estrelas." });
+    if(nota <= DIA_DO_SERVICO.notaQuePedeOMotivo && String((d && d.comentario) || "").trim().length < 3)
+      return pronto({ ok:false, campo:"comentario",
+                      erro:"Conte em poucas palavras o que não ficou bom: ajuda a melhorar." });
+    const ehDela = d && d.lado === "diarista";
+    const s = ehDela ? servicoDaAgendaNaMaquete(E.servicoAberto) : null;
+    const p = ehDela ? null : (E.pedidos || []).find(function(x){ return x.id === E.pedidoAtual; });
+    const r = ehDela ? (s && registroDoDiaNaMaquete(s)) : (p && registroDoPedidoNaMaquete(p));
+    if(!r) return pronto({ ok:false, erro:"Não achamos esse serviço." });
+    /* só a nota fica neste aparelho: o comentário não é guardado aqui */
+    if(!r.avaliou) r.avaliou = { nota: nota };
+    salvar();
+    pronto({ ok:true });
+  },
+
+  carregarDiaDoPedido: function(id, pronto){
+    pronto({ ok:true });
+  },
+
+  passoDaCliente: function(d, pronto){
+    const p = (E.pedidos || []).find(function(x){ return x.id === (d && d.pedidoId); });
+    if(!p) return pronto({ ok:false, erro:"Não achamos esse pedido." });
+    const r = registroDoPedidoNaMaquete(p);
+    const e = estadoDoPedidoNaMaquete(p);
+    const agora = relogioDoDiaNaMaquete("pedido:" + p.id).getTime();
+    if(d.passo === "tudo-certo"){
+      if(r.concluido) return pronto({ ok:true });
+      if(!e.pode.confirmarOFim) return pronto({ ok:false, erro:"A profissional ainda não terminou o serviço." });
+      r.concluido = agora;
+      r.clienteConfirmou = agora;
+      if(r.terminou === null || r.terminou === undefined) r.terminou = momentoDoDiaNaMaquete(dataDoPedidoNaMaquete(p), e.terminou);
+      p.situacao = "concluido";
+    } else if(d.passo === "contestar"){
+      if(r.contestou) return pronto({ ok:true });
+      if(String(d.texto || "").trim().length < 3)
+        return pronto({ ok:false, campo:"texto", erro:"Conte o que não ficou bom, para a nossa equipe ajudar." });
+      if(!e.pode.contestar) return pronto({ ok:false, erro:"A profissional ainda não terminou o serviço." });
+      /* o texto vai para a nossa equipe (no app); aqui não é guardado */
+      r.contestou = true;
+    }
+    salvar();
+    pronto({ ok:true });
+  },
+
   /* Pagar um pedido que espera o pagamento. Na maquete o pagamento é a tela
      de Pix e cartão, e o botão deste caminho nem aparece (ler.podePagar);
      se for chamado, o pedido vai para a busca, como no app. */
@@ -838,8 +938,219 @@ const FONTE = {
       const falta = Math.ceil((CODIGO_DA_SENHA_NA_MAQUETE_PODE_MANDAR_EM - Date.now()) / 1000);
       return { segundosParaMandarDeNovo: Math.max(0, falta) };
     },
+
+    /* O DIA DO SERVIÇO (A41): o dela, do serviço aberto da agenda; o da
+       cliente, do pedido. Na maquete, nunca "ainda não chegou". */
+    diaDela: function(a){
+      const s = servicoDaAgendaNaMaquete(a);
+      return s ? diaDelaNaMaquete(s) : null;
+    },
+    diaDoPedido: function(id){
+      const p = (E.pedidos || []).find(function(x){ return x.id === id; });
+      return (p && FONTE.ler.profissionalDoPedido(p)) ? diaDoPedidoNaMaquete(p) : null;
+    },
+    /* Na maquete, o "Acompanhar o serviço" aparece em todo pedido
+       confirmado (para ver as telas sem esperar o dia); no app, o servidor
+       diz (do dia do serviço até a semana da avaliação). */
+    acompanhar: function(p){
+      return !!p && (p.situacao === "confirmado" || p.situacao === "concluido")
+          && !!FONTE.ler.profissionalDoPedido(p);
+    },
+    /* A média de cada uma: na maquete, a do perfil de exemplo (as telas da
+       maquete já mostram as estrelas dele). */
+    notasDeQuemVai: function(){
+      return [];
+    },
   },
 };
+
+
+/* --------------------------------------------------------------------------
+   O DIA DO SERVIÇO NA MAQUETE (A41)
+   -------------------------------------------------------------------------- */
+/* "Simular: a selfie da chegada não confere": quantas das próximas não conferem */
+let CHEGADAS_QUE_NAO_CONFEREM_NA_MAQUETE = 0;
+
+function simularChegadaQueNaoConfereNaMaquete(){
+  CHEGADAS_QUE_NAO_CONFEREM_NA_MAQUETE = DIA_DO_SERVICO.selfiesDaChegadaNoMaximo;
+}
+
+/* No app, a pessoa da equipe confere quem é e libera, na fila "Hoje". */
+function simularEquipeLiberaAChegadaNaMaquete(a){
+  const s = servicoDaAgendaNaMaquete(a);
+  if(!s) return;
+  const r = registroDoDiaNaMaquete(s);
+  if(r.chegou) return;
+  r.chegou = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
+  r.chegadaPelaEquipe = true;
+  salvar();
+}
+/* as mesmas frases do servidor (app/limpah/rotas/dia.py; um teste compara) */
+const FRASE_DA_CHEGADA_QUE_NAO_CONFERE = "Não conseguimos confirmar que é você. Tire outra selfie: "
+  + "rosto inteiro, com luz, sem óculos escuros nem boné.";
+const FRASE_DA_CHEGADA_PARA_A_EQUIPE = "Não conseguimos confirmar pela selfie. Tudo bem: agora uma "
+  + "pessoa da nossa equipe confere, e a cliente já foi avisada.";
+
+function servicoDaAgendaNaMaquete(a){
+  if(!a) return null;
+  return (FONTE.ler.agenda() || []).find(function(x){
+    return x.oportunidadeId === a.oportunidadeId && x.data === a.data;
+  }) || null;
+}
+
+function chaveDoDiaNaMaquete(s){ return "servico:" + s.oportunidadeId + ":" + s.data; }
+
+function meiaNoiteNaMaquete(iso){
+  const p = String(iso || "").split("-");
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 0, 0, 0, 0);
+}
+
+/* O relógio do dia, na maquete: o que um botão ⏩ do quadro NA MAQUETE
+   escolheu para ESTE serviço (e que anda dali em diante), ou o de verdade. */
+function relogioDoDiaNaMaquete(chave){
+  const r = E.relogioDoDia;
+  if(r && r.chave === chave && r.data){
+    return new Date(meiaNoiteNaMaquete(r.data).getTime() + Number(r.minutos || 0) * 60000
+                    + Math.max(0, Date.now() - Number(r.marcadoEm || Date.now())));
+  }
+  return relogioDaAgenda();
+}
+
+function minutosDoDiaNaMaquete(iso, ms){
+  if(ms === null || ms === undefined || ms === "") return null;
+  return (Number(ms) - meiaNoiteNaMaquete(iso).getTime()) / 60000;
+}
+
+function momentoDoDiaNaMaquete(iso, minutos){
+  return meiaNoiteNaMaquete(iso).getTime() + Number(minutos) * 60000;
+}
+
+function registroDoDiaNaMaquete(s){
+  if(!s.dia || typeof s.dia !== "object") s.dia = {};
+  return s.dia;
+}
+
+function registroDoPedidoNaMaquete(p){
+  if(!p.diaNaMaquete || typeof p.diaNaMaquete !== "object") p.diaNaMaquete = {};
+  return p.diaNaMaquete;
+}
+
+function emMinutosNaMaquete(iso, r, aceito){
+  const m = function(x){ return minutosDoDiaNaMaquete(iso, x); };
+  return { aceito: m(aceito), confirmou: m(r.confirmou), aCaminho: m(r.aCaminho), chegou: m(r.chegou),
+           tentativas: Number(r.tentativas || 0), terminou: m(r.terminou), concluido: m(r.concluido),
+           contestou: !!r.contestou };
+}
+
+function estadoDoDiaNaMaquete(s){
+  const agora = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
+  return estadoEmMinutos(emMinutosNaMaquete(s.data, registroDoDiaNaMaquete(s), s.aceitoEm),
+                         s.inicio, s.fim, minutosDoDiaNaMaquete(s.data, agora));
+}
+
+/* O dia do pedido; o pedido de exemplo sem dia (o dos testes) conta como hoje. */
+function dataDoPedidoNaMaquete(p){
+  return /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(p.data || "")) ? p.data : isoDoDia(new Date());
+}
+
+function janelaDoPedidoNaMaquete(p){
+  return janelaDoServico(p.periodo, p.horas) || { inicio: 8, fim: 12, texto: "" };
+}
+
+function estadoDoPedidoNaMaquete(p){
+  const j = janelaDoPedidoNaMaquete(p);
+  const agora = relogioDoDiaNaMaquete("pedido:" + p.id).getTime();
+  const data = dataDoPedidoNaMaquete(p);
+  return estadoEmMinutos(emMinutosNaMaquete(data, registroDoPedidoNaMaquete(p), null),
+                         j.inicio, j.fim, minutosDoDiaNaMaquete(data, agora));
+}
+
+/* "hoje às 11h50", "amanhã às 9h" ou "dia 19/10 às 9h" (a mesma do servidor). */
+function quandoNaMaquete(iso, minutos, agora){
+  const quando = new Date(momentoDoDiaNaMaquete(iso, minutos));
+  const hora = horaEscrita(quando.getHours() * 60 + quando.getMinutes());
+  const hoje = isoDoDia(agora);
+  const amanha = isoDoDia(new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1));
+  if(isoDoDia(quando) === hoje) return "hoje às " + hora;
+  if(isoDoDia(quando) === amanha) return "amanhã às " + hora;
+  return "dia " + diaCurto(isoDoDia(quando)) + " às " + hora;
+}
+
+function horasDoDiaNaMaquete(iso, r, e){
+  const h = function(ms){ return (ms === null || ms === undefined) ? "" : horaEscrita(minutosDoDiaNaMaquete(iso, ms)); };
+  return { confirmou: h(r.confirmou || r.aCaminho), aCaminho: h(r.aCaminho), chegou: h(r.chegou),
+           terminou: e.terminou !== null ? horaEscrita(e.terminou) : "" };
+}
+
+/* O dia dela, no formato que as telas leem (o mesmo do app). */
+function diaDelaNaMaquete(s){
+  const r = registroDoDiaNaMaquete(s), e = estadoDoDiaNaMaquete(s);
+  const d = detalhesDoServico(s);
+  const agora = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s));
+  return {
+    servico: s.oportunidadeId, data: s.data, hoje: s.data === isoDoDia(agora),
+    janela: d.janela, bairro: d.bairro, cliente: d.cliente,
+    passo: e.passo, problema: e.problema,
+    janelaAberta: minutosDoDiaNaMaquete(s.data, agora.getTime()) < s.fim * 60,
+    pode: { confirmar: e.pode.confirmar, sair: e.pode.sair, chegar: e.pode.chegar, terminar: e.pode.terminar,
+            imprevisto: e.pode.imprevisto && !r.imprevisto,
+            clienteAusente: e.pode.clienteAusente && !r.clienteAusente,
+            avaliar: e.pode.avaliar && !r.avaliou },
+    abre: { confirmar: horaEscrita(e.abre.confirmar), sair: horaEscrita(e.abre.sair),
+            chegar: horaEscrita(e.abre.chegar) },
+    prazoDaConfirmacao: horaEscrita(e.prazoDaConfirmacao),
+    selfiesRestantes: e.selfiesRestantes,
+    horas: horasDoDiaNaMaquete(s.data, r, e),
+    chegadaPelaEquipe: !!r.chegadaPelaEquipe,
+    avisou: { imprevisto: !!r.imprevisto, clienteAusente: !!r.clienteAusente },
+    avaliou: !!r.avaliou,
+  };
+}
+
+/* O dia do pedido da cliente, no formato que as telas leem (o mesmo do app). */
+function diaDoPedidoNaMaquete(p){
+  const r = registroDoPedidoNaMaquete(p), e = estadoDoPedidoNaMaquete(p);
+  const agora = relogioDoDiaNaMaquete("pedido:" + p.id);
+  return {
+    pedidoId: p.id, data: dataDoPedidoNaMaquete(p), hoje: dataDoPedidoNaMaquete(p) === isoDoDia(agora),
+    janela: janelaDoPedidoNaMaquete(p).texto,
+    abreAConfirmacao: horaEscrita(DIA_DO_SERVICO.horaDaConfirmacao * 60),
+    prazoDaConfirmacao: horaEscrita(DIA_DO_SERVICO.horaLimiteDaConfirmacao * 60),
+    profissionais: [{
+      vaga: 1, nome: FONTE.ler.quemVai(p)[0] || "", foto: "exemplo",
+      passo: e.passo, problema: e.problema,
+      avisou: { imprevisto: !!r.imprevisto, clienteAusente: !!r.clienteAusente },
+      horas: horasDoDiaNaMaquete(dataDoPedidoNaMaquete(p), r, e),
+      chegadaPelaEquipe: !!r.chegadaPelaEquipe,
+      pode: { confirmarOFim: e.pode.confirmarOFim, contestar: e.pode.contestar,
+              avaliar: e.pode.avaliar && !r.avaliou },
+      prazoParaContestar: e.pode.contestar ? quandoNaMaquete(dataDoPedidoNaMaquete(p), e.prazoParaContestar, agora) : "",
+      avaliou: !!r.avaliou, contestou: !!r.contestou,
+    }],
+  };
+}
+
+/* A frase do passo que ainda não abriu (ou que já fechou), a mesma do servidor. */
+function fraseDoPassoQueNaoAbriu(acao, r, e){
+  const fechou = "A janela deste serviço já terminou.";
+  /* "imprevisto" só fica fechado com a janela terminada (ou o serviço) */
+  const naJanela = e.pode.imprevisto;
+  if(acao === "cheguei" && e.passo === "conferindo")
+    return "Agora uma pessoa da nossa equipe confere. Ela já foi avisada.";
+  if(acao === "terminei" && e.passo === "conferindo")
+    return "A nossa equipe ainda está confirmando a sua chegada. Ela já foi avisada.";
+  if((acao === "cheguei" || acao === "cliente-ausente") && !r.aCaminho && naJanela)
+    return "Antes, toque em Estou a caminho.";
+  if(acao === "terminei" && !r.chegou && naJanela) return "Antes, toque em Cheguei.";
+  if(!naJanela) return fechou;
+  if(acao === "confirmar")
+    return "A confirmação abre às " + horaEscrita(e.abre.confirmar) + " do dia do serviço.";
+  if(acao === "a-caminho")
+    return "Você pode avisar que está a caminho a partir das " + horaEscrita(e.abre.sair) + ".";
+  if(acao === "cheguei")
+    return "Você pode tirar a selfie da chegada a partir das " + horaEscrita(e.abre.chegar) + ".";
+  return fechou;
+}
 
 
 /* Uma linha nova na trilha de mentira dela (uma decisão "da equipe", pelos

@@ -722,3 +722,26 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 
 /* a última mensagem, na lista de Mensagens: uma linha só, com reticências */
 .item .txt span.previa{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- o dia do serviço (A41) ---------- */
+/* os quatro passos: o feito em verde (com a hora), o de agora em roxo */
+.passos-do-dia{padding:8px 16px}
+.passo-do-dia{display:flex;align-items:center;gap:12px;padding:8px 0;font-size:14px}
+.passo-do-dia + .passo-do-dia{border-top:1px solid var(--borda)}
+.passo-do-dia .bolinha{
+  flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;background:var(--roxo-claro);color:var(--suave);font-weight:800;font-size:13px;
+}
+.passo-do-dia.feito .bolinha{background:var(--verde-claro);color:var(--verde)}
+.passo-do-dia.agora .bolinha{background:var(--roxo);color:#fff}
+.passo-do-dia .txt{flex:1;min-width:0}
+.passo-do-dia .txt b{font-weight:600}
+.passo-do-dia.feito .txt b,.passo-do-dia.agora .txt b{font-weight:700}
+.passo-do-dia .hora{color:var(--suave);font-size:12.5px;font-weight:600}
+/* as cinco estrelas da avaliação: botões grandes (R21: 44px ou mais) */
+.notas{display:flex;gap:6px;margin:8px 0 14px}
+.notas button{
+  flex:1;min-width:44px;min-height:52px;border:1.5px solid var(--borda);background:var(--branco);
+  border-radius:14px;font-size:24px;cursor:pointer;font-family:inherit;color:var(--ambar);
+}
+.notas button.marcada{border-color:var(--roxo-borda);background:var(--roxo-claro)}
