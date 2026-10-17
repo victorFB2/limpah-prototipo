@@ -1064,6 +1064,7 @@ TELAS.diaristaHome = {
       pedirOportunidadesNestaVisita();
       pedirAAgendaNestaVisita();
       acompanharAsOportunidades();
+      acompanharASituacao();
     }
     relogioDoAlerta();
   }
@@ -1099,6 +1100,50 @@ function perguntarDeNovoPelaLista(){
     /* sem resposta: a lista de antes continua, e a próxima pergunta tenta de novo */
     if(r.ok && assinaturaDaLista() !== antes) desenhar();
   });
+}
+
+/* NO APP, ENQUANTO ELA ESPERA A EQUIPE: a situação dela é perguntada de
+   novo ao servidor a cada SEGUNDOS_ENTRE_PERGUNTAS_DA_SITUACAO, com o
+   início ou a tela "em análise" abertos e à vista (17/10: o dono aprovou
+   pela página da equipe e o app dela continuou "em análise" até ele
+   recarregar). Mudou: a equipe decidiu, e a tela da decisão abre sozinha
+   (a festa "Cadastro aprovado! 🎉", ou o motivo da recusa); os documentos
+   chegaram, e a tela de agora se redesenha. Só nessas duas telas, que não
+   têm campo para escrever: um redesenho apagaria o que ela digitou.
+   Mesmo jeito da lista: quem conta é a hora, não o relógio. */
+const SEGUNDOS_ENTRE_PERGUNTAS_DA_SITUACAO = 15;
+const SITUACOES_QUE_ESPERAM_A_EQUIPE = ["incompleto", "analise"];
+const SITUACOES_QUE_A_EQUIPE_DECIDE = ["aprovada", "recusada", "suspensa"];
+let SITUACAO_PERGUNTADA_EM = 0;
+
+function acompanharASituacao(){
+  if(FONTE.ehMaquete) return;
+  if(!SITUACAO_PERGUNTADA_EM) SITUACAO_PERGUNTADA_EM = Date.now();
+  repetir(function(){
+    if(document.hidden) return;
+    if(SITUACOES_QUE_ESPERAM_A_EQUIPE.indexOf(estadoDela().chave) < 0) return;
+    if(Date.now() - SITUACAO_PERGUNTADA_EM < SEGUNDOS_ENTRE_PERGUNTAS_DA_SITUACAO * 1000) return;
+    perguntarDeNovoPelaSituacao();
+  }, 1000);
+}
+
+function perguntarDeNovoPelaSituacao(){
+  SITUACAO_PERGUNTADA_EM = Date.now();
+  const antes = assinaturaDaSituacao();
+  FONTE.carregarSituacao(function(r){
+    if(r.destino) return seguirPeloErro(r);
+    /* sem resposta: a tela de antes continua, e a próxima pergunta tenta de novo */
+    if(!r.ok || assinaturaDaSituacao() === antes) return;
+    const agora = situacaoDaDiarista();
+    if(SITUACOES_QUE_A_EQUIPE_DECIDE.indexOf(agora.chave) >= 0)
+      return ir(agora.telaDaSituacao, { limparHistorico:true });
+    desenhar();
+  });
+}
+
+function assinaturaDaSituacao(){
+  const e = estadoDela();
+  return e.chave + "/" + e.pct;
 }
 
 /* O que muda a tela: quais pedidos, e se cabem. */
@@ -1737,7 +1782,10 @@ TELAS.diaristaAnalise = {
     +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
     +     'Ver oportunidades enquanto isso</button>'
     + '</div>';
-  }
+  },
+
+  /* a equipe decide enquanto ela olha esta tela: a decisão abre sozinha */
+  aoEntrar: function(){ acompanharASituacao(); }
 };
 
 /* O atalho de sempre: "a equipe" aprova o cadastro em análise. */
