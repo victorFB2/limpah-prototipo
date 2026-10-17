@@ -3430,9 +3430,12 @@ TELAS.diaristaPerfil = {
     +     '<div class="seta">›</div></button>'
 
     +   '<div class="rotulo">Ajuda</div>'
-    +   '<button class="item" onclick="ir(\'diaristaEmBreve\')">'
-    +     '<div class="txt"><b>Falar com o suporte</b><span>'
-    +       (FONTE.ehMaquete ? "Uma pessoa responde" : "Chega em breve") + '</span></div>'
+    /* desde a entrega 9, no app, a conversa com a nossa equipe; na maquete,
+       o "em construção" de sempre */
+    +   (FONTE.ehMaquete
+         ? '<button class="item" onclick="ir(\'diaristaEmBreve\')">'
+         : '<button class="item" onclick="abrirSuporte(\'\')">')
+    +     '<div class="txt"><b>Falar com o suporte</b><span>Uma pessoa responde</span></div>'
     +     '<div class="seta">›</div></button>'
 
     +   '<button class="btn btn-perigo" style="margin-top:18px" onclick="sairDaConta(this)">'
@@ -4560,7 +4563,9 @@ TELAS.diaristaServico = {
           + 'Fale com o suporte. Uma pessoa vê com você o que fazer.</div></div>'
         : '<div class="aviso roxo" style="margin-top:0">🛟<div><b>Algum imprevisto, ou não vai conseguir ir?</b>'
           + 'Fale com o suporte o quanto antes. Uma pessoa vê com você o que fazer.</div></div>')
-    +   '<button class="btn btn-claro" onclick="ir(\'diaristaEmBreve\')">Falar com o suporte</button>'
+    /* no app (entrega 9), a conversa com a nossa equipe, já citando este
+       serviço (pelo número dela); na maquete, o de sempre */
+    +   botaoDoSuporte("diarista", "servico:" + String(s.oportunidadeId || ""))
     + '</div>';
   },
 
@@ -5209,6 +5214,13 @@ TELAS.diaristaDia = {
     +   (d.avisou.clienteAusente
       ? '<div class="aviso roxo">🔔<div><b>Avisamos ' + esc(primeiro) + '</b>Ela recebeu um aviso de que '
         + 'você está na porta. A nossa equipe também foi avisada.</div></div>' : "")
+    /* "a nossa equipe vai falar com você": no app, a conversa com ela (9) */
+    +   (d.avisou.imprevisto || d.passo === "em_analise" || d.passo === "conferindo"
+         || janelaDoDiaAcabouSemChegada(d)
+      ? soNoApp(function(){
+          return botaoDoSuporte("diarista", "servico:" + String((E.servicoAberto || {}).oportunidadeId || ""),
+                                "💬 Falar com a nossa equipe");
+        }) : "")
     +   passosDoDia(d.horas, d.passo)
     +   (d.passo === "chegou"
       ? '<div class="servico-pausa">☕ Dentro da janela, quem organiza o tempo é você, inclusive o '
@@ -5388,7 +5400,13 @@ TELAS.diaristaImprevisto = {
         + '<div class="emojao">🙏</div><h2 class="titulo">'
         + (d && d.avisou.imprevisto ? 'Você já avisou a nossa equipe' : 'Este serviço já terminou') + '</h2>'
         + '<p class="apoio">Precisa de algo? A nossa equipe fala com você pelo suporte.</p></div>'
-        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+        + '<div class="rodape">'
+        /* no app, a conversa com a nossa equipe, já citando o serviço (9) */
+        +   soNoApp(function(){
+              return botaoDoSuporte("diarista", "servico:" + String((E.servicoAberto || {}).oportunidadeId || ""),
+                                    "💬 Falar com a nossa equipe");
+            })
+        +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
     }
     return cabecalho("")
     + '<div class="corpo">'

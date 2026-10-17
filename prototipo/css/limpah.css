@@ -697,6 +697,28 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .compositor input:focus{outline:none;border-color:var(--roxo)}
 .compositor .btn{width:50px;min-height:50px;flex:none;padding:0;border-radius:50%}
 
+/* ---------- o suporte no app (entrega 9, A42) ----------
+   A cara da tela 30 da maquete. "Nossa equipe" em cima das respostas; o
+   pedido citado embaixo do balão; o pedido a citar, num seletor de 16px
+   (senão o iPhone dá zoom); os assuntos de um toque, com 44px (R21), que
+   saem com o campo em foco, como as respostas prontas dela (A18-15). */
+.quem-no-suporte{font-size:11.5px;font-weight:700;color:var(--suave);margin:0 0 4px 4px}
+.sobre-no-suporte{font-size:11.5px;color:var(--suave);margin:-4px 4px 12px;overflow-wrap:anywhere}
+.sobre-no-suporte.minha{text-align:right}
+.sobre-do-suporte{
+  display:block;width:100%;min-height:44px;margin:0 0 8px;padding:8px 12px;
+  border:1.5px solid var(--borda);border-radius:12px;background:var(--branco);color:var(--texto);
+  font-size:16px;font-family:inherit;
+}
+.sobre-do-suporte:focus{outline:none;border-color:var(--roxo)}
+.assuntos-do-suporte{margin-top:12px}
+.assuntos-do-suporte .rotulo-dos-assuntos{font-size:11.5px;color:var(--suave);font-weight:600;margin-bottom:8px}
+.assuntos-do-suporte .fileira button{
+  flex:none;min-height:44px;cursor:pointer;border:1.5px solid var(--roxo-borda);
+  font-family:inherit;font-size:12.5px;
+}
+.rodape:has(#campo-suporte:focus) .assuntos-do-suporte{display:none}
+
 /* a nota âmbar da maquete: o que o app de verdade faz (A18-13) */
 .nota-maquete{
   background:var(--ambar-claro);color:var(--ambar);border:1.5px dashed var(--ambar);

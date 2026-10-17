@@ -482,6 +482,18 @@ const FONTE = {
     pronto(m ? { ok:true } : { ok:false, motivo:"conversa_fechada" });
   },
 
+  /* O SUPORTE (no app, 9, vem do servidor): na maquete, a tela 30 continua
+     a de sempre, com as mensagens fixas, e nada é perguntado nem gravado. */
+  carregarSuporte: function(pronto){
+    pronto({ ok:true });
+  },
+  enviarNoSuporte: function(d, pronto){
+    pronto({ ok:true });
+  },
+  marcarSuporteLido: function(d, pronto){
+    pronto({ ok:true });
+  },
+
   /* Salvar a casa (nova ou trocada). Na maquete, a rua e o número ficam
      juntos na rua, como sempre ficaram ("Rua das Flores, 123"): as outras
      telas da maquete leem a rua assim. Nada é recusado. */
@@ -796,6 +808,15 @@ const FONTE = {
     },
     conversas: function(){
       return null;
+    },
+
+    /* O suporte do servidor (no app, 9). Na maquete não há: a tela 30 é a
+       de sempre, e nenhuma resposta da equipe chega. */
+    suporte: function(){
+      return null;
+    },
+    novasDoSuporte: function(){
+      return 0;
     },
 
     /* Onde o app atende (a tela "Onde atendemos" e a lista de bairros do

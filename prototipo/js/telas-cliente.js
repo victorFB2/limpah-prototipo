@@ -1926,7 +1926,9 @@ TELAS.buscaCancelada = {
            + 'Nenhum valor foi cobrado e nenhuma taxa foi gerada.</div></div>'
          : '<div class="aviso verde">💚<div><b>Sem custo nenhum</b>'
            + 'Este cancelamento não gera taxa nenhuma.</div></div>')
-    /* o chamado no suporte (R1) chega com o suporte dentro do app */
+    /* o chamado AUTOMÁTICO no suporte (R1): no app, a tela não diz que ele
+       foi aberto (A25). O "Falar com o suporte", sim (entrega 9): ela
+       escreve, já citando este pedido (A42) */
     +   (automatico
       ? soNaMaquete('<div class="aviso roxo">🛟<div><b>Já avisamos nosso time</b>'
       +   'Abrimos um chamado no suporte. Uma pessoa vai procurar uma profissional na mão '
@@ -1935,7 +1937,7 @@ TELAS.buscaCancelada = {
     + '</div>'
     + '<div class="rodape">'
     +   '<button class="btn btn-principal" onclick="tentarOutroHorario()">Tentar outro horário</button>'
-    +   (automatico ? soNaMaquete('<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>') : "")
+    +   (automatico ? botaoDoSuporte("cliente", "pedido:" + p.id) : "")
     +   '<button class="btn btn-texto" onclick="trocarAba(\'inicio\')">Voltar ao início</button>'
     + '</div>';
   }
@@ -2369,14 +2371,16 @@ TELAS.detalhePedido = {
         + '☀️ Acompanhar o serviço</button>' : "";
     let acoes = "";
     if(p.situacao === "confirmado"){
+      /* o suporte (entrega 9): no app, a conversa com a nossa equipe já
+         citando este pedido; na maquete, a tela 30 de sempre */
       acoes = acompanhar + botoesDaConversaDoPedido(p, !!acompanhar)
-        + '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>'
+        + botaoDoSuporte("cliente", "pedido:" + p.id)
         + '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar serviço</button>';
     } else if(pedidoNaBusca(p)){
       /* a busca continua andando: a tela dela mostra o passo da régua */
       acoes = '<button class="btn btn-principal" onclick="ir(\'buscando\')">Acompanhar a busca</button>'
-        /* o suporte dentro do app é a entrega 9: no app, sem o botão (A25) */
-        + soNaMaquete('<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>')
+        /* desde a entrega 9 o suporte existe no app (era só da maquete, A25) */
+        + botaoDoSuporte("cliente", "pedido:" + p.id)
         + (FONTE.ler.podeCancelar(p)
            ? '<button class="btn btn-perigo" onclick="ir(\'cancelarPedido\')">Cancelar pedido</button>' : "");
     } else if(p.situacao === "aguardando_pagamento"){
@@ -2557,7 +2561,10 @@ TELAS.cancelarPedido = {
     /* "Manter" por último, como acima: o toque duplo não cancela */
     + '<div class="rodape">'
     +   (FONTE.ler.podeCancelar(p)
-         ? '<button class="btn btn-perigo" onclick="confirmarCancelamento(this)">Sim, cancelar</button>' : "")
+         ? '<button class="btn btn-perigo" onclick="confirmarCancelamento(this)">Sim, cancelar</button>'
+         /* o suporte (entrega 9), já citando o pedido: nenhum dinheiro é
+            decidido aqui (a política de cancelamento, R20, é do dono) */
+         : soNoApp(function(){ return botaoDoSuporte("cliente", p ? "pedido:" + p.id : ""); }))
     +   '<div class="erro-do-campo" id="cancelar-erro"></div>'
     +   '<button class="btn btn-contorno" onclick="voltar()">Manter o serviço</button>'
     + '</div>';
@@ -2649,10 +2656,14 @@ function mensagensNoApp(){
         + (novas ? '<span class="selo verde">' + Number(novas) + '</span>' : "") + '</button>';
     });
   }
-  lista += '<button class="item" onclick="ir(\'chatSuporte\')">'
+  /* o suporte (9): as respostas da equipe que ela não leu, sem o texto */
+  const doSuporte = FONTE.ler.novasDoSuporte();
+  lista += '<button class="item" onclick="abrirSuporte(\'\')">'
     + '<div class="avatar pequeno" style="background:var(--roxo)">L</div>'
     + '<div class="txt"><b>Suporte Limpah</b>'
-    + '<span>Estamos aqui se precisar de qualquer coisa.</span></div></button>';
+    + '<span>' + (doSuporte ? 'A nossa equipe respondeu' : 'Estamos aqui se precisar de qualquer coisa.')
+    + '</span></div>'
+    + (doSuporte ? '<span class="selo verde">' + Number(doSuporte) + '</span>' : "") + '</button>';
   return ''
   + '<div class="cabecalho"><h1>Mensagens</h1></div>'
   + '<div class="corpo">' + lista + '</div>'
@@ -3013,6 +3024,10 @@ function novasDasConversasNoApp(papel){
    mensagem (como o aviso que chega no celular: "Abra a conversa para
    ler"). Com mais de uma conversa esperando, diz quantas e de quem. */
 function cartaoDeMensagemNovaNoApp(papel){
+  return cartaoDasConversasNoApp(papel) + cartaoDoSuporteNoApp();
+}
+
+function cartaoDasConversasNoApp(papel){
   const novas = novasDasConversasNoApp(papel);
   if(!novas.length) return "";
   const melhor = novas[0], outros = novas.slice(1);
@@ -3365,7 +3380,6 @@ function telaDaConversaNoApp(papel){
   const c = FONTE.ler.conversa(chave);
   if(!chave || (c && c.naoExiste)) return semConversa(papel);
   if(!c) return cabecalho("Conversa") + '<div class="corpo">' + conversaAindaNao() + '</div>';
-  const irAoSuporte = (papel === "cliente") ? "ir('chatSuporte')" : "ir('diaristaEmBreve')";
   let rodape;
   if(c.situacao === "aberta"){
     const rascunho = RASCUNHOS_DA_CONVERSA[chave + "|" + papel] || "";
@@ -3384,7 +3398,9 @@ function telaDaConversaNoApp(papel){
       + '</div>'
       + '<div class="erro-do-campo" id="conversa-erro"></div>';
   } else {
-    rodape = '<button class="btn btn-claro" onclick="' + irAoSuporte + '">Falar com o suporte</button>';
+    /* fechada (ou antes de abrir): o suporte, dos dois lados, já citando
+       este pedido ou serviço (entrega 9) */
+    rodape = botaoDoSuporte(papel, sobreDaConversa(chave));
   }
   /* data-conversa: a lista na tela é desta conversa (atualizarAListaDaConversa) */
   return cabecalhoDaConversa(c.com || "Conversa", subtituloDaConversa(c.data, new Date()), "var(--roxo)")
@@ -3632,8 +3648,13 @@ TELAS.chatProfissional = {
   aoEntrar: function(){ aoEntrarNaConversa(); }
 };
 
+/* A CONVERSA COM O SUPORTE (tela 30). Na maquete, como sempre foi: as
+   mensagens são fixas. No app (entrega 9), a conversa de verdade com a nossa
+   equipe, dos dois lados (a cliente e a diarista): telaDoSuporteNoApp. */
 TELAS.chatSuporte = {
+  aoEntrar: function(){ if(!FONTE.ehMaquete) aoEntrarNoSuporte(); },
   html: function(){
+    if(!FONTE.ehMaquete) return telaDoSuporteNoApp();
     return conversa("Suporte Limpah", "Costuma responder em poucos minutos", "#6C3AD8", [
       { de:"ela", texto:"Olá! Aqui é a Camila, do suporte Limpah. Como posso ajudar?", hora:"agora" },
     ],
@@ -3647,6 +3668,358 @@ TELAS.chatSuporte = {
     + '</div></div>');
   }
 };
+
+
+/* ==========================================================================
+   O SUPORTE NO APP DE VERDADE (entrega 9; R12, grupo 1; DECISOES A42)
+
+   Uma conversa da pessoa — a cliente ou a diarista — com a nossa equipe, a
+   mesma cara da tela 30 da maquete: o cabeçalho "Suporte Limpah", os
+   balões, os assuntos mais comuns, o campo de 16px. Quem escreve do lado da
+   equipe aparece só como "Nossa equipe" (o servidor nunca manda o nome).
+
+   O que vem do servidor (FONTE.carregarSuporte, FONTE.enviarNoSuporte):
+   as mensagens (o contato já escondido), quantas respostas ela não leu, e
+   os pedidos (ou serviços) DELA que dá para citar. Quem confere que o
+   pedido citado é dela é o servidor.
+
+   - Sempre aberta: não tem horário, como a do serviço tem.
+   - Com a tela aberta e a página à vista, pergunta de novo a cada
+     SEGUNDOS_ENTRE_PERGUNTAS_DO_SUPORTE e diz "li até aqui" (é assim que o
+     servidor sabe que ela está lendo, e não manda o aviso).
+   - A resposta que chega troca SÓ a lista: o campo, com o que ela estava
+     escrevendo, fica (a lição da conversa, A18).
+   - Um envio de cada vez, e cada envio com a sua chave (o toque duplo, ou
+     tentar de novo depois de uma resposta perdida, grava uma vez só).
+   - Nada vai para o aparelho: sair da tela tira a conversa da memória.
+   ========================================================================== */
+const TELA_DO_SUPORTE = "chatSuporte";
+const SEGUNDOS_ENTRE_PERGUNTAS_DO_SUPORTE = 15;
+/* Os assuntos de um toque (os da tela 30 da maquete, para a cliente; os
+   dela, para a diarista). Um toque MANDA o assunto: a nossa equipe já sabe
+   do que se trata, e a pessoa conta o resto se quiser. */
+const ASSUNTOS_DO_SUPORTE = {
+  cliente: ["A profissional não chegou", "Preciso remarcar", "Problema no pagamento",
+            "Qualidade do serviço", "Cancelar serviço"],
+  diarista: ["Tive um imprevisto", "Problema no serviço", "Meu cadastro", "Meus ganhos"],
+};
+const SAUDACAO_DO_SUPORTE = "Aqui é a nossa equipe. Conte o que aconteceu: uma pessoa responde por aqui.";
+const DEPOIS_DE_ESCREVER_NO_SUPORTE = "Recebemos. Uma pessoa da nossa equipe responde por aqui, "
+  + "e você recebe um aviso no celular quando ela responder.";
+/* A explicação do contato escondido, do jeito do suporte (a da conversa
+   com a profissional fala em portão e interfone). */
+const EXPLICACAO_DO_CONTATO_ESCONDIDO_NO_SUPORTE = "🔒 O app esconde telefone, e-mail e link nas "
+  + "conversas, também nesta. A nossa equipe fala com você sempre por aqui.";
+let SUPORTE_SOBRE_PENDENTE = "";     // o pedido que a tela de onde ela veio citou
+let SUPORTE_SOBRE = "";              // o pedido escolhido (só na memória)
+let SUPORTE_PEDIDO_NA_NAVEGACAO = -1;
+let SUPORTE_PERGUNTADO_EM = 0;
+let ERRO_DO_SUPORTE = null;          // { frase, navegacao }
+let ENVIO_NO_SUPORTE = -1;           // a navegação de um envio que ainda não voltou
+let ULTIMO_ENVIO_DO_SUPORTE = null;  // { texto, sobre, envio }: o mesmo texto, a mesma chave
+let MENSAGENS_DO_SUPORTE_NA_LISTA = -1;
+let RASCUNHO_DO_SUPORTE = "";
+
+/* Abre o suporte citando um pedido ("pedido:<n>", da cliente) ou um serviço
+   ("servico:<n>", dela, pelo número da agenda) — ou nada (""). Na maquete,
+   a tela de sempre. */
+function abrirSuporte(sobre){
+  if(FONTE.ehMaquete) return ir(E.perfil === "diarista" ? "diaristaEmBreve" : "chatSuporte");
+  SUPORTE_SOBRE_PENDENTE = /^(pedido|servico):[0-9]{1,16}$/.test(String(sobre || "")) ? String(sobre) : "";
+  ir(TELA_DO_SUPORTE);
+}
+
+/* O botão "Falar com o suporte". Na maquete, o mesmo de antes (a cliente vai
+   à tela 30; a diarista, ao "em construção"). No app, a conversa com a
+   nossa equipe, já citando o pedido ou o serviço de onde ela veio. */
+function botaoDoSuporte(papel, sobre, texto){
+  if(FONTE.ehMaquete){
+    return papel === "diarista"
+      ? '<button class="btn btn-claro" onclick="ir(\'diaristaEmBreve\')">Falar com o suporte</button>'
+      : '<button class="btn btn-claro" onclick="ir(\'chatSuporte\')">Falar com o suporte</button>';
+  }
+  return '<button class="btn btn-claro" onclick="abrirSuporte(\'' + idSeguro(sobre) + '\')">'
+    + esc(texto || "Falar com o suporte") + '</button>';
+}
+
+/* "pedido:<n>" / "pedido:<n>:2" / "servico:<n>:<dia>" (a chave da conversa
+   do serviço) -> o que o suporte cita: "pedido:<n>" ou "servico:<n>". */
+function sobreDaConversa(chave){
+  const m = /^(pedido|servico):([0-9]{1,16})/.exec(String(chave || ""));
+  return m ? m[1] + ":" + m[2] : "";
+}
+
+function suporteComErro(){
+  return (ERRO_DO_SUPORTE && ERRO_DO_SUPORTE.navegacao === NAVEGACAO) ? ERRO_DO_SUPORTE.frase : "";
+}
+
+function papelNoSuporte(){
+  return E.perfil === "diarista" ? "diarista" : "cliente";
+}
+
+function telaDoSuporteNoApp(){
+  const c = FONTE.ler.suporte();
+  const topo = cabecalhoDaConversa("Suporte Limpah", "Uma pessoa da nossa equipe responde por aqui",
+                                   "var(--roxo)");
+  if(!c) return topo + '<div class="corpo">' + suporteAindaNao() + '</div>';
+  return topo
+    + '<div class="corpo" id="corpo-suporte" style="background:var(--fundo)">' + mioloDoSuporte(c) + '</div>'
+    + '<div class="rodape">' + rodapeDoSuporte(c) + '</div>';
+}
+
+function suporteAindaNao(){
+  const erro = suporteComErro();
+  if(!erro) return '<p class="apoio">Carregando a conversa…</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" onclick="tentarOSuporteDeNovo()">Tentar de novo</button>';
+}
+
+function tentarOSuporteDeNovo(){
+  ERRO_DO_SUPORTE = null;
+  SUPORTE_PEDIDO_NA_NAVEGACAO = -1;
+  desenhar();
+}
+
+/* "Pedido de sáb, 18/10 · Confirmado" (a cliente) ou "Serviço de sáb, 18/10
+   · das 8h às 12h" (ela). */
+function textoDoSobre(p){
+  const partes = String(p.data || "").split("-").map(Number);
+  const d = new Date(partes[0], partes[1] - 1, partes[2]);
+  const dia = isNaN(d.getTime()) ? "" : DIAS_SEMANA[d.getDay()].toLowerCase() + ", " + diaCurto(p.data);
+  return (String(p.ref).indexOf("servico:") === 0
+    ? "Serviço de " + dia + " · " + p.janela
+    : "Pedido de " + dia + " · " + p.situacaoTexto);
+}
+
+/* O miolo: a saudação, as mensagens (com o dia entre elas), "Nossa equipe"
+   em cima das respostas, o pedido citado embaixo do balão (quando muda), e
+   a explicação do contato escondido, uma vez. */
+function mioloDoSuporte(c){
+  const ola = "Olá" + (c.nome ? ", " + c.nome : "") + "! 👋 " + SAUDACAO_DO_SUPORTE;
+  let miolo = '<div class="quem-no-suporte">Nossa equipe</div>' + balaoDaConversa(ola, "", false);
+  let dia = "", antes = "pessoa", sobreAntes = "", explicou = false;
+  c.mensagens.forEach(function(m){
+    const d = diaDaMensagemNoApp(m.dia);
+    if(d !== dia){ miolo += '<div class="dia-conversa">' + esc(d) + '</div>'; dia = d; antes = ""; }
+    if(m.de === "equipe" && antes !== "equipe") miolo += '<div class="quem-no-suporte">Nossa equipe</div>';
+    miolo += balaoDaConversa(m.texto, m.hora, m.de === "pessoa");
+    const sobre = m.sobre ? m.sobre.ref : "";
+    if(sobre && sobre !== sobreAntes)
+      miolo += '<div class="sobre-no-suporte' + (m.de === "pessoa" ? " minha" : "") + '">📋 '
+        + esc(textoDoSobre(m.sobre)) + '</div>';
+    if(sobre) sobreAntes = sobre;
+    if(m.escondeu && !explicou){
+      miolo += '<div class="msg-app">' + esc(EXPLICACAO_DO_CONTATO_ESCONDIDO_NO_SUPORTE) + '</div>';
+      explicou = true;
+    }
+    antes = m.de;
+  });
+  const ultima = c.mensagens[c.mensagens.length - 1];
+  if(ultima && ultima.de === "pessoa") miolo += '<div class="msg-app">' + esc(DEPOIS_DE_ESCREVER_NO_SUPORTE) + '</div>';
+  return miolo;
+}
+
+/* O pedido escolhido, só se ele está entre os que o servidor disse que dá
+   para citar. */
+function sobreEscolhidoNoSuporte(){
+  const c = FONTE.ler.suporte();
+  if(!c || !SUPORTE_SOBRE) return "";
+  return c.pedidos.some(function(p){ return p.ref === SUPORTE_SOBRE; }) ? SUPORTE_SOBRE : "";
+}
+
+function escolherOSobreDoSuporte(valor){
+  SUPORTE_SOBRE = /^(pedido|servico):[0-9]{1,16}$/.test(String(valor || "")) ? String(valor) : "";
+}
+
+/* O rodapé: o pedido citado (se ela tem algum para citar), o campo, e os
+   assuntos de um toque (eles saem com o campo em foco, como as respostas
+   prontas dela na conversa: A18-15). */
+function rodapeDoSuporte(c){
+  const papel = papelNoSuporte();
+  const sobre = sobreEscolhidoNoSuporte();
+  const citar = c.pedidos.length
+    ? '<select id="suporte-sobre" class="sobre-do-suporte" aria-label="É sobre um pedido?" '
+      + 'onchange="escolherOSobreDoSuporte(this.value)">'
+      + '<option value="">' + (papel === "diarista" ? "📋 Sobre um serviço? (se quiser)" : "📋 Sobre um pedido? (se quiser)")
+      + '</option>'
+      + c.pedidos.map(function(p){
+          return '<option value="' + esc(p.ref) + '"' + (p.ref === sobre ? " selected" : "") + '>'
+            + esc(textoDoSobre(p)) + '</option>';
+        }).join("")
+      + '</select>'
+    : "";
+  return citar
+    + '<div class="compositor">'
+    +   '<input id="campo-suporte" type="text" maxlength="' + Number(c.tamanhoMaximo) + '" '
+    +     'enterkeyhint="send" autocomplete="off" placeholder="Escreva uma mensagem..." '
+    +     'value="' + esc(RASCUNHO_DO_SUPORTE) + '" oninput="guardarRascunhoDoSuporte(this.value)" '
+    +     'onkeydown="if(event.key===\'Enter\'){event.preventDefault();enviarDoCampoDoSuporte();}">'
+    +   '<button class="btn btn-principal" id="enviar-suporte" aria-label="Enviar" '
+    +     'onclick="enviarDoCampoDoSuporte()">➤</button>'
+    + '</div>'
+    + '<div class="erro-do-campo" id="suporte-erro"></div>'
+    + '<div class="assuntos-do-suporte">'
+    +   '<div class="rotulo-dos-assuntos">Assuntos mais comuns</div>'
+    +   '<div class="fileira">' + (ASSUNTOS_DO_SUPORTE[papel] || []).map(function(t, i){
+          return '<button class="selo" onclick="usarAssuntoDoSuporte(' + Number(i) + ')">' + esc(t) + '</button>';
+        }).join("") + '</div>'
+    + '</div>';
+}
+
+function guardarRascunhoDoSuporte(valor){ RASCUNHO_DO_SUPORTE = String(valor || ""); }
+
+function focarCampoDoSuporte(){
+  const campo = document.getElementById("campo-suporte");
+  if(campo){ try { campo.focus(); } catch(e){} }
+}
+
+/* Ao entrar (e a cada redesenho): pergunta uma vez por visita (com o pedido
+   que a tela de onde ela veio citou), e depois a cada 15 s, só com a página
+   à vista. Quem conta é a hora da última pergunta: um redesenho no meio não
+   recomeça a espera. */
+function aoEntrarNoSuporte(){
+  descerAteAUltimaDoSuporte(true);
+  if(SUPORTE_PEDIDO_NA_NAVEGACAO !== NAVEGACAO && !suporteComErro()){
+    SUPORTE_PEDIDO_NA_NAVEGACAO = NAVEGACAO;
+    SUPORTE_SOBRE = SUPORTE_SOBRE_PENDENTE;
+    SUPORTE_SOBRE_PENDENTE = "";
+    MENSAGENS_DO_SUPORTE_NA_LISTA = -1;
+    perguntarOSuporte();
+    return;
+  }
+  repetir(function(){
+    if(document.hidden) return;
+    if(Date.now() - SUPORTE_PERGUNTADO_EM < SEGUNDOS_ENTRE_PERGUNTAS_DO_SUPORTE * 1000) return;
+    perguntarOSuporte();
+  }, 1000);
+}
+
+function perguntarOSuporte(){
+  SUPORTE_PERGUNTADO_EM = Date.now();
+  FONTE.carregarSuporte(depoisDoSuporte);
+}
+
+/* O que o servidor disse. Sem resposta na primeira vez: a frase e "Tentar
+   de novo"; com a conversa já na tela, ela continua, e a próxima pergunta
+   tenta de novo. */
+function depoisDoSuporte(r){
+  if(r.destino) return seguirPeloErro(r);
+  if(!r.ok){
+    if(FONTE.ler.suporte()) return mostrarErro("suporte-erro", r.erro || "");
+    ERRO_DO_SUPORTE = { frase: r.erro || "", navegacao: NAVEGACAO };
+    return desenhar();
+  }
+  ERRO_DO_SUPORTE = null;
+  atualizarAListaDoSuporte();
+  marcarOSuporteComoLido();
+}
+
+/* Troca SÓ a lista quando o campo já está na tela (o que ela escrevia fica,
+   e o teclado não fecha); na primeira vez, desenha a tela inteira. */
+function atualizarAListaDoSuporte(){
+  const c = FONTE.ler.suporte();
+  const corpo = document.getElementById("corpo-suporte");
+  if(!c || !corpo || !document.getElementById("campo-suporte") || E.tela !== TELA_DO_SUPORTE
+     || ultimaTelaDesenhada !== E.tela){
+    const digitando = document.activeElement && document.activeElement.id === "campo-suporte";
+    desenhar();
+    if(digitando) focarCampoDoSuporte();
+    return;
+  }
+  corpo.innerHTML = mioloDoSuporte(c);
+  descerAteAUltimaDoSuporte(false);
+}
+
+function descerAteAUltimaDoSuporte(sempre){
+  const c = FONTE.ler.suporte();
+  const quantas = (c && c.mensagens) ? c.mensagens.length : 0;
+  if(!sempre && quantas === MENSAGENS_DO_SUPORTE_NA_LISTA) return;
+  MENSAGENS_DO_SUPORTE_NA_LISTA = quantas;
+  agendar(function(){
+    const corpo = document.getElementById("corpo-suporte");
+    if(corpo) corpo.scrollTop = corpo.scrollHeight;
+  }, 0);
+}
+
+/* "Li até aqui" e "estou aqui": só com a página à vista. */
+function marcarOSuporteComoLido(){
+  const c = FONTE.ler.suporte();
+  if(!c || !c.mensagens.length || document.hidden) return;
+  FONTE.marcarSuporteLido({ ate: c.mensagens[c.mensagens.length - 1].n }, function(r){
+    if(r.destino) seguirPeloErro(r);
+  });
+}
+
+function enviarDoCampoDoSuporte(){
+  const texto = valorDoCampo("campo-suporte");
+  if(!texto.trim()) return focarCampoDoSuporte();
+  enviarNoSuporteNoApp(texto, true);
+}
+
+/* Um toque num assunto MANDA o assunto (com o pedido escolhido, se houver). */
+function usarAssuntoDoSuporte(i){
+  const texto = (ASSUNTOS_DO_SUPORTE[papelNoSuporte()] || [])[Number(i)];
+  if(!texto) return;
+  enviarNoSuporteNoApp(texto, false);
+}
+
+function ligarOBotaoDoSuporte(ligado){
+  const botao = document.getElementById("enviar-suporte");
+  if(botao) botao.disabled = !ligado;
+}
+
+/* Um envio de cada vez (o toque duplo e o Enter repetido não mandam dois).
+   O mesmo texto, de novo depois de um envio que não voltou, vai com a mesma
+   chave: se o primeiro chegou ao servidor, ele não grava outro. */
+function enviarNoSuporteNoApp(texto, doCampo){
+  texto = String(texto || "").replace(/\s+/g, " ").trim();
+  if(!texto || ENVIO_NO_SUPORTE === NAVEGACAO) return;
+  const sobre = sobreEscolhidoNoSuporte();
+  const antes = ULTIMO_ENVIO_DO_SUPORTE;
+  const envio = (antes && antes.texto === texto && antes.sobre === sobre) ? antes.envio : chaveNovaDoEnvio();
+  ULTIMO_ENVIO_DO_SUPORTE = { texto:texto, sobre:sobre, envio:envio };
+  ENVIO_NO_SUPORTE = NAVEGACAO;
+  ligarOBotaoDoSuporte(false);
+  mostrarErro("suporte-erro", "");
+  FONTE.enviarNoSuporte({ texto:texto, envio:envio, sobre:sobre }, function(r){
+    ENVIO_NO_SUPORTE = -1;
+    ligarOBotaoDoSuporte(true);
+    depoisDoEnvioNoSuporte(r, doCampo);
+  });
+}
+
+function depoisDoEnvioNoSuporte(r, doCampo){
+  if(r.destino) return seguirPeloErro(r);
+  if(r.ok){
+    ULTIMO_ENVIO_DO_SUPORTE = null;
+    if(doCampo){
+      RASCUNHO_DO_SUPORTE = "";
+      const campo = document.getElementById("campo-suporte");
+      if(campo) campo.value = "";
+    }
+    return atualizarAListaDoSuporte();
+  }
+  /* sem internet, o limite, o pedido que não dá para citar: a frase embaixo
+     do campo, e o texto fica */
+  mostrarErro("suporte-erro", r.erro || "");
+}
+
+/* O cartão "a nossa equipe respondeu", nas telas de entrada (no app): sem o
+   texto, como o cartão de mensagem nova (A38). Quantas são, o servidor
+   contou (junto com as conversas: FONTE.carregarConversas). */
+function cartaoDoSuporteNoApp(){
+  const novas = FONTE.ler.novasDoSuporte();
+  if(!(novas > 0)) return "";
+  return '<div class="cartao destaque mensagem-nova">'
+    +   '<div class="pessoa"><div class="avatar pequeno" style="background:var(--roxo)">L</div>'
+    +     '<div class="info"><b>💬 A nossa equipe respondeu</b>'
+    +     '<span>Abra a conversa para ler.</span></div>'
+    +     (novas > 1 ? '<span class="selo verde">' + Number(novas) + '</span>' : "")
+    +   '</div>'
+    +   '<button class="btn btn-principal" style="margin-top:12px" onclick="abrirSuporte(\'\')">'
+    +     'Ver a conversa</button>'
+    + '</div>';
+}
 
 
 /* ==========================================================================
@@ -3701,20 +4074,22 @@ function avisarNoAcompanhamento(frase){
   AVISO_DO_ACOMPANHAMENTO = { frase: frase, navegacao: NAVEGACAO };
 }
 
-/* O título e a frase de cada passo, para a cliente. */
+/* O título e a frase de cada passo, para a cliente. O 4º item diz que a
+   frase promete "a nossa equipe vai falar com você": no app, embaixo dela,
+   o botão da conversa com a equipe (entrega 9). */
 function textoDoPassoParaACliente(x, d){
   const nome = String(x.nome || "").split(" ")[0] || "A profissional";
   const quando = d.hoje ? "hoje" : dataPorExtenso(d.data).toLowerCase();
   if(x.contestou || x.passo === "em_analise")
-    return ["📝", "Você contou um problema", "A nossa equipe vai falar com você para resolver."];
+    return ["📝", "Você contou um problema", "A nossa equipe vai falar com você para resolver.", true];
   if(x.avisou.imprevisto && !x.horas.chegou && x.passo !== "terminou" && x.passo !== "concluido")
-    return ["🙏", nome + " teve um imprevisto", "Ela avisou a nossa equipe, que vai falar com você."];
+    return ["🙏", nome + " teve um imprevisto", "Ela avisou a nossa equipe, que vai falar com você.", true];
   if(x.problema === "nao_confirmou")
     return ["⏰", nome + " ainda não confirmou",
             "A nossa equipe já está cuidando: vamos procurar outra profissional e falar com você. "
-            + "Se não acharmos, você escolhe: remarcar ou receber todo o valor de volta."];
+            + "Se não acharmos, você escolhe: remarcar ou receber todo o valor de volta.", true];
   if(x.problema === "nao_chegou")
-    return ["⏰", nome + " ainda não chegou", "A nossa equipe já foi avisada e vai falar com você."];
+    return ["⏰", nome + " ainda não chegou", "A nossa equipe já foi avisada e vai falar com você.", true];
   const t = {
     antes:      ["📅", "Seu serviço é " + quando,
                  (d.hoje ? "A partir das " : "No dia, a partir das ") + d.abreAConfirmacao + ", " + nome
@@ -3745,6 +4120,10 @@ function cartaoDaProfissionalNoDia(x, d, p){
     +   '<div style="font-size:40px;line-height:1">' + t[0] + '</div>'
     +   '<b style="display:block;font-size:17px;margin-top:6px">' + esc(t[1]) + '</b>'
     +   '<div class="apoio" style="margin:6px 0 0">' + esc(t[2]) + '</div></div>'
+    /* "a nossa equipe vai falar com você": no app, a conversa com ela (9) */
+    + (t[3] ? soNoApp(function(){
+        return botaoDoSuporte("cliente", "pedido:" + String(E.pedidoAtual || ""), "💬 Falar com a nossa equipe");
+      }) : "")
     + (x.avisou.clienteAusente && x.passo !== "terminou" && x.passo !== "concluido"
       ? '<div class="aviso ambar">🔔<div><b>' + esc(nome) + ' está na porta</b>'
         + 'Ela não conseguiu falar com você. Responda pela conversa.</div></div>' : "")
@@ -3936,7 +4315,12 @@ TELAS.contestarServico = {
         + (x && x.contestou ? 'A nossa equipe já recebeu' : 'Por aqui, não dá mais') + '</h2>'
         + '<p class="apoio">' + (x && x.contestou ? 'Uma pessoa da nossa equipe vai falar com você.'
           : 'Precisa de algo? Fale com a nossa equipe pelo suporte.') + '</p></div>'
-        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+        + '<div class="rodape">'
+        /* no app, a conversa com a nossa equipe, já citando o pedido (9) */
+        +   soNoApp(function(){
+              return botaoDoSuporte("cliente", "pedido:" + String(E.pedidoAtual || ""), "💬 Falar com a nossa equipe");
+            })
+        +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
     }
     return cabecalho("")
     + '<div class="corpo">'

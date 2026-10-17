@@ -437,6 +437,15 @@ function soNaMaquete(html){
   return (typeof html === "function") ? html() : html;
 }
 
+/* O que só existe no app de verdade (o botão da conversa com a nossa
+   equipe, entrega 9): na maquete, nada aparece, e ela continua como era.
+   Aceita o HTML pronto ou uma função que o monta — a função nem roda na
+   maquete. */
+function soNoApp(html){
+  if(FONTE.ehMaquete) return "";
+  return (typeof html === "function") ? html() : html;
+}
+
 /* O contrário: no app, onde a parte ainda não foi ligada ao servidor,
    diz que ela chega em breve. Na maquete não aparece nada. */
 function emBreveNoApp(assunto){
