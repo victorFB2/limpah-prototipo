@@ -1017,9 +1017,9 @@ TELAS.diaristaHome = {
     +   '<h2 class="titulo">Olá, ' + esc((d.nome || "").split(" ")[0] || "tudo bem") + '! 👋<br>'
     +     (pode ? "Veja o que tem para hoje." : "Veja o que está esperando por você.") + '</h2>'
 
-    /* mensagem nova de um cliente, com o app fora da conversa (A18). No
-       app, a conversa é a entrega 8: até lá, nada */
-    +   (pode ? soNaMaquete(function(){ return cartaoDeMensagemNova("diarista"); }) : "")
+    /* mensagem nova de um cliente, com o app fora da conversa (A18; no
+       app, contada pelo servidor) */
+    +   (pode ? cartaoDeMensagemNova("diarista") : "")
 
     +   (pode ? faixaDoCadastro() : interruptorTravado())
 
@@ -1063,6 +1063,7 @@ TELAS.diaristaHome = {
     if(!FONTE.ehMaquete){
       pedirOportunidadesNestaVisita();
       pedirAAgendaNestaVisita();
+      if(podeAceitarServico()) pedirAsConversasNestaVisita();
       acompanharAsOportunidades();
       acompanharASituacao();
     }
@@ -3324,7 +3325,8 @@ function detalhesDoServico(s){
    servidor mandou, a partir das 18h da véspera, com o serviço confirmado e
    antes do fim — a rua, o complemento, o CEP e o recado (já filtrado lá).
    Quem decide é o servidor; a tela só não mostra o que não veio. A
-   conversa é a entrega 8. O valor é o combinado no aceite. */
+   conversa (8) também: o detalhe diz se ela está aberta. O valor é o
+   combinado no aceite. */
 const FRASE_DA_RUA_ESPERANDO_A_SEGUNDA =
   "A rua e o número aparecem quando o serviço for confirmado.";
 
@@ -3358,7 +3360,13 @@ function detalhesDoServidor(s){
     ruaSaiu: !!s.detalhado && terminou,
     recado: casa ? String(s.recado || "") : "",
     recadoDepois: !casa && !terminou && s.temRecado === true,
-    conversaAberta: false, conversaSituacao: "antes",
+    /* a conversa com o cliente (8): o detalhe traz a situação que o
+       servidor decidiu (abre às 18h da véspera, fecha às 23h59 do dia) e as
+       mensagens novas; a agenda não traz (a conversa abre pelo detalhe) */
+    conversaAberta: !!s.conversa && s.conversa.situacao === "aberta",
+    conversaSituacao: (s.conversa && s.conversa.situacao) || "antes",
+    conversaNovas: (s.conversa && s.conversa.naoLidas) || 0,
+    conversaEsperaConfirmar: !!s.conversa && s.conversa.esperaConfirmar === true,
     cliente: String(s.cliente || ""), pedido: s.pedidoDaTela || null,
     km: s.km,
     resumo: s.resumo || "",
@@ -3665,6 +3673,8 @@ function toqueDoDetalhe(s){
    recente); a marca em cada cartão é como ela acha as outras (A18-16). */
 function novasDoServico(s){
   if(!s.conversaAberta) return 0;
+  /* no app, quem conta é o servidor (o detalhe traz as novas) */
+  if(!FONTE.ehMaquete) return Number(s.conversaNovas) || 0;
   const ctx = contextoDaConversa(chaveDaConversaDoServico(s));
   return ctx ? naoLidasDaConversa(ctx, "diarista", relogioDaAgenda()).length : 0;
 }
@@ -3723,8 +3733,16 @@ function cartaoDaAgenda(s){
    escrever "esqueci o guarda-chuva". Uma linha por serviço, só enquanto a
    conversa dele está aberta. Depois disso o caminho é o extrato. */
 function terminaramComAConversaAberta(){
-  /* no app, a conversa é a entrega 8: até lá, nada */
-  if(!FONTE.ehMaquete) return [];
+  /* No app, quem diz é o servidor: o serviço confirmado cuja rua já saiu
+     (ruaLiberada: depois das 18h da véspera) e que AINDA está na agenda
+     dela (até a meia-noite do dia) tem a conversa aberta — é a mesma regra
+     da conversa no servidor. O que terminou, o servidor também diz. */
+  if(!FONTE.ehMaquete){
+    return (FONTE.ler.agenda() || [])
+      .filter(function(s){ return s.terminou === true && s.ruaLiberada === true && s.situacao === "confirmado"; })
+      .map(detalhesDoServico)
+      .sort(function(a, b){ return a.inicio - b.inicio; });
+  }
   const agora = relogioDaAgenda();
   return (euSouDiarista().agenda || [])
     .filter(function(s){ return servicoJaTerminou(s) && situacaoDaConversa(s, agora) === "aberta"; })
@@ -3814,9 +3832,9 @@ TELAS.diaristaAgenda = {
     + '<div class="corpo">'
     +   '<h2 class="titulo">Minha agenda 📅</h2>'
     +   '<p class="apoio">Os serviços que você aceitou, do mais próximo ao mais distante.</p>'
-    /* mensagem nova de um cliente (A18) — só para quem já trabalha (R24).
-       No app, a conversa é a entrega 8 */
-    +   (e.podeAceitar ? soNaMaquete(function(){ return cartaoDeMensagemNova("diarista"); }) : "")
+    /* mensagem nova de um cliente (A18) — só para quem já trabalha (R24;
+       no app, contada pelo servidor) */
+    +   (e.podeAceitar ? cartaoDeMensagemNova("diarista") : "")
     +   (agendaComErro() && FONTE.ler.agenda() !== null ? '<p class="ajuda">' + esc(agendaComErro()) + '</p>' : "")
     +   miolo
     + '</div>'
@@ -3828,7 +3846,10 @@ TELAS.diaristaAgenda = {
      trocar de tela desliga. No app, a agenda vem do servidor, uma vez por
      visita. */
   aoEntrar: function(){
-    if(!FONTE.ehMaquete) pedirAAgendaNestaVisita();
+    if(!FONTE.ehMaquete){
+      pedirAAgendaNestaVisita();
+      if(podeAceitarServico()) pedirAsConversasNestaVisita();
+    }
     redesenharQuandoARuaChegar();
   }
 };
@@ -4016,10 +4037,12 @@ function blocoDoCliente(s){
   const primeiro = nome ? nome.split(" ")[0] : "";
   /* mensagem nova do cliente aparece no próprio botão */
   const novas = novasDoServico(s);
-  /* no app, a conversa é a entrega 8: a tela não promete hora nenhuma */
-  const conversa = !FONTE.ehMaquete
+  /* a situação da conversa vem pronta (na maquete, de situacaoDaConversa;
+     no app, do servidor). O pedido de duas que espera a segunda (só no
+     app): a conversa abre quando ele for confirmado, como a rua */
+  const conversa = s.conversaEsperaConfirmar
     ? '<div class="servico-rua" style="margin-top:12px">💬 A conversa com '
-      + esc(primeiro || "o cliente") + ' pelo app chega em breve.</div>'
+      + esc(primeiro || "o cliente") + ' abre quando o serviço for confirmado.</div>'
     : s.conversaAberta
     ? '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirConversaComOCliente()">'
       + '💬 Conversar com ' + esc(primeiro || "o cliente")
@@ -4155,7 +4178,7 @@ TELAS.diaristaServico = {
     +     (s.ruaSaiu
         ? '<div class="servico-rua">🔒 A rua e o número saíram daqui quando o serviço terminou.</div>'
           + '<div class="servico-pausa">É para proteger a casa do cliente.'
-          /* no app, a conversa é a entrega 8 */
+          /* a conversa continua até as 23h59 do dia (no app, o servidor diz) */
           + (s.conversaSituacao !== "antes"
             ? ' A conversa com ' + esc((s.cliente || "o cliente").split(" ")[0]) + ' continua aqui embaixo.'
             : "")

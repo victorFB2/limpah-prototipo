@@ -305,6 +305,25 @@ const FONTE = {
     pronto({ ok:true });
   },
 
+  /* A CONVERSA (no app, 8, vem do servidor): na maquete, as telas usam o
+     motor deste aparelho (telas-cliente.js: contextoDaConversa,
+     mensagensDaConversa, enviarMensagem), que já está sempre à mão. */
+  carregarConversa: function(chave, pronto){
+    pronto({ ok:true });
+  },
+  carregarConversas: function(pronto){
+    pronto({ ok:true });
+  },
+  marcarConversaLida: function(d, pronto){
+    pronto({ ok:true });
+  },
+  /* Escrever: o mesmo motor deste aparelho (fora do horário, não vai). */
+  enviarNaConversa: function(d, pronto){
+    const papel = String(E.conversaNaTela || "").indexOf("servico:") === 0 ? "diarista" : "cliente";
+    const m = enviarMensagem(d.chave, papel, d.texto);
+    pronto(m ? { ok:true } : { ok:false, motivo:"conversa_fechada" });
+  },
+
   /* Salvar a casa (nova ou trocada). Na maquete, a rua e o número ficam
      juntos na rua, como sempre ficaram ("Rua das Flores, 123"): as outras
      telas da maquete leem a rua assim. Nada é recusado. */
@@ -491,6 +510,16 @@ const FONTE = {
     /* O detalhe pronto do servidor (no app, 6b). Na maquete não há: a tela
        o monta da agenda (servicoAberto, no telas-diarista.js). */
     servicoAberto: function(){
+      return null;
+    },
+
+    /* A conversa e a lista das conversas prontas do servidor (no app, 8).
+       Na maquete não há: as telas as montam deste aparelho (o motor da
+       conversa, no telas-cliente.js). */
+    conversa: function(){
+      return null;
+    },
+    conversas: function(){
       return null;
     },
 
