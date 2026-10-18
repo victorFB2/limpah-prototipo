@@ -1096,6 +1096,25 @@ const ACOES = {
   enviarAAvaliacaoDela:   function(el){ enviarAAvaliacaoDela(el); },
   pularODiaPara:          function(el){ pularODiaPara(dadoDoToque(el, "momento")); },
   simularEquipeLiberaAChegada: function(){ simularEquipeLiberaAChegada(); },
+
+  /* a segurança e a defesa dela (entrega 12, telas-diarista.js) */
+  confirmarSaidaDaCasa:   function(el){ confirmarSaidaDaCasa(el); },
+  escolherForaDoCombinado: function(el){ escolherForaDoCombinado(numeroDoToque(el, "indice")); },
+  escolherSeFez:          function(el){ escolherSeFez(numeroDoToque(el, "fez")); },
+  enviarForaDoCombinado:  function(el){ enviarForaDoCombinado(el); },
+  abrirBloqueio:          function(){ abrirBloqueio(); },
+  abrirBloqueioDoExtrato: function(el){
+    abrirBloqueioDoExtrato(numeroDoToque(el, "oportunidade"), dadoDoToque(el, "data"),
+                           dadoDoToque(el, "janela"), dadoDoToque(el, "bairro"));
+  },
+  confirmarBloqueio:      function(el){ confirmarBloqueio(el); },
+  desbloquearCliente:     function(el){ desbloquearCliente(numeroDoToque(el, "bloqueio"), el); },
+  tentarAListaDeNovo:     function(el){ tentarAListaDeNovo(dadoDoToque(el, "lista")); },
+  abrirContestacaoDaNota: function(el){ abrirContestacaoDaNota(numeroDoToque(el, "avaliacao")); },
+  enviarContestacaoDaNota: function(el){ enviarContestacaoDaNota(el); },
+  simularDecisaoDaContestacao: function(el){
+    simularDecisaoDaContestacao(numeroDoToque(el, "avaliacao"), dadoDoToque(el, "decisao"));
+  },
 };
 
 /* Qual atributo cada tipo de evento lê. */

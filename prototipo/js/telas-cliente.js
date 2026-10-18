@@ -3577,7 +3577,12 @@ function mioloDaConversaNoApp(c, papel){
       + (c.situacao === "aberta"
         ? 'A conversa abriu. Combine por aqui portão, interfone ou a chegada. 😊'
         : 'Ninguém escreveu nesta conversa.') + '</div>';
-  if(c.situacao === "fechada")
+  /* entrega 12: fechou antes da hora (o serviço foi interrompido). Só isso,
+     sem o porquê */
+  if(c.situacao === "fechada" && c.encerradaAntes)
+    miolo += '<div class="aviso roxo" style="margin-top:6px">🔒<div><b>Esta conversa foi encerrada</b>'
+      + 'Dá para ler o que foi escrito. Precisa de algo? Fale com o suporte.</div></div>';
+  else if(c.situacao === "fechada")
     miolo += '<div class="aviso roxo" style="margin-top:6px">🔒<div><b>Esta conversa foi encerrada</b>'
       + 'Ela fica aberta até as ' + ULTIMO_MINUTO_DA_CONVERSA.hora + 'h'
       + String(ULTIMO_MINUTO_DA_CONVERSA.minuto).padStart(2, "0") + ' do dia do serviço. '
@@ -4190,6 +4195,9 @@ function avisarNoAcompanhamento(frase){
 function textoDoPassoParaACliente(x, d){
   const nome = String(x.nome || "").split(" ")[0] || "A profissional";
   const quando = d.hoje ? "hoje" : dataPorExtenso(d.data).toLowerCase();
+  /* entrega 12: ela saiu da casa por segurança. A cliente lê SÓ a frase
+     neutra (nunca o que ela contou), e a nossa equipe fala com ela */
+  if(x.interrompido) return ["🤝", "Serviço interrompido", FRASE_DA_INTERRUPCAO, true];
   /* R37: o "algo não ficou bom" decidido pela equipe (refazer ou devolver) */
   if(x.decisaoDoProblema)
     return x.decisaoDoProblema.decisao === "refazer"
@@ -4244,16 +4252,20 @@ function cartaoDaProfissionalNoDia(x, d, p){
     + (t[3] ? soNoApp(function(){
         return botaoDoSuporte("cliente", "pedido:" + String(E.pedidoAtual || ""), "💬 Falar com a nossa equipe");
       }) : "")
-    + (x.avisou.clienteAusente && x.passo !== "terminou" && x.passo !== "concluido"
+    + (x.avisou.clienteAusente && x.passo !== "terminou" && x.passo !== "concluido" && !x.interrompido
       ? '<div class="aviso ambar">🔔<div><b>' + esc(nome) + ' está na porta</b>'
         + 'Ela não conseguiu falar com você. Responda pela conversa.</div></div>' : "")
+    /* entrega 12: ela contou que pediram algo fora do combinado. A cliente
+       lê só o lembrete gentil, nunca a lista */
+    + (x.foraDoCombinado && !x.interrompido
+      ? '<div class="aviso roxo">📌<div>' + esc(FRASE_DO_FORA_DO_COMBINADO) + '</div></div>' : "")
     + passosDoDia(x.horas, x.passo)
     + (x.pode.contestar && x.prazoParaContestar
       ? '<p class="ajuda">Algo não ficou bom? Conte até ' + esc(x.prazoParaContestar) + '.</p>' : "")
     + (x.pode.avaliar
       ? '<button class="btn btn-claro" style="margin-top:10px" data-acao="abrirAvaliacao" data-vaga="' + Number(x.vaga) + '">'
         + '⭐ Avaliar ' + esc(nome) + '</button>' : "")
-    + (p && p.situacao === "confirmado" && (x.passo !== "concluido")
+    + (p && p.situacao === "confirmado" && x.passo !== "concluido" && !x.interrompido
       ? '<button class="btn btn-texto" style="min-height:44px" data-acao="abrirConversaDoPedido" data-pedido="' + idSeguro(p.id) + '" data-vaga="' + Number(x.vaga) + '">💬 Conversar com ' + esc(nome) + '</button>' : "")
     + '</div>';
 }
@@ -4483,6 +4495,10 @@ function quadroDoAcompanhamentoNaMaquete(){
     + '<button class="btn btn-contorno" data-acao="simularODiaDoPedido" data-caso="conferindo">Simular: a selfie dela não confere</button>'
     + '<button class="btn btn-contorno" data-acao="simularODiaDoPedido" data-caso="nao_confirmou">Simular: ela não confirmou</button>'
     + '<button class="btn btn-contorno" data-acao="simularODiaDoPedido" data-caso="nao_chegou">Simular: ela não chegou</button>'
+    /* entrega 12: o que a cliente vê quando ela sai por segurança, ou marca
+       algo fora do combinado */
+    + '<button class="btn btn-contorno" data-acao="simularODiaDoPedido" data-caso="interrompido">Simular: ela saiu por segurança</button>'
+    + '<button class="btn btn-contorno" data-acao="simularODiaDoPedido" data-caso="fora_do_combinado">Simular: ela marcou algo fora do combinado</button>'
     + '<button class="btn btn-contorno" data-acao="simularODiaDoPedido" data-caso="do_zero">Começar o dia de novo</button>'
     + '</div>';
 }
@@ -4524,6 +4540,12 @@ function simularODiaDoPedido(qual){
   } else if(qual === "nao_chegou"){
     p.diaNaMaquete = { confirmou: em(7 * 60 + 5) };
     relogioDoPedidoNaMaquete(p, j.inicio * 60 + DIA_DO_SERVICO.minutosDeToleranciaDaChegada + 1);
+  } else if(qual === "interrompido" || qual === "fora_do_combinado"){
+    /* ela chegou; depois, saiu por segurança, ou marcou algo fora do combinado */
+    p.diaNaMaquete = { confirmou: em(7 * 60 + 5), aCaminho: em(j.inicio * 60 - 40), chegou: em(j.inicio * 60 - 5) };
+    if(qual === "interrompido") p.diaNaMaquete.interrompido = em(j.inicio * 60 + 30);
+    else p.diaNaMaquete.foraDoCombinado = true;
+    relogioDoPedidoNaMaquete(p, j.inicio * 60 + 40);
   } else {
     E.relogioDoDia = null;
   }

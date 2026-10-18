@@ -1564,7 +1564,8 @@ const DIA_DO_SERVICO = {
 
 /* r: o que já aconteceu, em minutos do dia (null = ainda não): aceito,
    confirmou, aCaminho, chegou, tentativas, terminou, concluido, contestou,
-   chamou (ela escreveu para a cliente na conversa depois do "Cheguei"). */
+   chamou (ela escreveu para a cliente na conversa depois do "Cheguei") e
+   interrompido (ela saiu da casa por segurança: SEGURANCA_DELA). */
 function estadoEmMinutos(r, inicioHora, fimHora, agora){
   r = r || {};
   const D = DIA_DO_SERVICO;
@@ -1584,8 +1585,10 @@ function estadoEmMinutos(r, inicioHora, fimHora, agora){
   const concluido = terminou !== null && !r.contestou && (tem(r.concluido) || agora >= prazoParaContestar);
   const fimDaAvaliacao = (D.diasParaAvaliar + 1) * 1440;
 
+  const interrompido = tem(r.interrompido);
   let passo;
-  if(terminou !== null && r.contestou) passo = "em_analise";
+  if(interrompido) passo = "interrompido";
+  else if(terminou !== null && r.contestou) passo = "em_analise";
   else if(concluido) passo = "concluido";
   else if(terminou !== null) passo = "terminou";
   else if(tem(r.chegou)) passo = "chegou";
@@ -1601,13 +1604,11 @@ function estadoEmMinutos(r, inicioHora, fimHora, agora){
      de ela ter chamado a cliente pela conversa (r.chamou) */
   const abreAusente = abreClienteAusente(tem(r.chegou) ? r.chegou : null, inicio);
   let problema = null;
-  if(!tem(r.chegou) && terminou === null && !conferindo){
+  if(!tem(r.chegou) && terminou === null && !conferindo && !interrompido){
     if(!confirmou && agora >= prazo) problema = "nao_confirmou";
     else if(agora >= tolerancia) problema = "nao_chegou";
   }
-  return {
-    passo: passo,
-    pode: {
+  const pode = {
       confirmar: !confirmou && abreConfirmar <= agora && naJanela,
       sair: !tem(r.aCaminho) && !tem(r.chegou) && abreSair <= agora && naJanela,
       chegar: tem(r.aCaminho) && !tem(r.chegou) && !conferindo && abreChegar <= agora && naJanela,
@@ -1618,7 +1619,17 @@ function estadoEmMinutos(r, inicioHora, fimHora, agora){
       confirmarOFim: abertoParaACliente,
       contestar: abertoParaACliente,
       avaliar: terminou !== null && agora < fimDaAvaliacao,
-    },
+      /* SEGURANCA_DELA: o "Preciso de ajuda", do "Estou a caminho" ao fim
+         da janela; o "pediram algo fora do combinado", do "Cheguei" ao fim */
+      seguranca: tem(r.aCaminho) && naJanela,
+      foraDoCombinado: tem(r.chegou) && naJanela,
+  };
+  /* ela saiu da casa: o serviço para ali, e nada mais abre (nem a
+     avaliação da cliente, nem o "algo não ficou bom": a equipe cuida) */
+  if(interrompido) Object.keys(pode).forEach(function(k){ pode[k] = false; });
+  return {
+    passo: passo,
+    pode: pode,
     abre: { confirmar: abreConfirmar, sair: abreSair, chegar: abreChegar },
     clienteAusenteAbre: abreAusente,
     prazoDaConfirmacao: prazo,
@@ -1638,6 +1649,45 @@ function horaEscrita(minutos){
   const hora = Math.floor(m / 60), minuto = m % 60;
   return minuto ? hora + "h" + String(minuto).padStart(2, "0") : hora + "h";
 }
+
+
+/* ==========================================================================
+   A SEGURANÇA E A DEFESA DELA (entrega 12; DECISOES A46, PROVISÓRIAS)
+
+   - "Preciso de ajuda" (do "Estou a caminho" ao fim da janela): ligar para
+     a polícia, ou "Saí da casa / não me sinto segura". Saindo, o serviço
+     fica INTERROMPIDO: a cliente lê só FRASE_DA_INTERRUPCAO (nunca o que ela
+     contou), não avalia, e fica bloqueada para ela.
+   - "Bloquear esta cliente", depois de qualquer serviço: ela nunca mais
+     recebe pedido dessa cliente, e a cliente não fica sabendo.
+   - "Pediram algo fora do combinado": a cliente lê FRASE_DO_FORA_DO_COMBINADO;
+     a nota baixa que vier depois vai sozinha para a revisão da equipe.
+   - Contestar uma nota de 3 ou menos, em até 7 dias: enquanto a equipe
+     olha, a nota não entra na média.
+
+   OS MESMOS VALORES do servidor (regras.py, seção 16; um teste compara).
+   ========================================================================== */
+const SEGURANCA_DELA = {
+  telefoneDaPolicia: "190",
+  textoDaSegurancaMaximo: 1000,
+  diasParaBloquear: 60,
+  diasParaContestarANota: 7,
+  notaQuePodeSerContestada: 3,
+  contestacaoMinima: 10,
+  contestacaoMaxima: 1000,
+};
+const FRASE_DA_INTERRUPCAO = "O serviço foi interrompido. A nossa equipe vai falar com você.";
+const FRASE_DO_FORA_DO_COMBINADO = "Ficou combinado o que está no pedido. Para algo a mais, é só "
+  + "pedir um serviço novo pelo app.";
+/* o que pediram fora do combinado, na ordem da tela (os nomes são os do servidor) */
+const FORA_DO_COMBINADO = [
+  { id:"limpeza_pesada",   nome:"Limpeza pesada",              ic:"🧽" },
+  { id:"comodo_a_mais",    nome:"Um cômodo a mais",            ic:"🚪" },
+  { id:"passar_roupa",     nome:"Passar roupa",                ic:"👕" },
+  { id:"cozinhar",         nome:"Cozinhar",                    ic:"🍳" },
+  { id:"cuidar_de_alguem", nome:"Cuidar de criança ou animal", ic:"🧸" },
+  { id:"outro",            nome:"Outra coisa",                 ic:"✏️" },
+];
 
 
 /* ==========================================================================

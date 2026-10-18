@@ -619,6 +619,7 @@ const FONTE = {
     const pode = { "confirmar":"confirmar", "a-caminho":"sair", "terminei":"terminar",
                    "imprevisto":"imprevisto", "cliente-ausente":"clienteAusente" }[acao];
     if(!pode) return pronto({ ok:false, erro:"Não entendemos o que foi enviado." });
+    if(r.interrompido) return pronto({ ok:false, erro:FRASE_DO_INTERROMPIDO_NA_MAQUETE });
     if(acao === "imprevisto" && r.imprevisto) return pronto({ ok:true });
     if(!e.pode[pode]) return pronto({ ok:false, erro:fraseDoPassoQueNaoAbriu(acao, r, e, s) });
     /* R37: antes do "Cheguei", o imprevisto é o cancelar dela */
@@ -728,6 +729,92 @@ const FONTE = {
     pronto({ ok:true });
   },
 
+  /* A SEGURANÇA E A DEFESA DELA (entrega 12). Na maquete, tudo mora neste
+     aparelho: o "Saí da casa" no serviço da agenda (s.dia.interrompido), o
+     "fora do combinado" também, as bloqueadas em d.bloqueadas e as
+     contestações em d.contestacoes. O que ela conta não é guardado aqui (no
+     app, só a nossa equipe lê). As regras de quando pode são as mesmas do
+     servidor (estadoEmMinutos, no dados.js). */
+  sairDaCasaPorSeguranca: function(d, pronto){
+    const s = servicoDaAgendaNaMaquete(E.servicoAberto);
+    if(!s) return pronto({ ok:false, erro:"Não achamos esse serviço." });
+    const r = registroDoDiaNaMaquete(s);
+    if(r.interrompido) return pronto({ ok:true });
+    const e = estadoDoDiaNaMaquete(s);
+    if(!e.pode.seguranca)
+      return pronto({ ok:false, erro: r.aCaminho ? "A janela deste serviço já terminou. Em perigo, ligue 190."
+        : "O botão de ajuda abre quando você toca em Estou a caminho. Em perigo, ligue 190." });
+    /* o que ela contou (d.texto) não fica neste aparelho */
+    r.interrompido = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
+    /* o serviço terminou para ela (como no app): a agenda e o detalhe dizem */
+    s.terminou = true;
+    bloquearNaMaquete(clienteDoServicoNaMaquete(s), "seguranca", s);
+    salvar();
+    pronto({ ok:true });
+  },
+
+  marcarForaDoCombinado: function(d, pronto){
+    const s = servicoDaAgendaNaMaquete(E.servicoAberto);
+    if(!s) return pronto({ ok:false, erro:"Não achamos esse serviço." });
+    const o = FORA_DO_COMBINADO.find(function(x){ return x.id === (d && d.oQue); });
+    if(!o) return pronto({ ok:false, erro:"Escolha o que foi pedido." });
+    const r = registroDoDiaNaMaquete(s);
+    const lista = Array.isArray(r.foraDoCombinado) ? r.foraDoCombinado : [];
+    if(lista.some(function(x){ return x.oQue === o.id; })) return pronto({ ok:true });
+    if(!estadoDoDiaNaMaquete(s).pode.foraDoCombinado)
+      return pronto({ ok:false, erro: r.interrompido ? FRASE_DO_INTERROMPIDO_NA_MAQUETE
+        : "Isto abre depois do Cheguei, durante o serviço." });
+    r.foraDoCombinado = lista.concat([{ oQue: o.id, fez: !!(d && d.fez) }]);
+    salvar();
+    pronto({ ok:true });
+  },
+
+  bloquearCliente: function(d, pronto){
+    const s = (FONTE.ler.agenda() || []).find(function(x){
+      return x.oportunidadeId === (d && d.oportunidadeId) && x.data === (d && d.data); });
+    const cliente = (d && d.cliente) || (s ? clienteDoServicoNaMaquete(s) : "")
+      || clienteDaOportunidadeNaMaquete(d && d.oportunidadeId);
+    if(!cliente) return pronto({ ok:false, erro:"Não achamos esse serviço." });
+    const ja = bloqueadaNaMaquete(cliente);
+    if(!ja) bloquearNaMaquete(cliente, "ela", s || { data: d.data, bairro: "" });
+    salvar();
+    pronto({ ok:true, jaEstava: ja });
+  },
+
+  desbloquearCliente: function(d, pronto){
+    const dela = FONTE.ler.diarista();
+    const antes = (dela.bloqueadas || []).length;
+    dela.bloqueadas = (dela.bloqueadas || []).filter(function(b){ return b.id !== (d && d.id); });
+    if(dela.bloqueadas.length === antes) return pronto({ ok:false, erro:"Não achamos esse bloqueio." });
+    salvar();
+    pronto({ ok:true });
+  },
+
+  carregarBloqueadas: function(pronto){
+    pronto({ ok:true });
+  },
+
+  carregarAvaliacoesDela: function(pronto){
+    pronto({ ok:true });
+  },
+
+  contestarNota: function(d, pronto){
+    const a = (FONTE.ler.avaliacoesDela().avaliacoes || []).find(function(x){ return x.id === (d && d.id); });
+    if(!a) return pronto({ ok:false, erro:"Não achamos essa avaliação." });
+    if(a.contestacao) return pronto({ ok:true });
+    if(!a.podeContestar) return pronto({ ok:false, erro:"O prazo para contestar esta nota passou: eram "
+                                         + SEGURANCA_DELA.diasParaContestarANota + " dias." });
+    if(String((d && d.texto) || "").trim().length < SEGURANCA_DELA.contestacaoMinima)
+      return pronto({ ok:false, campo:"texto", erro:"Conte o que aconteceu (pelo menos "
+                      + SEGURANCA_DELA.contestacaoMinima + " letras): a nossa equipe lê antes de decidir." });
+    const dela = FONTE.ler.diarista();
+    if(!dela.contestacoes || typeof dela.contestacoes !== "object") dela.contestacoes = {};
+    /* o texto dela não fica neste aparelho (no app, só a nossa equipe lê) */
+    dela.contestacoes[String(a.id)] = { decisao: null, motivo: "" };
+    salvar();
+    pronto({ ok:true });
+  },
+
   /* Pagar um pedido que espera o pagamento. Na maquete o pagamento é a tela
      de Pix e cartão, e o botão deste caminho nem aparece (ler.podePagar);
      se for chamado, o pedido vai para a busca, como no app. */
@@ -820,7 +907,8 @@ const FONTE = {
     /* As oportunidades da região dela: as de exemplo, com o valor dela e o
        veredito da agenda (todasAsOportunidades, telas-diarista.js). */
     oportunidades: function(){
-      return todasAsOportunidades();
+      /* entrega 12: a cliente que ela bloqueou não manda mais pedido */
+      return todasAsOportunidades().filter(function(o){ return !bloqueadaNaMaquete(o.cliente); });
     },
 
     /* O que ela aceitou: a agenda deste aparelho (nunca "ainda não chegou"). */
@@ -841,10 +929,19 @@ const FONTE = {
         return { data: isoDeHaDias(c.haDias), inicio: janela.inicio, fim: janela.fim,
                  bairro: c.bairro, km: c.km, endereco: c.rua, pedido: c.pedido, exemplo: true };
       });
+      /* entrega 12: o serviço que ela deixou por segurança tem a linha dele,
+         com o valor inteiro dela (fora dos agendados e dos feitos) */
+      const interrompido = function(s){ return !!(s.dia && s.dia.interrompido); };
+      const interrompidos = agenda.filter(interrompido).map(function(s){
+        const x = detalhesDoServico(s);
+        return { data: s.data, janela: x.janela, bairro: x.bairro, valor: x.valor };
+      });
       return {
         pagamentoLigado: true,
-        aReceber: agenda.filter(function(s){ return !servicoJaTerminou(s); }),
-        feitos: exemplos.concat(agenda.filter(servicoJaTerminou)),
+        aReceber: agenda.filter(function(s){ return !servicoJaTerminou(s) && !interrompido(s); }),
+        feitos: exemplos.concat(agenda.filter(function(s){ return servicoJaTerminou(s) && !interrompido(s); })),
+        interrompidos: interrompidos,
+        interrompidosTotal: interrompidos.reduce(function(t, x){ return Math.round((t + x.valor) * 100) / 100; }, 0),
       };
     },
 
@@ -1030,6 +1127,14 @@ const FONTE = {
       return (x && a && x.chave === "servico:" + a.oportunidadeId + ":" + a.data)
         ? JSON.parse(JSON.stringify(x.valor)) : null;
     },
+    /* Entrega 12: as clientes que ela bloqueou, e as notas que ela recebeu
+       (as de exemplo, com o que ela contestou neste aparelho). */
+    bloqueadas: function(){
+      return JSON.parse(JSON.stringify(FONTE.ler.diarista().bloqueadas || []));
+    },
+    avaliacoesDela: function(){
+      return avaliacoesDelaNaMaquete();
+    },
     /* R37: as faltas dela. Na maquete não há faltas guardadas: nada a dizer. */
     faltasDela: function(){
       return { emNoventaDias: 0, depoisDasOutrasAte: "", pausada: false };
@@ -1132,7 +1237,7 @@ function emMinutosNaMaquete(iso, r, aceito){
   const m = function(x){ return minutosDoDiaNaMaquete(iso, x); };
   return { aceito: m(aceito), confirmou: m(r.confirmou), aCaminho: m(r.aCaminho), chegou: m(r.chegou),
            tentativas: Number(r.tentativas || 0), terminou: m(r.terminou), concluido: m(r.concluido),
-           contestou: !!r.contestou };
+           contestou: !!r.contestou, interrompido: m(r.interrompido) };
 }
 
 function estadoDoDiaNaMaquete(s){
@@ -1231,7 +1336,7 @@ function previaDelaNaMaquete(s){
   const inicio = momentoDoDiaNaMaquete(s.data, s.inicio * 60), fim = momentoDoDiaNaMaquete(s.data, s.fim * 60);
   const minutos = (inicio - agora) / 60000;
   const faixa = faixaDoCancelamento(minutos);
-  return { pode: !r.chegou && e.passo !== "conferindo" && agora < fim, faixa: faixa,
+  return { pode: !r.chegou && e.passo !== "conferindo" && e.passo !== "interrompido" && agora < fim, faixa: faixa,
            consequencia: CONSEQUENCIA_PARA_ELA[faixa], substituta: haTempoParaASubstituta(minutos) };
 }
 
@@ -1283,7 +1388,9 @@ function diaDelaNaMaquete(s){
             /* R37: antes do "Cheguei", o imprevisto é o cancelar dela */
             imprevisto: e.pode.imprevisto && !r.imprevisto && (!!r.chegou || e.passo === "conferindo"),
             clienteAusente: e.pode.clienteAusente,
-            avaliar: e.pode.avaliar && !r.avaliou },
+            avaliar: e.pode.avaliar && !r.avaliou,
+            /* entrega 12 */
+            seguranca: e.pode.seguranca, foraDoCombinado: e.pode.foraDoCombinado },
     abre: { confirmar: horaEscrita(e.abre.confirmar), sair: horaEscrita(e.abre.sair),
             chegar: horaEscrita(e.abre.chegar) },
     prazoDaConfirmacao: horaEscrita(e.prazoDaConfirmacao),
@@ -1298,6 +1405,14 @@ function diaDelaNaMaquete(s){
     cancelar: previaDelaNaMaquete(s),
     decisaoDoProblema: null,
     faltas: FONTE.ler.faltasDela(),
+    /* entrega 12 (os mesmos campos do app) */
+    interrompido: !!r.interrompido,
+    foraDoCombinado: (Array.isArray(r.foraDoCombinado) ? r.foraDoCombinado : []).map(function(x){
+      const o = FORA_DO_COMBINADO.find(function(y){ return y.id === x.oQue; });
+      return { oQue: x.oQue, nome: o ? o.nome : "", fez: !!x.fez };
+    }),
+    bloqueouACliente: bloqueadaNaMaquete(clienteDoServicoNaMaquete(s)),
+    podeBloquear: agora.getTime() >= momentoDoDiaNaMaquete(s.data, s.inicio * 60),
   };
 }
 
@@ -1320,6 +1435,8 @@ function diaDoPedidoNaMaquete(p){
               avaliar: e.pode.avaliar && !r.avaliou },
       prazoParaContestar: e.pode.contestar ? quandoNaMaquete(dataDoPedidoNaMaquete(p), e.prazoParaContestar, agora) : "",
       avaliou: !!r.avaliou, contestou: !!r.contestou,
+      /* entrega 12: só que foi interrompido e que houve algo fora do combinado */
+      interrompido: !!r.interrompido, foraDoCombinado: !!r.foraDoCombinado,
     }],
   };
 }
@@ -1399,4 +1516,88 @@ function pedidoDaMaquete(d, situacao){
     profissionalId: null,
     recusadas: [],
   };
+}
+
+
+/* --------------------------------------------------------------------------
+   A SEGURANÇA E A DEFESA DELA NA MAQUETE (entrega 12)
+   -------------------------------------------------------------------------- */
+/* as mesmas frases do servidor (dia_do_servico.py e defesa.py; um teste compara) */
+const FRASE_DO_INTERROMPIDO_NA_MAQUETE = "Este serviço foi interrompido. A nossa equipe vai falar com você.";
+
+function clienteDoServicoNaMaquete(s){
+  return s ? String(detalhesDoServico(s).cliente || "") : "";
+}
+
+function clienteDaOportunidadeNaMaquete(id){
+  const o = OPORTUNIDADES[Number(id)];
+  return o ? nomeCurto(o.cliente) : "";
+}
+
+function bloqueadaNaMaquete(cliente){
+  const nome = String(cliente || "");
+  return !!nome && (FONTE.ler.diarista().bloqueadas || []).some(function(b){ return b.cliente === nome; });
+}
+
+/* Uma linha nova nas bloqueadas dela (o número seguinte deste aparelho). */
+function bloquearNaMaquete(cliente, origem, s){
+  const nome = String(cliente || "");
+  if(!nome || bloqueadaNaMaquete(nome)) return;
+  const dela = FONTE.ler.diarista();
+  const lista = Array.isArray(dela.bloqueadas) ? dela.bloqueadas : [];
+  const id = lista.reduce(function(m, b){ return Math.max(m, Number(b.id) || 0); }, 0) + 1;
+  const hoje = relogioDaAgenda();
+  dela.bloqueadas = [{ id: id, cliente: nome, desde: diaCurto(isoDoDia(hoje)), origem: origem,
+                       servico: s && s.data ? { data: s.data, bairro: String(s.bairro || "") } : null }].concat(lista);
+}
+
+/* As notas de exemplo que as clientes deram a ela (fictícias, como os
+   serviços feitos de exemplo): uma baixa e recente, para ver a contestação. */
+const AVALIACOES_DE_EXEMPLO = [
+  { id: 9102, nota: 2, comentario: "Achei que faltou limpar o box do banheiro.", haDias: 1, bairro: "Lapa", inicio: 8, fim: 12 },
+  { id: 9103, nota: 4, comentario: "", haDias: 4, bairro: "Perdizes", inicio: 12, fim: 16 },
+  { id: 9101, nota: 5, comentario: "Caprichou na cozinha. Voltaria a chamar!", haDias: 6, bairro: "Pinheiros", inicio: 8, fim: 14 },
+  { id: 9104, nota: 3, comentario: "Demorou mais do que eu esperava.", haDias: 12, bairro: "Moema", inicio: 8, fim: 12 },
+];
+const MOTIVOS_DE_EXEMPLO_DA_EQUIPE = {
+  retirar: "Conversamos com as duas: o box não estava no combinado. A nota saiu da sua média.",
+  manter: "Olhamos com calma e a nota fica. Se quiser conversar, fale com a nossa equipe pelo suporte.",
+};
+
+function avaliacoesDelaNaMaquete(){
+  const dela = FONTE.ler.diarista();
+  /* quem ainda não trabalha pelo app não tem avaliação nenhuma */
+  if(!podeAceitarServico()) return { avaliacoes: [], media: null, quantas: null,
+                                     minimoParaAMedia: DIA_DO_SERVICO.avaliacoesParaMostrarAMedia };
+  const contestacoes = (dela.contestacoes && typeof dela.contestacoes === "object") ? dela.contestacoes : {};
+  const lista = AVALIACOES_DE_EXEMPLO.map(function(x){
+    const c = contestacoes[String(x.id)] || null;
+    const situacao = !c ? null : c.decisao === "retirar" ? "retirada" : c.decisao === "manter" ? "mantida" : "em_analise";
+    const dentro = x.haDias <= SEGURANCA_DELA.diasParaContestarANota;
+    return {
+      id: x.id, nota: x.nota, comentario: x.comentario, data: isoDeHaDias(x.haDias),
+      janela: "das " + x.inicio + "h às " + x.fim + "h", bairro: x.bairro, dadaEm: diaCurto(isoDeHaDias(x.haDias)),
+      contaNaMedia: !c || c.decisao === "manter",
+      podeContestar: !c && x.nota <= SEGURANCA_DELA.notaQuePodeSerContestada && dentro,
+      contestarAte: x.nota <= SEGURANCA_DELA.notaQuePodeSerContestada
+        ? diaCurto(isoDeHaDias(x.haDias - SEGURANCA_DELA.diasParaContestarANota)) : "",
+      contestacao: c ? { situacao: situacao, origem: "ela", contou: true, motivo: c.motivo || "",
+                         decididaEm: c.decisao ? diaCurto(isoDoDia(relogioDaAgenda())) : "" } : null,
+    };
+  });
+  const contam = lista.filter(function(a){ return a.contaNaMedia; }).map(function(a){ return a.nota; });
+  const media = contam.length >= DIA_DO_SERVICO.avaliacoesParaMostrarAMedia
+    ? Math.round(contam.reduce(function(t, n){ return t + n; }, 0) / contam.length * 10 + 1e-9) / 10 : null;
+  return { avaliacoes: lista, media: media, quantas: media === null ? null : contam.length,
+           minimoParaAMedia: DIA_DO_SERVICO.avaliacoesParaMostrarAMedia };
+}
+
+/* "Simular: a equipe retira / mantém" (no app, quem decide é a nossa equipe). */
+function simularDecisaoDaContestacaoNaMaquete(id, decisao){
+  const dela = FONTE.ler.diarista();
+  const c = dela.contestacoes && dela.contestacoes[String(id)];
+  if(!c || (decisao !== "retirar" && decisao !== "manter")) return;
+  c.decisao = decisao;
+  c.motivo = MOTIVOS_DE_EXEMPLO_DA_EQUIPE[decisao];
+  salvar();
 }

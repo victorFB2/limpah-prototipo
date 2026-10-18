@@ -3435,6 +3435,15 @@ TELAS.diaristaPerfil = {
              : d.feito.recebimento ? "Pix cadastrado" : "ainda não informado") + '</span></div>'
     +     '<div class="seta">›</div></button>'
 
+    /* entrega 12: as notas (e contestar a injusta) e as clientes bloqueadas */
+    +   '<div class="rotulo">Sua reputação e sua segurança</div>'
+    +   '<button class="item" data-acao="ir" data-tela="diaristaAvaliacoes">'
+    +     '<div class="txt"><b>Minhas avaliações ⭐</b><span>Uma nota injusta? Você pode contestar</span></div>'
+    +     '<div class="seta">›</div></button>'
+    +   '<button class="item" data-acao="ir" data-tela="diaristaBloqueadas">'
+    +     '<div class="txt"><b>Clientes bloqueadas 🚫</b><span>Quem não manda mais pedidos para você</span></div>'
+    +     '<div class="seta">›</div></button>'
+
     +   '<div class="rotulo">Ajuda</div>'
     /* desde a entrega 9, no app, a conversa com a nossa equipe; na maquete,
        o "em construção" de sempre */
@@ -3640,6 +3649,8 @@ function detalhesDoServico(s){
     /* para o cartão da agenda abrir o detalhe certo (diaristaServico) */
     oportunidadeId: s.oportunidadeId,
     data: s.data, inicio: s.inicio, fim: s.fim,
+    /* o mesmo "terminou" desta conta (a saída por segurança também termina) */
+    terminou: terminou,
     /* a JANELA, nunca "N horas" (R9) */
     janela: "das " + s.inicio + "h às " + s.fim + "h",
     horasDaJanela: s.fim - s.inicio,
@@ -3695,6 +3706,9 @@ function detalhesDoServidor(s){
   return {
     oportunidadeId: s.oportunidadeId,
     data: s.data, inicio: s.inicio, fim: s.fim,
+    /* quem diz se o serviço terminou é o servidor (o fim da janela, o
+       "Terminei", ou a saída por segurança): servicoJaTerminou lê daqui */
+    terminou: terminou,
     janela: s.janela || ("das " + s.inicio + "h às " + s.fim + "h"),
     horasDaJanela: s.fim - s.inicio,
     bairro: s.bairro || "",
@@ -3716,6 +3730,8 @@ function detalhesDoServidor(s){
     conversaSituacao: (s.conversa && s.conversa.situacao) || "antes",
     conversaNovas: (s.conversa && s.conversa.naoLidas) || 0,
     conversaEsperaConfirmar: !!s.conversa && s.conversa.esperaConfirmar === true,
+    /* entrega 12: fechou antes da hora (o serviço foi interrompido) */
+    conversaEncerradaAntes: !!s.conversa && s.conversa.encerradaAntes === true,
     cliente: String(s.cliente || ""), pedido: s.pedidoDaTela || null,
     km: s.km,
     resumo: s.resumo || "",
@@ -4401,7 +4417,8 @@ function blocoDoCliente(s){
       /* depois das 23h59 do dia: dá para ler, não para escrever (A18-7) */
       ? '<button class="btn btn-claro" style="margin-top:14px" data-acao="abrirConversaComOCliente">'
         + '💬 Ver a conversa com ' + esc(primeiro || "o cliente") + '</button>'
-        + '<div class="ajuda">A conversa fechou às 23h59 do dia do serviço. Precisa de algo? Fale com o suporte.</div>'
+        + '<div class="ajuda">' + (s.conversaEncerradaAntes ? 'A conversa foi encerrada.'
+          : 'A conversa fechou às 23h59 do dia do serviço.') + ' Precisa de algo? Fale com o suporte.</div>'
       /* o dia vem da mesma frase da rua: as duas chegam juntas (A18, item 2) */
       : '<div class="servico-rua" style="margin-top:12px">💬 A conversa com '
         + esc(primeiro || "o cliente") + ' abre ' + esc(quandoARuaAparece(s)) + ' a partir das '
@@ -4573,6 +4590,14 @@ TELAS.diaristaServico = {
     /* no app (entrega 9), a conversa com a nossa equipe, já citando este
        serviço (pelo número dela); na maquete, o de sempre */
     +   botaoDoSuporte("diarista", "servico:" + String(s.oportunidadeId || ""))
+    /* entrega 12: depois do serviço, ela pode bloquear a cliente (a
+       cliente não é avisada) */
+    +   (terminou
+        ? '<button class="item" style="margin-top:10px" data-acao="abrirBloqueio">'
+          + '<div style="font-size:19px;width:26px;text-align:center">🚫</div>'
+          + '<div class="txt"><b>Bloquear esta cliente</b><span>Você não recebe mais pedidos dela. '
+          + 'Ela não fica sabendo.</span></div><div class="seta">›</div></button>'
+        : "")
     + '</div>';
   },
 
@@ -4797,6 +4822,23 @@ function cartaoAReceber(r, e){
    para a plataforma. Sem o pagamento de verdade, tudo fica anotado. */
 function blocoDasCompensacoes(g){
   const comp = (g && g.compensacoes) || [], desc = (g && g.descontos) || [];
+  return blocoDosInterrompidos(g) + blocoDasCompensacoesDoCancelamento(comp, desc, g);
+}
+
+/* Entrega 12: o serviço que ela deixou por segurança. O valor é dela, por
+   inteiro, a receber (PROVISÓRIO, DECISOES A46). */
+function blocoDosInterrompidos(g){
+  const lista = (g && g.interrompidos) || [];
+  if(!lista.length) return "";
+  return '<div class="cartao" style="margin-top:10px"><b style="font-size:14px">Interrompido por segurança: '
+    + moeda(g.interrompidosTotal) + '</b>' + lista.map(function(x){
+      return '<div class="linha"><span class="rot">' + esc(dataPorExtenso(x.data)) + ' · ' + esc(x.bairro)
+        + '</span><span class="val" style="white-space:nowrap">' + moeda(x.valor) + '</span></div>';
+    }).join("")
+    + '<div class="ajuda" style="margin:6px 0 0">Você saiu da casa por segurança: o valor é seu, por inteiro.</div></div>';
+}
+
+function blocoDasCompensacoesDoCancelamento(comp, desc, g){
   if(!comp.length && !desc.length) return "";
   function linha(x){
     return '<div class="linha"><span class="rot">' + esc(dataPorExtenso(x.data)) + ' · ' + esc(x.motivo)
@@ -4967,6 +5009,13 @@ function cartaoDoExtrato(s, pagamento){
       ? '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
         + toqueDoDetalhe(s) + '>Ver detalhes do serviço ›</button>'
       : "")
+    /* entrega 12: de qualquer serviço feito (os de exemplo não têm cliente) */
+    + (pagamento && !s.exemplo && s.oportunidadeId != null
+      ? '<button class="btn btn-texto" style="min-height:44px" data-acao="abrirBloqueioDoExtrato" '
+        + 'data-oportunidade="' + Number(s.oportunidadeId) + '" data-data="'
+        + idSeguro(String(s.data || "").replace(/[^0-9-]/g, "")) + '" data-janela="' + esc(s.janela || "")
+        + '" data-bairro="' + esc(s.bairro || "") + '">🚫 Bloquear esta cliente</button>'
+      : "")
     + '</div>';
 }
 
@@ -5127,6 +5176,9 @@ function textoDoPassoDela(d){
     em_analise: ["📝", primeiro + " contou um problema",
                  "A nossa equipe vai falar com você para entender o que houve. "
                  + "Ninguém decide nada sem ouvir você."],
+    /* entrega 12: ela saiu da casa por segurança */
+    interrompido: ["🫂", "Você saiu da casa",
+                   "Fez certo em cuidar de você. A nossa equipe já foi avisada e vai falar com você."],
   };
   /* a janela acabou sem a chegada: nada mais abre por aqui, e ela sabe por quê */
   if(janelaDoDiaAcabouSemChegada(d))
@@ -5236,10 +5288,13 @@ TELAS.diaristaDia = {
     + cabecalho("O dia do serviço")
     + '<div class="corpo">'
     +   avisoDoDiaAgora()
+    /* entrega 12: do "Estou a caminho" até o fim, sempre à vista */
+    +   botaoDePrecisoDeAjuda(d)
     +   '<div class="centro" style="flex:none;padding:8px 6px 14px;gap:8px">'
     +     '<div class="emojao" style="font-size:52px">' + t[0] + '</div>'
     +     '<h2 class="titulo">' + esc(t[1]) + '</h2>'
     +     '<p class="apoio" style="margin:0">' + esc(t[2]) + '</p></div>'
+    +   (d.passo === "interrompido" ? avisosDoInterrompido(d, primeiro) : "")
     +   avisoDoProblemaDela(d)
     +   (d.chegadaPelaEquipe && d.passo === "chegou"
       ? '<div class="aviso verde">✅<div><b>A nossa equipe confirmou a sua chegada</b>'
@@ -5252,12 +5307,14 @@ TELAS.diaristaDia = {
         + 'você está na porta. A nossa equipe também foi avisada.</div></div>' : "")
     /* "a nossa equipe vai falar com você": no app, a conversa com ela (9) */
     +   (d.avisou.imprevisto || d.passo === "em_analise" || d.passo === "conferindo"
-         || janelaDoDiaAcabouSemChegada(d)
+         || d.passo === "interrompido" || janelaDoDiaAcabouSemChegada(d)
       ? soNoApp(function(){
           return botaoDoSuporte("diarista", "servico:" + String((E.servicoAberto || {}).oportunidadeId || ""),
                                 "💬 Falar com a nossa equipe");
         }) : "")
+    +   (d.passo === "interrompido" ? botaoDaPolicia() : "")
     +   passosDoDia(d.horas, d.passo)
+    +   oQueElaJaContou(d.foraDoCombinado)
     +   (d.passo === "chegou"
       ? '<div class="servico-pausa">☕ Dentro da janela, quem organiza o tempo é você, inclusive o '
         + 'intervalo.</div>' : "")
@@ -5276,8 +5333,16 @@ TELAS.diaristaDia = {
     /* R37: antes do "Cheguei", o imprevisto é o cancelar dela (a tela diz o
        que acontece ANTES); depois, "não atende" (o "Cheguei", a espera e a
        conversa) e o imprevisto de sempre, com a nossa equipe */
-    +   ((d.pode.imprevisto || d.cancelar.pode || d.passo === "chegou")
+    +   ((d.pode.imprevisto || d.cancelar.pode || d.passo === "chegou" || d.pode.foraDoCombinado)
       ? '<div class="rotulo">Precisa de ajuda?</div>'
+        /* entrega 12: o que a cliente pediu a mais, durante o serviço */
+        + (d.pode.foraDoCombinado
+          ? '<button class="item" data-acao="ir" data-tela="diaristaForaDoCombinado">'
+            + '<div style="font-size:19px;width:26px;text-align:center">✋</div>'
+            + '<div class="txt"><b>Pediram algo fora do combinado</b>'
+            + '<span>Conte o que pediram a mais. A cliente recebe um lembrete gentil.</span></div>'
+            + '<div class="seta">›</div></button>'
+          : "")
         + (d.pode.clienteAusente
           ? '<button class="item" data-acao="passoDoDiaDela" data-passo="cliente-ausente">'
             + '<div style="font-size:19px;width:26px;text-align:center">🔔</div>'
@@ -5707,6 +5772,520 @@ function enviarAAvaliacaoDela(botao){
     avisarNoDia("Obrigada pela avaliação!", "ok");
     desenhar();
   }, { botao: botao || null });
+}
+
+
+/* ==========================================================================
+   A SEGURANÇA E A DEFESA DELA (entrega 12; DECISOES A46, PROVISÓRIAS)
+
+   - 🆘 "Preciso de ajuda" (do "Estou a caminho" ao fim da janela): ligar
+     para a polícia, ou "Saí da casa / não me sinto segura". Saindo, o
+     serviço fica interrompido: a nossa equipe é avisada na hora, a cliente
+     lê só a frase neutra (FRASE_DA_INTERRUPCAO) e fica bloqueada para ela.
+   - "Pediram algo fora do combinado" (durante o serviço).
+   - "Bloquear esta cliente" (depois de qualquer serviço) e a lista das
+     bloqueadas, com o "Desbloquear".
+   - "Minhas avaliações": contestar uma nota de 3 ou menos, em até 7 dias.
+
+   NENHUMA REGRA MORA AQUI: o que ela pode agora vem da tomada (no app, do
+   servidor; na maquete, da mesma conta do dados.js). O que ela conta só a
+   nossa equipe lê, e a tela diz isso.
+   ========================================================================== */
+
+/* O link de ligar para a polícia: o único número de telefone que uma tela
+   leva, e de propósito (é o que salva). Não passa pelo filtro de contato:
+   ele esconde o telefone que as pessoas ESCREVEM, e este é da tela. */
+function botaoDaPolicia(){
+  const tel = String(SEGURANCA_DELA.telefoneDaPolicia).replace(/[^0-9]/g, "");
+  return '<a class="btn btn-emergencia" href="tel:' + esc(tel) + '">📞 Ligar para a polícia ('
+    + esc(tel) + ')</a>';
+}
+
+/* O botão vermelho no dia dela: "Preciso de ajuda" (do "a caminho" ao fim). */
+function botaoDePrecisoDeAjuda(d){
+  if(!d || !d.pode.seguranca) return "";
+  return '<button class="btn btn-ajuda" data-acao="ir" data-tela="diaristaAjuda">🆘 Preciso de ajuda</button>';
+}
+
+/* O que ela lê depois de sair da casa (no dia do serviço). */
+function avisosDoInterrompido(d, primeiro){
+  return '<div class="aviso verde">💜<div><b>Você recebe o valor inteiro deste serviço</b>'
+    + 'Fica anotado em Meus ganhos. Você não perde nada por ter saído.</div></div>'
+    + (d.bloqueouACliente
+      ? '<div class="aviso roxo">🚫<div><b>Você não recebe mais pedidos de ' + esc(primeiro) + '</b>'
+        + 'Ela não é avisada disso. Se quiser, você desbloqueia em Perfil → Clientes bloqueadas.</div></div>'
+      : "")
+    + '<div class="aviso roxo">🤝<div><b>' + esc(primeiro) + ' leu só isto</b>“'
+    + esc(FRASE_DA_INTERRUPCAO) + '” O que você contou, só a nossa equipe lê.</div></div>';
+}
+
+/* --- 🆘 "Preciso de ajuda" --- */
+TELAS.diaristaAjuda = {
+  html: function(){
+    const d = podeAceitarServico() ? diaDelaAberto() : null;
+    const ja = !!(d && d.interrompido);
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Preciso de ajuda 🆘</h2>'
+    +   '<p class="apoio">' + (ja ? 'A nossa equipe já foi avisada e vai falar com você.'
+                                  : 'Você não está sozinha. Escolha o que fazer agora.') + '</p>'
+    +   '<div class="rotulo">Em perigo agora</div>'
+    +   botaoDaPolicia()
+    +   '<p class="ajuda">Se você corre perigo, ligue primeiro. Depois, se puder, avise a gente por aqui.</p>'
+    +   (d && d.pode.seguranca
+      ? '<div class="rotulo">Quer sair daí</div>'
+        + '<button class="opcao" data-acao="ir" data-tela="diaristaSaiDaCasa">'
+        +   '<div class="icone">🚪</div>'
+        +   '<div class="txt"><b>Saí da casa / não me sinto segura</b>'
+        +   '<span>O serviço para aqui, e a nossa equipe é avisada na hora. Você recebe o valor inteiro.</span></div>'
+        +   '<div class="seta">›</div></button>'
+      : ja ? soNoApp(function(){
+          return botaoDoSuporte("diarista", "servico:" + String((E.servicoAberto || {}).oportunidadeId || ""),
+                                "💬 Falar com a nossa equipe");
+        })
+      : '<div class="aviso">🔒<div><b>O "Saí da casa" abre no dia do serviço</b>'
+        + 'Ele aparece quando você toca em Estou a caminho, e fica até o fim da janela.</div></div>')
+    + '</div>'
+    + '<div class="rodape"><button class="btn btn-contorno" data-acao="voltar">Voltar</button></div>';
+  }
+};
+
+/* --- "Saí da casa / não me sinto segura": confirmar --- */
+TELAS.diaristaSaiDaCasa = {
+  html: function(){
+    const d = podeAceitarServico() ? diaDelaAberto() : null;
+    if(!d || !d.pode.seguranca){
+      return cabecalho("") + '<div class="centro">'
+        + '<div class="emojao">🆘</div><h2 class="titulo">'
+        + (d && d.interrompido ? 'A nossa equipe já foi avisada' : 'Isto abre no dia do serviço') + '</h2>'
+        + '<p class="apoio">Em perigo, ligue para a polícia.</p></div>'
+        + '<div class="rodape">' + botaoDaPolicia()
+        + '<button class="btn btn-contorno" data-acao="voltar">Voltar</button></div>';
+    }
+    const primeiro = String(d.cliente || "").split(" ")[0] || "a cliente";
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Saiu da casa? 🚪</h2>'
+    +   '<p class="apoio">Tudo bem. Você fez certo em cuidar de você.</p>'
+    +   '<div class="cartao"><div class="lista-do-que-acontece">'
+    +     '<div>🛑 O serviço para aqui.</div>'
+    +     '<div>🛟 A nossa equipe é avisada na hora e fala com você.</div>'
+    +     '<div>💜 Você recebe o valor inteiro deste serviço.</div>'
+    +     '<div>🚫 Você não recebe mais pedidos de ' + esc(primeiro) + '.</div>'
+    +     '<div>🤝 ' + esc(primeiro) + ' lê só: “' + esc(FRASE_DA_INTERRUPCAO) + '”</div>'
+    +   '</div></div>'
+    +   '<div class="campo"><label for="seguranca-texto">Quer contar o que aconteceu? (só a nossa equipe lê)</label>'
+    +     '<textarea id="seguranca-texto" maxlength="' + Number(SEGURANCA_DELA.textoDaSegurancaMaximo) + '" '
+    +       'placeholder="Se preferir, conte depois pelo suporte"></textarea>'
+    +     erroDoCampo("seguranca-erro", "diaristaSaiDaCasa", "texto") + '</div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" data-acao="confirmarSaidaDaCasa">Confirmar: saí da casa</button>'
+    +   '<div class="erro-do-campo" id="seguranca-geral"></div>'
+    +   botaoDaPolicia()
+    + '</div>';
+  }
+};
+
+function confirmarSaidaDaCasa(botao){
+  mostrarErro("seguranca-erro", "");
+  mostrarErro("seguranca-geral", "");
+  const texto = valorDoCampo("seguranca-texto").trim();
+  FONTE.sairDaCasaPorSeguranca({ texto: texto }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro(r.campo === "texto" ? "seguranca-erro" : "seguranca-geral", r.erro || "");
+    ir("diaristaDia", { limparHistorico:true });
+  }, { botao: botao || null });
+}
+
+/* --- "Pediram algo fora do combinado" (durante o serviço) --- */
+let FORA_DO_COMBINADO_ESCOLHIDO = { navegacao: -1, indice: -1, fez: null };
+
+function escolhaDoForaDoCombinado(){
+  return FORA_DO_COMBINADO_ESCOLHIDO.navegacao === NAVEGACAO ? FORA_DO_COMBINADO_ESCOLHIDO
+    : { indice: -1, fez: null };
+}
+
+function escolherForaDoCombinado(indice){
+  const texto = valorDoCampo("fora-texto");
+  const atual = escolhaDoForaDoCombinado();
+  FORA_DO_COMBINADO_ESCOLHIDO = { navegacao: NAVEGACAO, indice: Number(indice), fez: atual.fez };
+  desenhar();
+  const campo = document.getElementById("fora-texto");
+  if(campo) campo.value = texto;
+}
+
+function escolherSeFez(fez){
+  const texto = valorDoCampo("fora-texto");
+  const atual = escolhaDoForaDoCombinado();
+  FORA_DO_COMBINADO_ESCOLHIDO = { navegacao: NAVEGACAO, indice: atual.indice, fez: Number(fez) === 1 };
+  desenhar();
+  const campo = document.getElementById("fora-texto");
+  if(campo) campo.value = texto;
+}
+
+/* O que ela já contou neste serviço (só ela e a nossa equipe veem). */
+function oQueElaJaContou(lista){
+  if(!lista || !lista.length) return "";
+  return '<div class="aviso roxo">📝<div><b>Você já contou</b>' + lista.map(function(x){
+    return esc(x.nome) + ' (' + (x.fez ? 'fiz' : 'não fiz') + ')';
+  }).join(" · ") + '</div></div>';
+}
+
+TELAS.diaristaForaDoCombinado = {
+  html: function(){
+    const d = podeAceitarServico() ? diaDelaAberto() : null;
+    if(!d || !d.pode.foraDoCombinado){
+      return cabecalho("") + '<div class="centro">'
+        + '<div class="emojao">✋</div><h2 class="titulo">Isto abre durante o serviço</h2>'
+        + '<p class="apoio">Depois do Cheguei, até o fim da janela. Precisa de algo? Fale com a nossa equipe.</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" data-acao="voltar">Voltar</button></div>';
+    }
+    const primeiro = String(d.cliente || "").split(" ")[0] || "a cliente";
+    const esc0 = escolhaDoForaDoCombinado();
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Pediram algo fora do combinado? ✋</h2>'
+    +   '<p class="apoio">O combinado é o que está no pedido. Conte o que pediram a mais: '
+    +     esc(primeiro) + ' recebe só um lembrete gentil.</p>'
+    +   oQueElaJaContou(d.foraDoCombinado)
+    +   '<div class="rotulo">O que pediram</div>'
+    +   FORA_DO_COMBINADO.map(function(o, i){
+          return '<button class="opcao' + (esc0.indice === i ? ' marcada' : '') + '" data-acao="escolherForaDoCombinado" '
+            + 'data-indice="' + Number(i) + '"><div class="icone">' + esc(o.ic) + '</div>'
+            + '<div class="txt"><b>' + esc(o.nome) + '</b></div>'
+            + '<div class="seta">' + (esc0.indice === i ? '✓' : '') + '</div></button>';
+        }).join("")
+    +   '<div class="rotulo">Você fez?</div>'
+    +   '<div class="grade-2">'
+    +     '<button class="opcao' + (esc0.fez === true ? ' marcada' : '') + '" data-acao="escolherSeFez" data-fez="1">'
+    +       '<div class="txt"><b>Fiz</b></div></button>'
+    +     '<button class="opcao' + (esc0.fez === false ? ' marcada' : '') + '" data-acao="escolherSeFez" data-fez="0">'
+    +       '<div class="txt"><b>Não fiz</b></div></button>'
+    +   '</div>'
+    +   '<div class="campo" style="margin-top:14px"><label for="fora-texto">Quer contar mais? (opcional)</label>'
+    +     '<textarea id="fora-texto" maxlength="' + Number(DIA_DO_SERVICO.comentarioMaximo) + '" '
+    +       'placeholder="Ex.: pediu para lavar a varanda"></textarea>'
+    +     erroDoCampo("fora-erro", "diaristaForaDoCombinado", "texto") + '</div>'
+    +   '<div class="aviso roxo">🛡️<div><b>A sua nota fica protegida</b>Se ' + esc(primeiro)
+    +     ' der uma nota baixa depois disto, a nossa equipe olha antes de ela contar na sua média.</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" data-acao="enviarForaDoCombinado">Contar para a nossa equipe</button>'
+    +   '<div class="erro-do-campo" id="fora-geral"></div>'
+    + '</div>';
+  }
+};
+
+function enviarForaDoCombinado(botao){
+  mostrarErro("fora-geral", "");
+  mostrarErro("fora-erro", "");
+  const e = escolhaDoForaDoCombinado();
+  const o = FORA_DO_COMBINADO[e.indice];
+  if(!o) return mostrarErro("fora-geral", "Escolha o que foi pedido.");
+  if(e.fez !== true && e.fez !== false) return mostrarErro("fora-geral", "Diga se você fez ou não.");
+  const texto = valorDoCampo("fora-texto").trim();
+  FONTE.marcarForaDoCombinado({ oQue: o.id, fez: e.fez, texto: texto }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro(r.campo === "texto" ? "fora-erro" : "fora-geral", r.erro || "");
+    FORA_DO_COMBINADO_ESCOLHIDO = { navegacao: -1, indice: -1, fez: null };
+    voltar();
+    avisarNoDia("Pronto: a nossa equipe ficou sabendo, e a cliente recebeu o lembrete do combinado.", "ok");
+    desenhar();
+  }, { botao: botao || null });
+}
+
+/* --- "Bloquear esta cliente" (depois de qualquer serviço) ---
+   Aberto pelo detalhe do serviço (com o nome curto dela) ou pelo extrato
+   (sem o nome: os ganhos nunca levam o nome de ninguém). */
+function abrirBloqueio(){
+  const feito = servicoAberto();
+  if(!feito) return;
+  E.bloqueioAberto = { oportunidadeId: Number(feito.oportunidadeId), data: String(feito.data || ""),
+                       cliente: feito ? String(feito.cliente || "") : "",
+                       janela: feito ? String(feito.janela || "") : "", bairro: feito ? String(feito.bairro || "") : "" };
+  salvar();
+  ir("diaristaBloquear");
+}
+
+/* No extrato, o cartão do serviço feito leva os dados que a tela já tem. */
+function abrirBloqueioDoExtrato(id, data, janela, bairro){
+  E.bloqueioAberto = { oportunidadeId: Number(id), data: String(data || ""), cliente: "",
+                       janela: String(janela || ""), bairro: String(bairro || "") };
+  salvar();
+  ir("diaristaBloquear");
+}
+
+TELAS.diaristaBloquear = {
+  html: function(){
+    const b = E.bloqueioAberto;
+    if(!b || typeof b.oportunidadeId !== "number" || isNaN(b.oportunidadeId) || !podeAceitarServico()){
+      return cabecalho("") + '<div class="centro"><div class="emojao">🚫</div>'
+        + '<h2 class="titulo">Escolha o serviço</h2>'
+        + '<p class="apoio">O bloqueio é pelo detalhe do serviço, ou pelo extrato.</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" data-acao="voltar">Voltar</button></div>';
+    }
+    const quem = b.cliente ? esc(b.cliente) : 'a cliente do serviço de ' + esc(dataPorExtenso(b.data).toLowerCase());
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Bloquear ' + quem + '? 🚫</h2>'
+    +   (b.janela || b.bairro
+      ? '<p class="apoio" style="margin-top:0">' + esc(dataPorExtenso(b.data)) + (b.janela ? ' · ' + esc(b.janela) : '')
+        + (b.bairro ? ' · ' + esc(b.bairro) : '') + '</p>' : '')
+    +   '<div class="cartao"><div class="lista-do-que-acontece">'
+    +     '<div>🚫 Você nunca mais recebe pedidos dela.</div>'
+    +     '<div>🤫 Ela não é avisada, e nada muda para ela.</div>'
+    +     '<div>↩️ Mudou de ideia? Você desbloqueia em Perfil → Clientes bloqueadas.</div>'
+    +   '</div></div>'
+    +   '<div class="aviso roxo">🛟<div><b>Aconteceu algo grave?</b>Conte para a nossa equipe pelo suporte. '
+    +     'O que você contar fica entre você e a gente.</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-perigo" data-acao="confirmarBloqueio">Bloquear</button>'
+    +   '<div class="erro-do-campo" id="bloquear-erro"></div>'
+    +   '<button class="btn btn-contorno" data-acao="voltar">Voltar</button>'
+    + '</div>';
+  }
+};
+
+let AVISO_DAS_BLOQUEADAS = null;            // { frase, navegacao }
+
+function confirmarBloqueio(botao){
+  const b = E.bloqueioAberto;
+  if(!b) return;
+  mostrarErro("bloquear-erro", "");
+  FONTE.bloquearCliente({ oportunidadeId: b.oportunidadeId, data: b.data, cliente: b.cliente }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("bloquear-erro", r.erro || "");
+    E.bloqueioAberto = null;
+    salvar();
+    ir("diaristaBloqueadas", { limparHistorico:true });
+    AVISO_DAS_BLOQUEADAS = { navegacao: NAVEGACAO,
+      frase: r.jaEstava ? "Você já tinha bloqueado esta cliente." : "Pronto: os pedidos dela não chegam mais para você." };
+    desenhar();
+  }, { botao: botao || null });
+}
+
+/* --- as listas que vêm do servidor, uma vez por visita (no app) --- */
+const LISTAS_DA_DEFESA = {
+  bloqueadas: { pedidaNa: -1, erro: null, carregar: function(p){ FONTE.carregarBloqueadas(p); } },
+  avaliacoes: { pedidaNa: -1, erro: null, carregar: function(p){ FONTE.carregarAvaliacoesDela(p); } },
+};
+
+function erroDaLista(qual){
+  const l = LISTAS_DA_DEFESA[qual];
+  return (l.erro && l.erro.navegacao === NAVEGACAO) ? l.erro.frase : "";
+}
+
+function pedirAListaNestaVisita(qual){
+  const l = LISTAS_DA_DEFESA[qual];
+  if(FONTE.ehMaquete || l.pedidaNa === NAVEGACAO || erroDaLista(qual)) return;
+  l.pedidaNa = NAVEGACAO;
+  l.carregar(function(r){
+    if(r.destino) return seguirPeloErro(r);
+    l.erro = r.ok ? null : { frase: r.erro || "", navegacao: NAVEGACAO };
+    desenhar();
+  });
+}
+
+function tentarAListaDeNovo(qual){
+  const l = LISTAS_DA_DEFESA[qual];
+  if(!l) return;
+  l.erro = null;
+  l.pedidaNa = -1;
+  desenhar();
+}
+
+function listaAindaNao(qual, carregando){
+  const erro = erroDaLista(qual);
+  if(!erro) return '<p class="apoio">' + esc(carregando) + '</p>';
+  return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
+    + '<button class="btn btn-contorno" data-acao="tentarAListaDeNovo" data-lista="' + idSeguro(qual) + '">'
+    + 'Tentar de novo</button>';
+}
+
+/* --- as clientes bloqueadas (Perfil) --- */
+TELAS.diaristaBloqueadas = {
+  html: function(){
+    const lista = FONTE.ler.bloqueadas();
+    const aviso = (AVISO_DAS_BLOQUEADAS && AVISO_DAS_BLOQUEADAS.navegacao === NAVEGACAO)
+      ? '<div class="aviso verde">✅<div>' + esc(AVISO_DAS_BLOQUEADAS.frase) + '</div></div>' : "";
+    let miolo;
+    if(!lista) miolo = listaAindaNao("bloqueadas", "Carregando…");
+    else if(!lista.length)
+      miolo = '<div class="vazio">Você não bloqueou ninguém. 😊<br>Depois de um serviço, o detalhe dele tem '
+        + 'o “Bloquear esta cliente”.</div>';
+    else miolo = lista.map(function(b){
+      return '<div class="cartao bloqueada">'
+        + '<div class="pessoa"><div class="info"><b>' + esc(b.cliente || "Cliente") + '</b>'
+        + '<span>Bloqueada desde ' + esc(b.desde)
+        + (b.origem === "seguranca" ? ' · quando você saiu por segurança' : '') + '</span>'
+        + (b.servico ? '<span>Serviço de ' + esc(dataPorExtenso(b.servico.data).toLowerCase()) + ' · '
+          + esc(b.servico.bairro) + '</span>' : '')
+        + '</div></div>'
+        + '<button class="btn btn-contorno" data-acao="desbloquearCliente" data-bloqueio="' + Number(b.id) + '">'
+        + 'Desbloquear</button></div>';
+    }).join("");
+    return cabecalho("Clientes bloqueadas")
+    + '<div class="corpo">'
+    +   aviso
+    +   '<p class="apoio" style="margin-top:0">Estas clientes não mandam mais pedidos para você. Elas não ficam sabendo.</p>'
+    +   miolo
+    +   '<div class="erro-do-campo" id="bloqueadas-erro"></div>'
+    + '</div>';
+  },
+  aoEntrar: function(){ pedirAListaNestaVisita("bloqueadas"); }
+};
+
+function desbloquearCliente(id, botao){
+  mostrarErro("bloqueadas-erro", "");
+  FONTE.desbloquearCliente({ id: Number(id) }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro("bloqueadas-erro", r.erro || "");
+    AVISO_DAS_BLOQUEADAS = { navegacao: NAVEGACAO, frase: "Pronto: os pedidos dela voltam a chegar para você." };
+    desenhar();
+  }, { botao: botao || null });
+}
+
+/* --- "Minhas avaliações" e a contestação (Perfil) --- */
+function estrelasDaNota(n){
+  const nota = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
+  return '<span class="estrelas-da-nota" aria-label="' + nota + (nota === 1 ? ' estrela' : ' estrelas') + '">'
+    + "★★★★★".slice(0, nota) + '<i>' + "★★★★★".slice(nota) + '</i></span>';
+}
+
+function seloDaAvaliacao(a){
+  const c = a.contestacao;
+  if(c && c.situacao === "em_analise")
+    return '<span class="selo ambar">Fora da média enquanto a nossa equipe olha</span>';
+  if(c && c.situacao === "retirada") return '<span class="selo verde">Retirada da média</span>';
+  if(c && c.situacao === "mantida") return '<span class="selo">Mantida na média</span>';
+  return a.contaNaMedia ? '<span class="selo cinza">Conta na média</span>' : '<span class="selo cinza">Não conta na média</span>';
+}
+
+function cartaoDaAvaliacao(a){
+  const c = a.contestacao;
+  return '<div class="cartao avaliacao-dela">'
+    + '<div class="extrato-cab"><b>' + estrelasDaNota(a.nota) + '</b>' + seloDaAvaliacao(a) + '</div>'
+    + '<div class="extrato-sub">' + esc(dataPorExtenso(a.data)) + ' · ' + esc(a.janela) + ' · ' + esc(a.bairro) + '</div>'
+    + (a.comentario ? '<p class="texto-da-cliente">“' + esc(a.comentario) + '”</p>' : '')
+    + (c && c.motivo
+      ? '<div class="aviso roxo" style="margin:8px 0 0">💬<div><b>A nossa equipe escreveu</b>' + esc(c.motivo) + '</div></div>'
+      : '')
+    + (c && c.situacao === "em_analise" && c.origem === "fora_do_combinado" && !c.contou
+      ? '<p class="ajuda">Ela veio depois do “fora do combinado”: foi sozinha para a nossa equipe olhar.</p>' : '')
+    + (a.podeContestar
+      ? '<button class="btn btn-claro" style="margin-top:10px" data-acao="abrirContestacaoDaNota" data-avaliacao="'
+        + Number(a.id) + '">Contestar esta nota</button>'
+        + '<p class="ajuda">Você pode contestar até ' + esc(a.contestarAte) + '.</p>'
+      : '')
+    + soNaMaquete(function(){
+        return c && c.situacao === "em_analise"
+          ? '<div class="cartao maquete" style="margin-top:10px"><b>⚙ NA MAQUETE</b><div>No app, quem decide é a nossa equipe:</div>'
+            + '<button class="btn btn-contorno" data-acao="simularDecisaoDaContestacao" data-avaliacao="' + Number(a.id)
+            + '" data-decisao="retirar">Simular: a equipe retira da média</button>'
+            + '<button class="btn btn-contorno" data-acao="simularDecisaoDaContestacao" data-avaliacao="' + Number(a.id)
+            + '" data-decisao="manter">Simular: a equipe mantém</button></div>'
+          : "";
+      })
+    + '</div>';
+}
+
+let AVISO_DAS_AVALIACOES = null;            // { frase, navegacao }
+
+TELAS.diaristaAvaliacoes = {
+  html: function(){
+    const v = FONTE.ler.avaliacoesDela();
+    const aviso = (AVISO_DAS_AVALIACOES && AVISO_DAS_AVALIACOES.navegacao === NAVEGACAO)
+      ? '<div class="aviso verde">✅<div>' + esc(AVISO_DAS_AVALIACOES.frase) + '</div></div>' : "";
+    let miolo;
+    if(!v) miolo = listaAindaNao("avaliacoes", "Carregando suas avaliações…");
+    else {
+      miolo = '<div class="cartao destaque" style="text-align:center">'
+        + (v.media !== null
+          ? '<div class="valor-grande">' + esc(estrelas(v.media)) + '</div>'
+            + '<div class="ajuda" style="margin:0">' + Number(v.quantas) + ' avaliações contam na sua média</div>'
+          : '<b style="font-size:15px">A média aparece a partir de ' + Number(v.minimoParaAMedia) + ' avaliações</b>'
+            + '<div class="ajuda">Até lá, as clientes leem “Nova na ' + esc(NOME_DO_APP) + '”.</div>')
+        + '</div>'
+        + '<div class="aviso roxo">🛡️<div><b>Uma nota injusta não derruba você</b>Nota de '
+        + Number(SEGURANCA_DELA.notaQuePodeSerContestada) + ' ou menos? Conte o que houve em até '
+        + Number(SEGURANCA_DELA.diasParaContestarANota) + ' dias. Enquanto a nossa equipe olha, ela não entra '
+        + 'na média. Uma nota sozinha nunca tira nada de você.</div></div>'
+        + (v.avaliacoes.length
+          ? v.avaliacoes.map(cartaoDaAvaliacao).join("")
+          : '<div class="vazio">Nenhuma avaliação ainda. Depois de cada serviço, a cliente pode avaliar.</div>');
+    }
+    return cabecalho("Minhas avaliações")
+    + '<div class="corpo">' + aviso + miolo + '</div>';
+  },
+  aoEntrar: function(){ pedirAListaNestaVisita("avaliacoes"); }
+};
+
+function abrirContestacaoDaNota(id){
+  E.avaliacaoAberta = Number(id);
+  salvar();
+  ir("diaristaContestarNota");
+}
+
+function avaliacaoAberta(){
+  const v = FONTE.ler.avaliacoesDela();
+  return v ? (v.avaliacoes.find(function(a){ return a.id === E.avaliacaoAberta; }) || null) : null;
+}
+
+TELAS.diaristaContestarNota = {
+  html: function(){
+    const a = avaliacaoAberta();
+    if(!a || !a.podeContestar){
+      return cabecalho("") + '<div class="centro"><div class="emojao">⭐</div>'
+        + '<h2 class="titulo">' + (a && a.contestacao ? 'A nossa equipe já está olhando' : 'Esta nota não dá para contestar') + '</h2>'
+        + '<p class="apoio">Dá para contestar nota de ' + Number(SEGURANCA_DELA.notaQuePodeSerContestada)
+        + ' ou menos, em até ' + Number(SEGURANCA_DELA.diasParaContestarANota) + ' dias.</p></div>'
+        + '<div class="rodape"><button class="btn btn-principal" data-acao="voltar">Voltar</button></div>';
+    }
+    return cabecalho("")
+    + '<div class="corpo">'
+    +   '<h2 class="titulo">Contestar a nota ⭐</h2>'
+    +   '<p class="apoio">Conte o que aconteceu. Uma pessoa da nossa equipe lê e decide.</p>'
+    +   '<div class="cartao">' + estrelasDaNota(a.nota)
+    +     '<div class="extrato-sub">' + esc(dataPorExtenso(a.data)) + ' · ' + esc(a.bairro) + '</div>'
+    +     (a.comentario ? '<p class="texto-da-cliente">“' + esc(a.comentario) + '”</p>' : '') + '</div>'
+    +   '<div class="campo"><label for="contestar-nota-texto">O que aconteceu</label>'
+    +     '<textarea id="contestar-nota-texto" maxlength="' + Number(SEGURANCA_DELA.contestacaoMaxima) + '" '
+    +       'placeholder="Ex.: o combinado eram 3 cômodos, e ela pediu mais 2"></textarea>'
+    +     erroDoCampo("contestar-nota-erro", "diaristaContestarNota", "texto") + '</div>'
+    +   '<div class="aviso roxo">🤫<div><b>A cliente não fica sabendo</b>Enquanto a nossa equipe olha, esta '
+    +     'nota não entra na sua média. A decisão vem por escrito, com o motivo.</div></div>'
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" data-acao="enviarContestacaoDaNota">Enviar para a nossa equipe</button>'
+    +   '<div class="erro-do-campo" id="contestar-nota-geral"></div>'
+    + '</div>';
+  }
+};
+
+function enviarContestacaoDaNota(botao){
+  mostrarErro("contestar-nota-erro", "");
+  mostrarErro("contestar-nota-geral", "");
+  const texto = valorDoCampo("contestar-nota-texto").trim();
+  if(texto.length < SEGURANCA_DELA.contestacaoMinima)
+    return mostrarErro("contestar-nota-erro", "Conte o que aconteceu (pelo menos "
+                       + SEGURANCA_DELA.contestacaoMinima + " letras): a nossa equipe lê antes de decidir.");
+  FONTE.contestarNota({ id: E.avaliacaoAberta, texto: texto }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok) return mostrarErro(r.campo === "texto" ? "contestar-nota-erro" : "contestar-nota-geral", r.erro || "");
+    voltar();
+    AVISO_DAS_AVALIACOES = { navegacao: NAVEGACAO,
+      frase: "Recebemos. Enquanto a nossa equipe olha, esta nota não entra na sua média." };
+    desenhar();
+  }, { botao: botao || null });
+}
+
+/* Na maquete, "Simular: a equipe retira / mantém" (no app, a nossa equipe). */
+function simularDecisaoDaContestacao(id, decisao){
+  if(!FONTE.ehMaquete) return;
+  simularDecisaoDaContestacaoNaMaquete(Number(id), decisao);
+  desenhar();
 }
 
 

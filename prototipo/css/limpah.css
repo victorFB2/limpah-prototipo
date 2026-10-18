@@ -777,3 +777,17 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
   border-radius:14px;font-size:24px;cursor:pointer;font-family:inherit;color:var(--ambar);
 }
 .notas button.marcada{border-color:var(--roxo-borda);background:var(--roxo-claro)}
+
+/* ---------- a segurança e a defesa dela (entrega 12) ---------- */
+/* "Preciso de ajuda": sempre à vista no dia do serviço, vermelho de contorno */
+.btn-ajuda{background:var(--vermelho-claro);color:var(--vermelho);margin:0 0 12px}
+/* ligar para a polícia: o único link de telefone das telas */
+.btn-emergencia{background:var(--vermelho);color:var(--branco);box-shadow:0 6px 18px rgba(220,38,38,.28)}
+a.btn{text-align:center;text-decoration:none}
+/* a lista do que acontece, antes de confirmar */
+.lista-do-que-acontece{display:flex;flex-direction:column;gap:9px;font-size:14px;line-height:1.45}
+/* as estrelas da nota que ela recebeu: as cheias em âmbar, as vazias claras */
+.estrelas-da-nota{color:var(--ambar);font-size:17px;letter-spacing:1px}
+.estrelas-da-nota i{font-style:normal;color:var(--borda)}
+.texto-da-cliente{margin:8px 0 0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.cartao.bloqueada .btn{margin-top:12px}
