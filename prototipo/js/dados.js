@@ -21,6 +21,14 @@
 const TELAS = {};
 
 
+/* O NOME DO APP, num lugar só (R36: o nome ainda não foi escolhido, e
+   "Limpah" é provisório). Os textos novos que dizem o nome (o cartão de
+   instalar o app) leem daqui. O servidor tem o dele (app/limpah/marca.py:
+   o manifest e o título do app instalado), e um teste confere que os dois
+   são iguais. Trocar o nome = trocar nos dois. O ícone não tem o nome. */
+const NOME_DO_APP = "Limpah";
+
+
 /* --------------------------------------------------------------------------
    1. TABELA DE PREÇOS  (documento, seção 11)
    -------------------------------------------------------------------------- */

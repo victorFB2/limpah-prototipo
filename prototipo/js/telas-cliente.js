@@ -108,6 +108,9 @@ TELAS.home = {
     +   blocoProximo
     +   blocoRecentes
     +   blocoFavoritas
+    /* "Instale o app na sua tela inicial" (entrega 11): só no app, quando o
+       celular deixa instalar; some com o "Agora não" */
+    +   cartaoDeInstalar()
     + '</div>'
     + abas("inicio");
   },

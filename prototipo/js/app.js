@@ -455,6 +455,50 @@ function emBreveNoApp(assunto){
        + 'Ainda estamos preparando esta parte do aplicativo.</div></div>';
 }
 
+/* --------------------------------------------------------------------------
+   O CARTÃO "INSTALE O APP" (entrega 11), no fim do início da cliente e do
+   início dela. Discreto: no fim, e some quando a pessoa toca em "Agora
+   não" (o aparelho lembra, em E.instalarDispensado; nada da conta).
+
+   Quem diz se ele aparece é a tomada (FONTE.ler.comoInstalar):
+     "android"  o navegador avisou que o app pode ser instalado: o botão
+                "Instalar" abre a pergunta do próprio navegador;
+     "iphone"   o iPhone não tem esse aviso: o cartão ensina o caminho;
+     ""         nada (já instalado e aberto como app, navegador que não
+                instala, ou a maquete, que não é instalável).
+   O nome no texto vem de NOME_DO_APP (dados.js), sem artigo na frente: o
+   nome ainda não foi escolhido (R36), e "o"/"a" muda com ele.
+   -------------------------------------------------------------------------- */
+function cartaoDeInstalar(){
+  if(E.instalarDispensado) return "";
+  const como = FONTE.ler.comoInstalar();
+  if(como !== "android" && como !== "iphone") return "";
+  const comNome = 'O ícone aparece com o nome “' + esc(NOME_DO_APP) + '”, junto com os seus apps.';
+  return '<div class="aviso roxo cartao-instalar">📲<div>'
+    + '<b>Instale o app na sua tela inicial</b>'
+    + (como === "android" ? comNome
+      : 'Toque em <b class="em-linha">Compartilhar</b> ⬆️ e depois em '
+        + '<b class="em-linha">Adicionar à Tela de Início</b>. ' + comNome)
+    + '<div class="botoes-instalar">'
+    +   (como === "android" ? '<button class="btn btn-principal" data-acao="instalarOApp">Instalar</button>' : '')
+    +   '<button class="btn btn-texto" data-acao="dispensarOInstalar">Agora não</button>'
+    + '</div></div></div>';
+}
+
+/* "Instalar": a pergunta do navegador ("Instalar app?"). Aceitou ou não, o
+   cartão sai (o navegador só deixa perguntar uma vez); se ela disser não,
+   o navegador pode oferecer de novo outro dia, e o cartão volta. */
+function instalarOApp(){
+  FONTE.instalarOApp(function(){ desenhar(); });
+}
+
+/* "Agora não": o cartão não volta neste aparelho. */
+function dispensarOInstalar(){
+  E.instalarDispensado = true;
+  salvar();
+  desenhar();
+}
+
 function moeda(valor){
   return "R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
 }
@@ -892,6 +936,10 @@ const ACOES = {
   trocarAba:              function(el){ trocarAba(dadoDoToque(el, "aba")); },
   recarregar:             function(){ location.reload(); },
   reiniciarPrototipo:     function(){ reiniciarPrototipo(); },
+
+  /* o app na tela inicial (entrega 11): o cartão do início */
+  instalarOApp:           function(){ instalarOApp(); },
+  dispensarOInstalar:     function(){ dispensarOInstalar(); },
 
   /* entrar, criar a conta, a senha e o código (telas-acesso.js) */
   tentarArranqueDeNovo:   function(){ tentarArranqueDeNovo(); },

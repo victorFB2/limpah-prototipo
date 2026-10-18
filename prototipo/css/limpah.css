@@ -310,6 +310,16 @@ p.apoio{font-size:14px;color:var(--suave);margin:0 0 18px;line-height:1.5}
 .aviso.verde{background:var(--verde-claro);color:#0F7A38}
 .aviso.ambar{background:var(--ambar-claro);color:var(--ambar)}
 .aviso b{display:block;margin-bottom:2px}
+/* um destaque no meio da frase (o "Compartilhar" do cartão de instalar) */
+.aviso b.em-linha{display:inline;margin:0}
+
+/* O cartão "Instale o app na sua tela inicial" (entrega 11), no fim do
+   início: os dois botões lado a lado, menores que os do rodapé, com os
+   44px de altura de sempre (R21). */
+.cartao-instalar{margin-top:18px}
+.botoes-instalar{display:flex;gap:8px;margin-top:10px}
+.botoes-instalar .btn{flex:1;min-height:44px;padding:10px 12px;font-size:14px}
+.botoes-instalar .btn+.btn{margin-top:0}
 
 /* ---------- o que a equipe escreveu, e a conversa sobre o cadastro dela
    (entrega 5a). O texto vem de fora do código: quebra palavra comprida e

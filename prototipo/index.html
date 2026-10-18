@@ -10,7 +10,13 @@
      cartao - e tocar nele abria o calendario em vez de abrir o servico. -->
 <meta name="format-detection" content="telephone=no,date=no,address=no,email=no">
 <title>Limpah — protótipo</title>
-<link rel="stylesheet" href="css/limpah.css?v=a3f5c498">
+<!-- O ícone da aba e o do iPhone (entrega 11; desenhados pelo
+     app/gerar_icones.py, sem o nome). A maquete NÃO tem manifest nem o
+     guarda da casca: ela não é um app para instalar, e o manifest aberto
+     com dois cliques, direto do arquivo, daria erro no console. -->
+<link rel="icon" href="icones/favicon.ico" sizes="16x16 32x32">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<link rel="stylesheet" href="css/limpah.css?v=a1b4e438">
 </head>
 <body>
 
@@ -33,12 +39,12 @@
   <!-- A ordem importa: dados.js cria as regras e a lista de telas; os
        exemplos e a tomada da maquete vêm antes das telas; app.js liga tudo
        no fim. -->
-  <script charset="utf-8" src="js/dados.js?v=a3f5c498"></script>
-  <script charset="utf-8" src="js/exemplos.js?v=a3f5c498"></script>
-  <script charset="utf-8" src="js/fonte-maquete.js?v=a3f5c498"></script>
-  <script charset="utf-8" src="js/telas-acesso.js?v=a3f5c498"></script>
-  <script charset="utf-8" src="js/telas-cliente.js?v=a3f5c498"></script>
-  <script charset="utf-8" src="js/telas-diarista.js?v=a3f5c498"></script>
-  <script charset="utf-8" src="js/app.js?v=a3f5c498"></script>
+  <script charset="utf-8" src="js/dados.js?v=a1b4e438"></script>
+  <script charset="utf-8" src="js/exemplos.js?v=a1b4e438"></script>
+  <script charset="utf-8" src="js/fonte-maquete.js?v=a1b4e438"></script>
+  <script charset="utf-8" src="js/telas-acesso.js?v=a1b4e438"></script>
+  <script charset="utf-8" src="js/telas-cliente.js?v=a1b4e438"></script>
+  <script charset="utf-8" src="js/telas-diarista.js?v=a1b4e438"></script>
+  <script charset="utf-8" src="js/app.js?v=a1b4e438"></script>
 </body>
 </html>

@@ -742,7 +742,19 @@ const FONTE = {
     pronto({ ok:true });
   },
 
+  /* Instalar na tela inicial (entrega 11): a maquete não é instalável (ela
+     é a demonstração, e abre com dois cliques, direto do arquivo). O cartão
+     nem aparece aqui (ler.comoInstalar), e o "Instalar" não faz nada. */
+  instalarOApp: function(pronto){
+    pronto({ ok:false });
+  },
+
   ler: {
+    /* A maquete não é instalável: o cartão "Instale o app" é só do app. */
+    comoInstalar: function(){
+      return "";
+    },
+
     /* Com que estado o app começa: duas favoritas e uma mensagem não lida,
        para a home da maquete não abrir vazia. Cópia nova a cada vez: a
        lista de favoritas é alterada no lugar. */

@@ -1065,6 +1065,9 @@ TELAS.diaristaHome = {
         + 'Depois do aceite, a rua e o número aparecem a partir das '
         + HORA_DO_ENDERECO_NA_VESPERA + 'h da véspera.</div>'
       : '')
+    /* "Instale o app na sua tela inicial" (entrega 11): só no app, quando o
+       celular deixa instalar; some com o "Agora não" */
+    +   cartaoDeInstalar()
     /* o aviso para o time de desenvolvimento é da maquete */
     +   soNaMaquete(avisoDoPushParaOTime)
     + '</div>'
