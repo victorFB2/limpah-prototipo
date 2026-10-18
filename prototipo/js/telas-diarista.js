@@ -1030,6 +1030,10 @@ TELAS.diaristaHome = {
        app, contada pelo servidor) */
     +   (pode ? cartaoDeMensagemNova("diarista") : "")
 
+    /* R37: o que as faltas fazem com ela, dito a ela (os pedidos chegam um
+       pouco depois; a conta parada para a análise) */
+    +   (pode ? avisoDasFaltasDela(FONTE.ler.faltasDela(), false) : "")
+
     +   (pode ? faixaDoCadastro() : interruptorTravado())
 
     /* a chave "Disponível" (no app, desde a 6a: com o app aberto, a lista
@@ -4716,6 +4720,7 @@ TELAS.diaristaGanhos = {
       /* A RECEBER — a renda do conjunto, e o que já terminou e vem a caminho */
       miolo += '<div class="rotulo">A receber</div>'
         + cartaoAReceber(r, e)
+        + blocoDasCompensacoes(g)
         + avisoACaminho(aCaminho);
 
       /* RECEBIDO — no recorte escolhido. A lista embaixo do título é SÓ do
@@ -4782,6 +4787,30 @@ function cartaoAReceber(r, e){
     + '</div>';
 }
 
+/* R37: a COMPENSAÇÃO que a cliente pagou ao cancelar tarde, ou ao não estar
+   em casa, é dela: aparece "a receber". E o que fica anotado para
+   descontar (a compensação dela à cliente pela falta sem aviso; a parte dela
+   numa devolução combinada pela equipe). Nunca "multa": ela não paga nada
+   para a plataforma. Sem o pagamento de verdade, tudo fica anotado. */
+function blocoDasCompensacoes(g){
+  const comp = (g && g.compensacoes) || [], desc = (g && g.descontos) || [];
+  if(!comp.length && !desc.length) return "";
+  function linha(x){
+    return '<div class="linha"><span class="rot">' + esc(dataPorExtenso(x.data)) + ' · ' + esc(x.motivo)
+      + '</span><span class="val" style="white-space:nowrap">' + moeda(x.valor) + '</span></div>';
+  }
+  return (comp.length
+      ? '<div class="cartao" style="margin-top:10px"><b style="font-size:14px">Compensação pelo cancelamento: '
+        + moeda(g.compensacoesTotal) + '</b>' + comp.map(linha).join("")
+        + '<div class="ajuda" style="margin:6px 0 0">A cliente cancelou em cima da hora, ou não estava em casa: '
+        + 'pela regra, esse valor é seu.</div></div>' : "")
+    + (desc.length
+      ? '<div class="cartao" style="margin-top:10px"><b style="font-size:14px">Anotado para descontar: '
+        + moeda(g.descontosTotal) + '</b>' + desc.map(linha).join("")
+        + '<div class="ajuda" style="margin:6px 0 0">Sai do próximo pagamento, quando o pagamento pelo app '
+        + 'for ligado. Foi força maior? Fale com a nossa equipe.</div></div>' : "");
+}
+
 function botaoDoExtrato(){
   return '<button class="btn btn-claro" style="margin-top:4px" data-acao="ir" data-tela="diaristaExtrato">'
     +   'Ver extrato serviço a serviço</button>';
@@ -4817,6 +4846,7 @@ function ganhosSemOPagamento(e, g){
   return avisoDoPagamentoDesligado(g)
     + '<div class="rotulo">A receber</div>'
     + cartaoAReceber(r, e)
+    + blocoDasCompensacoes(g)
     + '<div class="rotulo">Recebido</div>'
     + seletorDeRecorte()
     + '<div class="grade-2">'
@@ -5179,6 +5209,10 @@ TELAS.diaristaDia = {
       return cabecalho("O dia do serviço")
         + '<div class="corpo">' + blocoAntesDeTrabalhar(e) + '</div>';
     }
+    /* R37: o serviço deixou de ser dela (ela cancelou, ou a cliente não
+       estava em casa): a tela diz o que aconteceu, e não "não achamos" */
+    const encerrado = E.servicoAberto ? FONTE.ler.encerradoNoDia(E.servicoAberto) : null;
+    if(encerrado) return telaDoServicoEncerrado(encerrado);
     const d = diaDelaAberto();
     if(!d){
       const erro = erroDoDiaAgora();
@@ -5236,18 +5270,26 @@ TELAS.diaristaDia = {
     +   '</div>'
     +   '<button class="btn btn-texto" style="min-height:44px" data-acao="ir" data-tela="diaristaServico">'
     +     'Ver detalhes do serviço ›</button>'
-    +   ((d.pode.imprevisto || d.pode.clienteAusente)
+    /* R37: antes do "Cheguei", o imprevisto é o cancelar dela (a tela diz o
+       que acontece ANTES); depois, "não atende" (o "Cheguei", a espera e a
+       conversa) e o imprevisto de sempre, com a nossa equipe */
+    +   ((d.pode.imprevisto || d.cancelar.pode || d.passo === "chegou")
       ? '<div class="rotulo">Precisa de ajuda?</div>'
         + (d.pode.clienteAusente
           ? '<button class="item" data-acao="passoDoDiaDela" data-passo="cliente-ausente">'
             + '<div style="font-size:19px;width:26px;text-align:center">🔔</div>'
-            + '<div class="txt"><b>' + esc(primeiro) + ' não atende</b>'
-            + '<span>Avisamos ela e a nossa equipe.</span></div><div class="seta">›</div></button>' : "")
-        + (d.pode.imprevisto
+            + '<div class="txt"><b>' + esc(primeiro) + ' não está em casa</b>'
+            + '<span>Você esperou e chamou pela conversa. Pela regra, '
+            + Number(CANCELAMENTO.percentualEmCimaDaHora) + '% do valor fica para você.</span></div>'
+            + '<div class="seta">›</div></button>'
+          : d.passo === "chegou" ? avisoDaClienteQueNaoAtende(d, primeiro) : "")
+        + (d.pode.imprevisto || d.cancelar.pode
           ? '<button class="item" data-acao="ir" data-tela="diaristaImprevisto">'
             + '<div style="font-size:19px;width:26px;text-align:center">🙏</div>'
             + '<div class="txt"><b>Tive um imprevisto</b>'
-            + '<span>A nossa equipe fala com você.</span></div><div class="seta">›</div></button>' : "")
+            + '<span>' + (d.cancelar.pode ? 'Não vou conseguir ir: veja antes o que acontece.'
+                          : 'A nossa equipe fala com você.') + '</span></div><div class="seta">›</div></button>'
+          : "")
       : "")
     +   soNaMaquete(function(){ return quadroDoDiaNaMaquete(d); })
     + '</div>'
@@ -5259,6 +5301,8 @@ TELAS.diaristaDia = {
   },
   aoEntrar: function(){
     if(FONTE.ehMaquete) return;
+    /* o serviço que deixou de ser dela (R37) não tem mais dia para perguntar */
+    if(E.servicoAberto && FONTE.ler.encerradoNoDia(E.servicoAberto)) return;
     pedirODiaNestaVisita();
     acompanharODiaDela();
   }
@@ -5309,10 +5353,83 @@ function passoDoDiaDela(acao, botao){
       mostrarErro("dia-erro", r.erro || "");
       return;
     }
-    if(acao === "cliente-ausente") avisarNoDia("Avisamos a cliente e a nossa equipe.", "ok");
+    /* "não está em casa" (R37): a tela passa a dizer o que aconteceu
+       (telaDoServicoEncerrado), e não precisa de outro aviso */
     if(acao === "terminei") avisarNoDia("Pronto! A cliente foi avisada para conferir.", "ok");
     desenhar();
   }, { botao: botao || null });
+}
+
+/* "Fulana não atende" ainda não pode ser marcado: o que falta (R37). Chamar
+   pela conversa é o caminho, e a tela diz a partir de quando. */
+function avisoDaClienteQueNaoAtende(d, primeiro){
+  return '<div class="aviso">🔔<div><b>' + esc(primeiro) + ' não atende?</b>'
+    + (d.chamou ? '' : 'Chame ' + esc(primeiro) + ' pela conversa. ')
+    + (d.clienteAusenteAbre
+      ? 'A partir das ' + esc(d.clienteAusenteAbre) + ', se ela não aparecer, você pode marcar que ela '
+        + 'não está em casa.' : '')
+    + '</div></div>';
+}
+
+/* O SERVIÇO QUE DEIXOU DE SER DELA (R37): ela cancelou ("Não vou conseguir
+   ir"), ou a cliente não estava em casa. O que acontece, com todas as
+   letras: ninguém é punido em silêncio. "Compensação", nunca multa: ela não
+   paga nada para a plataforma. */
+function telaDoServicoEncerrado(x){
+  const linhas = [];
+  let sinal = "🙏", titulo = "Pronto, avisamos a cliente";
+  if(x.tipo === "cliente_ausente"){
+    sinal = "🔔"; titulo = "A cliente não estava em casa";
+    linhas.push("Você esperou e chamou pela conversa. O serviço foi encerrado: pode ir embora.");
+    if(x.compensacao > 0)
+      linhas.push(moeda(x.compensacao) + " ficam para você, como compensação. Fica anotado em Meus ganhos.");
+  } else {
+    if(x.consequencia === "nenhuma") linhas.push("Faltavam mais de 24 horas: sem consequência nenhuma.");
+    if(x.consequencia === "tardio")
+      linhas.push("Ficou anotado como cancelamento tardio, sem desconto nenhum.");
+    if(x.consequencia === "falta") linhas.push("Contou como falta.");
+    linhas.push(x.substituta ? "O serviço voltou para a busca: outra profissional pode aceitar."
+                             : "A cliente recebe todo o valor de volta.");
+    linhas.push("Você não recebe por este serviço.");
+  }
+  return cabecalho("O dia do serviço")
+    + '<div class="corpo">'
+    +   '<div class="centro" style="flex:none;padding:8px 6px 14px;gap:8px">'
+    +     '<div class="emojao" style="font-size:52px">' + sinal + '</div>'
+    +     '<h2 class="titulo">' + esc(titulo) + '</h2>'
+    +     '<p class="apoio" style="margin:0">' + linhas.map(esc).join("<br>") + '</p></div>'
+    +   avisoDasFaltasDela(x.faltas, x.tipo !== "cliente_ausente" && x.consequencia === "falta")
+    +   (x.tipo !== "cliente_ausente" && x.consequencia !== "nenhuma"
+      ? '<div class="aviso roxo">🛟<div><b>Foi doença ou emergência?</b>Conte para a nossa equipe: '
+        + 'ela pode isentar.</div></div>' : "")
+    +   soNoApp(function(){
+          return botaoDoSuporte("diarista", "servico:" + String((E.servicoAberto || {}).oportunidadeId || ""),
+                                "💬 Falar com a nossa equipe");
+        })
+    + '</div>'
+    + '<div class="rodape">'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaAgenda" data-limpar="1">'
+    +     'Ver minha agenda</button>'
+    + '</div>';
+}
+
+/* O que as faltas fazem com ela (R37), com as datas: os pedidos chegam um
+   pouco depois por 7 dias; com 3 em 90 dias, a conta fica parada para a análise.
+   Sempre a mesma explicação, curta. comoFunciona: diz também a regra. */
+function avisoDasFaltasDela(f, comoFunciona){
+  const C = CANCELAMENTO;
+  if(f && f.pausada)
+    return '<div class="aviso ambar">⏸️<div><b>Sua conta está parada para análise</b>Foram '
+      + Number(C.faltasParaPausar) + ' faltas em ' + Number(C.diasQueAFaltaConta) + ' dias. Por enquanto '
+      + 'você não recebe pedidos novos. A nossa equipe vai olhar com você, e você pode contar o que '
+      + 'houve pelo suporte.</div></div>';
+  if(f && f.depoisDasOutrasAte)
+    return '<div class="aviso ambar">⏳<div><b>Até ' + esc(f.depoisDasOutrasAte) + ', os pedidos chegam um '
+      + 'pouco depois</b>Por causa de uma falta, você recebe os pedidos ' + Number(C.minutosDepoisDasOutras)
+      + ' minutos depois das outras. Depois volta ao normal.'
+      + (comoFunciona ? ' Com ' + Number(C.faltasParaPausar) + ' faltas em ' + Number(C.diasQueAFaltaConta)
+        + ' dias, a conta fica parada até a nossa equipe analisar.' : '') + '</div></div>';
+  return "";
 }
 
 
@@ -5390,10 +5507,15 @@ function simularChegadaQueNaoConfere(){
 }
 
 
-/* --- "Tive um imprevisto" --- */
+/* --- "Tive um imprevisto" ---
+   R37: ANTES do "Cheguei", o imprevisto é o cancelar dela ("Não vou
+   conseguir ir"), e a tela diz ANTES o que acontece, pela faixa de agora
+   (contada pela tomada: no app, o servidor). DEPOIS do "Cheguei", o de
+   sempre: a nossa equipe fala com ela e com a cliente. */
 TELAS.diaristaImprevisto = {
   html: function(){
     const d = podeAceitarServico() ? diaDelaAberto() : null;
+    if(d && d.cancelar && d.cancelar.pode && !d.horas.chegou) return telaDoCancelarDela(d);
     if(!d || !d.pode.imprevisto){
       return cabecalho("") + '<div class="centro">'
         + '<div class="emojao">🙏</div><h2 class="titulo">'
@@ -5425,6 +5547,71 @@ TELAS.diaristaImprevisto = {
     + '</div>';
   }
 };
+
+/* O que acontece se ela cancelar agora, pela faixa da tabela (R37). Ela
+   nunca paga multa: a consequência é objetiva e escrita antes. */
+function oQueAconteceSeElaCancelar(c, primeiro){
+  const C = CANCELAMENTO;
+  const busca = c.substituta ? " O serviço volta para a busca, e outra profissional pode aceitar." : "";
+  if(c.consequencia === "nenhuma")
+    return '<div class="aviso verde">✓<div><b>Sem consequência</b>Faltam mais de '
+      + Number(C.horasParaCancelarSemCusto) + ' horas: cancelar agora não conta nada para você.'
+      + esc(busca) + '</div></div>';
+  if(c.consequencia === "tardio")
+    return '<div class="aviso ambar">⏰<div><b>Cancelamento tardio</b>Faltam menos de '
+      + Number(C.horasParaCancelarSemCusto) + ' horas: fica anotado como cancelamento tardio, sem '
+      + 'desconto nenhum.' + esc(busca) + '</div></div>';
+  return '<div class="aviso ambar">⚠️<div><b>Conta como falta</b>Faltam menos de ' + Number(C.horasEmCimaDaHora)
+    + ' horas. Por ' + Number(C.diasDepoisDasOutras) + ' dias você recebe os pedidos '
+    + Number(C.minutosDepoisDasOutras) + ' minutos depois das outras, e com ' + Number(C.faltasParaPausar)
+    + ' faltas em ' + Number(C.diasQueAFaltaConta) + ' dias a conta fica parada até a nossa equipe '
+    + 'analisar.' + esc(busca) + '</div></div>';
+}
+
+function telaDoCancelarDela(d){
+  const primeiro = String(d.cliente || "").split(" ")[0] || "a cliente";
+  return cabecalho("")
+  + '<div class="corpo">'
+  +   '<h2 class="titulo">Não vou conseguir ir 🙏</h2>'
+  +   '<p class="apoio">Acontece. Avise por aqui: ' + esc(primeiro) + ' e a nossa equipe ficam sabendo '
+  +     'na hora.</p>'
+  +   oQueAconteceSeElaCancelar(d.cancelar, primeiro)
+  +   '<div class="cartao"><div class="ajuda" style="margin:0">Você não recebe por este serviço. '
+  +     esc(primeiro) + ' recebe outra profissional ou todo o valor de volta.</div></div>'
+  +   '<div class="campo"><label for="dia-imprevisto">O que houve? (se quiser contar)</label>'
+  +     '<textarea id="dia-imprevisto" maxlength="' + Number(DIA_DO_SERVICO.comentarioMaximo) + '" '
+  +       'placeholder="Ex.: meu filho ficou doente"></textarea>'
+  +     erroDoCampo("imprevisto-erro", "diaristaImprevisto", "texto") + '</div>'
+  +   (d.cancelar.consequencia !== "nenhuma"
+    ? '<div class="aviso roxo">🛟<div><b>Foi doença ou emergência?</b>Conte aqui: a nossa equipe pode '
+      + 'isentar.</div></div>' : '')
+  + '</div>'
+  + '<div class="rodape">'
+  +   '<button class="btn btn-perigo" data-acao="cancelarOServicoDela">Avisar e liberar o serviço</button>'
+  +   '<div class="erro-do-campo" id="imprevisto-geral"></div>'
+  +   '<button class="btn btn-contorno" data-acao="voltar">Voltar</button>'
+  + '</div>';
+}
+
+/* "Avisar e liberar o serviço": vai com a consequência que a tela mostrou.
+   Se a faixa mudou enquanto ela olhava, nada é gravado e a tela mostra a
+   nova (a tomada já guardou o dia de agora). */
+function cancelarOServicoDela(botao){
+  const d = diaDelaAberto();
+  if(!d || !d.cancelar) return;
+  mostrarErro("imprevisto-erro", "");
+  mostrarErro("imprevisto-geral", "");
+  const texto = valorDoCampo("dia-imprevisto").trim();
+  FONTE.cancelarOServicoDela({ consequencia: d.cancelar.consequencia, texto: texto }, function(r){
+    if(r.destino) return seguirPeloErro(r);
+    if(!r.ok && r.motivo === "valor_mudou"){
+      desenhar();
+      return mostrarErro("imprevisto-geral", r.erro || "");
+    }
+    if(!r.ok) return mostrarErro(r.campo === "texto" ? "imprevisto-erro" : "imprevisto-geral", r.erro || "");
+    ir("diaristaDia", { limparHistorico:true });
+  }, { botao: botao || null });
+}
 
 function enviarOImprevisto(botao){
   mostrarErro("imprevisto-erro", "");

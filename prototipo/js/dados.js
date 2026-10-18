@@ -1555,7 +1555,8 @@ const DIA_DO_SERVICO = {
 };
 
 /* r: o que já aconteceu, em minutos do dia (null = ainda não): aceito,
-   confirmou, aCaminho, chegou, tentativas, terminou, concluido, contestou. */
+   confirmou, aCaminho, chegou, tentativas, terminou, concluido, contestou,
+   chamou (ela escreveu para a cliente na conversa depois do "Cheguei"). */
 function estadoEmMinutos(r, inicioHora, fimHora, agora){
   r = r || {};
   const D = DIA_DO_SERVICO;
@@ -1588,6 +1589,9 @@ function estadoEmMinutos(r, inicioHora, fimHora, agora){
 
   const naJanela = agora < fim;
   const abertoParaACliente = terminou !== null && !concluido && !r.contestou && agora < prazoParaContestar;
+  /* R37: "a cliente não está em casa" só depois do "Cheguei", da espera e
+     de ela ter chamado a cliente pela conversa (r.chamou) */
+  const abreAusente = abreClienteAusente(tem(r.chegou) ? r.chegou : null, inicio);
   let problema = null;
   if(!tem(r.chegou) && terminou === null && !conferindo){
     if(!confirmou && agora >= prazo) problema = "nao_confirmou";
@@ -1601,12 +1605,14 @@ function estadoEmMinutos(r, inicioHora, fimHora, agora){
       chegar: tem(r.aCaminho) && !tem(r.chegou) && !conferindo && abreChegar <= agora && naJanela,
       terminar: tem(r.chegou) && !tem(r.terminou) && naJanela,
       imprevisto: terminou === null && naJanela,
-      clienteAusente: tem(r.aCaminho) && terminou === null && naJanela,
+      clienteAusente: abreAusente !== null && agora >= abreAusente && !!r.chamou
+                      && terminou === null && naJanela,
       confirmarOFim: abertoParaACliente,
       contestar: abertoParaACliente,
       avaliar: terminou !== null && agora < fimDaAvaliacao,
     },
     abre: { confirmar: abreConfirmar, sair: abreSair, chegar: abreChegar },
+    clienteAusenteAbre: abreAusente,
     prazoDaConfirmacao: prazo,
     toleranciaDaChegada: tolerancia,
     terminou: terminou,
@@ -1623,4 +1629,158 @@ function horaEscrita(minutos){
   const m = ((Math.floor(Number(minutos)) % 1440) + 1440) % 1440;
   const hora = Math.floor(m / 60), minuto = m % 60;
   return minuto ? hora + "h" + String(minuto).padStart(2, "0") : hora + "h";
+}
+
+
+/* ==========================================================================
+   O CANCELAMENTO E A FALTA (R37, decisão do dono de 17/10/2026, que revisa a
+   R20; as escolhas do assistente estão na DECISOES, A44, PROVISÓRIAS)
+
+   Contado até o INÍCIO DA JANELA:
+     | Quanto falta          | A cliente cancela        | A diarista cancela    |
+     | 24h ou mais           | grátis, devolução total  | sem consequência      |
+     | menos de 24h, 3h ou + | 20%, que vai para ELA    | "cancelamento tardio" |
+     | menos de 3h           | 50%, que vai para ELA    | FALTA                 |
+   Nos limites, a faixa mais leve para quem cancela: 24h00 ainda é grátis,
+   3h00 ainda é 20%.
+
+   O 20% e o 50% são do VALOR QUE A CLIENTE PAGOU, e a multa INTEIRA vai
+   para a diarista. Nunca passa do que ela receberia pelo serviço (Código
+   Civil, art. 412). A diarista nunca paga multa para a plataforma: em
+   todos os casos ela não recebe aquele serviço, e a cliente tem a
+   substituta ou a devolução total (R11). Com falta, a cliente ganha um
+   crédito de 20%, pago pela plataforma; com falta SEM AVISO, também a
+   cláusula penal provisória (20% do valor dela, só anotada; ver R37).
+
+   A MESMA CONTA do servidor (app/limpah/regras.py, seção 15): um teste
+   cruzado compara as duas (app/testes/test_cancelamento.py).
+   ========================================================================== */
+const CANCELAMENTO = {
+  horasParaCancelarSemCusto: 24,
+  horasEmCimaDaHora: 3,
+  percentualTardio: 20,               // entre 24h e 3h: para ela
+  percentualEmCimaDaHora: 50,         // menos de 3h, ou a cliente não está: para ela
+  minutosDeEsperaPelaCliente: 30,     // depois do "Cheguei", chamando pela conversa
+  creditoDaFaltaPercentual: 20,       // pago pela plataforma, para a cliente
+  clausulaPenalPercentual: 20,        // do valor dela, só na falta sem aviso
+  diasDepoisDasOutras: 7,
+  minutosDepoisDasOutras: 10,
+  faltasParaPausar: 3,
+  diasQueAFaltaConta: 90,
+  diasUteisParaDecidirOProblema: 2,
+  devolucaoMaximaDoProblemaPercentual: 50,
+  minutosParaASubstituta: 120,        // a busca inteira cabe antes do prazo do aceite
+};
+/* CLAUSULA_PENAL_LIGADA: provisória, a confirmar (ver R37); a mesma do servidor */
+const CLAUSULA_PENAL_LIGADA = true;
+
+const PERCENTUAL_DO_CANCELAMENTO = { mais_de_24h: 0,
+  entre_24h_e_3h: CANCELAMENTO.percentualTardio, menos_de_3h: CANCELAMENTO.percentualEmCimaDaHora };
+const CONSEQUENCIA_PARA_ELA = { mais_de_24h: "nenhuma", entre_24h_e_3h: "tardio", menos_de_3h: "falta" };
+
+function faixaDoCancelamento(minutosAntes){
+  const C = CANCELAMENTO;
+  if(minutosAntes >= C.horasParaCancelarSemCusto * 60) return "mais_de_24h";
+  if(minutosAntes >= C.horasEmCimaDaHora * 60) return "entre_24h_e_3h";
+  return "menos_de_3h";
+}
+
+/* percentual% de um valor em centavos, o meio para cima (centavos inteiros) */
+function percentualDe(centavos, percentual){
+  return Math.floor((Math.round(Number(centavos)) * Math.round(Number(percentual)) + 50) / 100);
+}
+
+/* o valor pago, em partes iguais por vaga; o centavo que sobra, na vaga 1 */
+function partesDoValor(totalCentavos, vagas){
+  const total = Math.round(Number(totalCentavos)), n = Math.round(Number(vagas));
+  const base = Math.floor(total / n), sobra = total - base * n;
+  const partes = [];
+  for(let i = 0; i < n; i++) partes.push(base + (i < sobra ? 1 : 0));
+  return partes;
+}
+
+function haTempoParaASubstituta(minutosAntes){
+  return minutosAntes >= CANCELAMENTO.minutosParaASubstituta;
+}
+
+/* Os valores de UMA vaga, em centavos (o mesmo do regras.acerto_do_cancelamento). */
+function acertoDoCancelamento(quem, faixa, valorPago, repasse, semAviso, reabreABusca){
+  if(!Object.prototype.hasOwnProperty.call(PERCENTUAL_DO_CANCELAMENTO, faixa)) throw new Error(faixa);
+  valorPago = Math.round(Number(valorPago)); repasse = Math.round(Number(repasse));
+  if(quem === "cliente"){
+    const percentual = PERCENTUAL_DO_CANCELAMENTO[faixa];
+    const multa = Math.min(percentualDe(valorPago, percentual), repasse);
+    return { percentual: percentual, multa: multa, devolucao: valorPago - multa,
+             credito: 0, clausula_penal: 0, consequencia: "nenhuma" };
+  }
+  if(quem !== "diarista") throw new Error(quem);
+  const consequencia = CONSEQUENCIA_PARA_ELA[faixa];
+  const falta = consequencia === "falta";
+  const clausula = (falta && semAviso && CLAUSULA_PENAL_LIGADA)
+    ? Math.min(percentualDe(repasse, CANCELAMENTO.clausulaPenalPercentual), repasse) : 0;
+  return { percentual: 0, multa: 0, devolucao: reabreABusca ? 0 : valorPago,
+           credito: falta ? percentualDe(valorPago, CANCELAMENTO.creditoDaFaltaPercentual) : 0,
+           clausula_penal: clausula, consequencia: consequencia };
+}
+
+/* "Algo não ficou bom", decidido pela equipe: refazer, ou devolver até 50%. */
+function acertoDoProblema(valorPago, repasse, decisao, percentual){
+  if(decisao === "refazer") return { percentual: 0, devolucao: 0, desconto_dela: 0 };
+  if(decisao !== "devolver" || typeof percentual !== "number" || percentual % 1 !== 0
+     || percentual < 1 || percentual > CANCELAMENTO.devolucaoMaximaDoProblemaPercentual)
+    throw new Error(String(decisao) + " " + String(percentual));
+  return { percentual: percentual, devolucao: percentualDe(valorPago, percentual),
+           desconto_dela: percentualDe(repasse, percentual) };
+}
+
+/* Em minutos do dia: quando ela pode marcar que a cliente não está em casa. */
+function abreClienteAusente(chegou, inicio){
+  if(chegou === null || chegou === undefined) return null;
+  return Math.max(chegou, inicio) + CANCELAMENTO.minutosDeEsperaPelaCliente;
+}
+
+/* Até que distância o pedido já chega, com a busca neste minuto (R22). */
+function raioDaOnda(minutosDeBusca){
+  let raio = ONDAS[0].raioKm;
+  ONDAS.forEach(function(o){ if(minutosDeBusca >= o.comecaAos) raio = o.raioKm; });
+  return raio;
+}
+
+/* A onda DELA: com uma falta recente, o pedido chega 10 minutos depois das
+   outras à mesma distância (e não some da lista). */
+function raioDaOndaDela(minutosDeBusca, depoisDasOutras){
+  const m = minutosDeBusca - (depoisDasOutras ? CANCELAMENTO.minutosDepoisDasOutras : 0);
+  return m < 0 ? 0 : raioDaOnda(m);
+}
+
+/* As faltas que contam (momentos em milissegundos), da mais velha à mais nova. */
+function faltasQueContam(momentos, agora){
+  const desde = agora - CANCELAMENTO.diasQueAFaltaConta * 86400000;
+  return (momentos || []).filter(function(m){ return m > desde && m <= agora; })
+    .sort(function(a, b){ return a - b; });
+}
+
+function depoisDasOutrasAte(momentos, agora){
+  const ja = (momentos || []).filter(function(m){ return m <= agora; });
+  if(!ja.length) return null;
+  const ate = Math.max.apply(null, ja) + CANCELAMENTO.diasDepoisDasOutras * 86400000;
+  return ate > agora ? ate : null;
+}
+
+function pausaPorFaltas(momentos, agora){
+  return faltasQueContam(momentos, agora).length >= CANCELAMENTO.faltasParaPausar;
+}
+
+/* "aaaa-mm-dd" -> o dia (também "aaaa-mm-dd") em que vence o prazo da equipe:
+   2 dias úteis (segunda a sexta). */
+function prazoParaDecidirOProblema(isoDia){
+  const p = String(isoDia).split("-").map(Number);
+  const d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+  let faltam = CANCELAMENTO.diasUteisParaDecidirOProblema;
+  while(faltam > 0){
+    d.setUTCDate(d.getUTCDate() + 1);
+    const semana = d.getUTCDay();
+    if(semana !== 0 && semana !== 6) faltam--;
+  }
+  return d.toISOString().slice(0, 10);
 }

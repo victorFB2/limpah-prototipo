@@ -1432,6 +1432,8 @@ TELAS.pagamento = {
     +       (conta.quantidade > 1 ? ' <span style="font-weight:600;font-size:12px">(duas diaristas)</span>' : "")
     +       '</span>'
     +     '<span class="val">' + moeda(conta.total) + '</span></div></div>'
+    /* R37: a tabela do cancelamento, curta, ANTES de pagar */
+    +   linhaDaTabelaDoCancelamento()
     +   avisoDoQuando(s)
     +   avisoDaTrava(s)
     /* a frase do servidor sobre a casa, ou (sem ela) a casa que sumiu */
@@ -1457,6 +1459,17 @@ TELAS.pagamento = {
   /* no app, depois de recarregar, as casas também (o endereço do pedido) */
   aoEntrar: function(){ simularSeFaltar(); pedirCasasSeFaltar(); }
 };
+
+/* A TABELA DO CANCELAMENTO (R37), numa linha, antes de pagar: os números
+   vêm do CANCELAMENTO (dados.js), os mesmos do servidor (regras.py, seção 15). */
+function linhaDaTabelaDoCancelamento(){
+  const C = CANCELAMENTO;
+  return '<p class="ajuda" style="margin-top:8px">📌 Se precisar cancelar: grátis até '
+    + Number(C.horasParaCancelarSemCusto) + 'h antes do início; depois, '
+    + Number(C.percentualTardio) + '% até ' + Number(C.horasEmCimaDaHora) + 'h antes, e '
+    + Number(C.percentualEmCimaDaHora) + '% com menos de ' + Number(C.horasEmCimaDaHora)
+    + 'h. Esse valor vai para a profissional.</p>';
+}
 
 /* Pix e cartão: só na maquete (o cartão é de exemplo). */
 function formasDePagamentoDaMaquete(){
@@ -2367,6 +2380,10 @@ TELAS.detalhePedido = {
            : 'O pagamento pelo app chega em breve. Enquanto isso, ninguém é chamado e nada é '
              + 'cobrado. Se mudar de ideia, cancele sem custo.')
         + '</div></div>';
+    } else if(p.acerto){
+      /* R37: o que aconteceu com o dinheiro (o que volta, a multa que foi
+         para a profissional, o crédito) — tudo do valor que ELA pagou */
+      avisoDaSituacao = avisoDoAcerto(p);
     } else if(p.situacao === "cancelado" && p.situacaoTexto && p.situacaoTexto !== "Cancelado"){
       /* no app, o porquê do cancelamento, quando o servidor diz (o pedido
          que não foi pago a tempo) */
@@ -2382,9 +2399,12 @@ TELAS.detalhePedido = {
     if(p.situacao === "confirmado"){
       /* o suporte (entrega 9): no app, a conversa com a nossa equipe já
          citando este pedido; na maquete, a tela 30 de sempre */
+      /* R37: "Cancelar serviço" só enquanto ainda pode (até o início da
+         janela, com ninguém na porta), nunca depois do serviço */
       acoes = acompanhar + botoesDaConversaDoPedido(p, !!acompanhar)
         + botaoDoSuporte("cliente", "pedido:" + p.id)
-        + '<button class="btn btn-perigo" data-acao="ir" data-tela="cancelarPedido">Cancelar serviço</button>';
+        + (FONTE.ler.podeCancelar(p)
+           ? '<button class="btn btn-perigo" data-acao="ir" data-tela="cancelarPedido">Cancelar serviço</button>' : "");
     } else if(pedidoNaBusca(p)){
       /* a busca continua andando: a tela dela mostra o passo da régua */
       acoes = '<button class="btn btn-principal" data-acao="ir" data-tela="buscando">Acompanhar a busca</button>'
@@ -2501,6 +2521,71 @@ function alternarFavorita(id){
   salvar(); desenhar();
 }
 
+/* R37: o que aconteceu com o dinheiro do pedido, como ELA pode ver — o que
+   volta, a multa que foi para a profissional e o crédito pago por nós, tudo
+   do valor que ela pagou. Da compensação da profissional pela falta sem
+   aviso, só que ela existe: o valor dela não vem para o celular da cliente
+   (R31). No app, o pagamento ainda é de teste: tudo fica anotado. */
+function avisoDoAcerto(p){
+  const a = p.acerto;
+  const linhas = [];
+  let titulo = "", sinal = "📌", cor = "";
+  if(a.tipo === "cliente_cancelou"){
+    titulo = "Pedido cancelado";
+    if(a.multa > 0)
+      linhas.push(moeda(a.multa) + " (" + Number(a.percentual) + "%) ficaram com a profissional, que tinha "
+                  + "reservado o horário.");
+    if(a.isento) linhas.push("A nossa equipe isentou a multa: tudo volta para você.");
+  } else if(a.tipo === "cliente_ausente"){
+    titulo = "A profissional não encontrou ninguém";
+    linhas.push("Ela esteve no seu endereço, esperou e chamou pela conversa.");
+    if(a.multa > 0) linhas.push(moeda(a.multa) + " (" + Number(a.percentual) + "%) ficaram com ela.");
+    if(a.isento) linhas.push("A nossa equipe isentou: tudo volta para você.");
+  } else if(a.tipo === "problema"){
+    titulo = "A nossa equipe decidiu";
+  } else if(p.situacao !== "cancelado" && a.voltouParaABusca && pedidoNaBusca(p)){
+    titulo = "A profissional não vai poder ir";
+    sinal = "🔍"; cor = "ambar";
+    linhas.push("Já estamos procurando outra profissional para você, no mesmo dia e horário.");
+  } else {
+    titulo = p.situacao === "cancelado" ? "A profissional não pôde ir" : "Uma profissional não pôde ir";
+  }
+  if(a.problema){
+    linhas.push(a.problema.decisao === "refazer"
+      ? "A profissional volta para refazer, sem custo. A nossa equipe combina o dia com você."
+      : moeda(a.problema.devolucao) + " (" + Number(a.problema.percentual) + "%) voltam para você.");
+  }
+  if(a.devolucao > 0 && a.tipo !== "problema") linhas.push(moeda(a.devolucao) + " voltam para você.");
+  if(a.credito > 0)
+    linhas.push("Você ganhou " + moeda(a.credito) + " de crédito para o próximo pedido, por nossa conta.");
+  if(a.compensacaoDaProfissional)
+    linhas.push("A profissional também compensa você pela falta: fica anotado como crédito seu.");
+  const aindaDeTeste = soNoApp(function(){
+    return a.devolucao > 0 || a.credito > 0 || (a.problema && a.problema.devolucao > 0)
+      ? '<br><span style="font-size:12.5px">O pagamento pelo app ainda não está ligado: a devolução e o '
+        + 'crédito ficam anotados.</span>' : "";
+  });
+  return '<div class="aviso' + (cor ? " " + cor : "") + '">' + sinal + '<div><b>' + esc(titulo) + '</b>'
+    + linhas.map(esc).join("<br>") + aindaDeTeste + '</div></div>';
+}
+
+/* O VALOR ANTES (R37): o que cancelar o serviço confirmado custa agora, e
+   quando passa a custar mais. Quem conta é a tomada (no app, o servidor). */
+function avisoDoValorDoCancelamento(v){
+  const proxima = v.proximaFaixa
+    ? '<br><span style="font-size:12.5px">A partir de ' + esc(v.proximaFaixa.quando) + ', passa a custar '
+      + Number(v.proximaFaixa.percentual) + '%.</span>' : "";
+  if(v.semCusto)
+    return '<div class="aviso verde">✓<div><b>Sem custo</b>Faltam mais de '
+      + Number(CANCELAMENTO.horasParaCancelarSemCusto) + ' horas: cancelar é grátis, e '
+      + (v.devolucao > 0 ? moeda(v.devolucao) + ' voltam para você.' : 'nada é cobrado.') + proxima + '</div></div>';
+  const horas = v.faixa === "menos_de_3h" ? CANCELAMENTO.horasEmCimaDaHora : CANCELAMENTO.horasParaCancelarSemCusto;
+  return '<div class="aviso ambar">💸<div><b>Cancelar agora custa ' + moeda(v.multa) + ' ('
+    + Number(v.percentual) + '%)</b>Faltam menos de ' + Number(horas) + ' horas para o serviço. Esse valor vai '
+    + 'para a profissional, que reservou o horário e já não consegue outro serviço tão perto. '
+    + moeda(v.devolucao) + ' voltam para você.' + proxima + '</div></div>';
+}
+
 TELAS.cancelarPedido = {
   html: function(){
     const p = pedidoAtual();
@@ -2551,6 +2636,11 @@ TELAS.cancelarPedido = {
       +   '<button class="btn btn-contorno" data-acao="voltar">Manter o pedido</button>'
       + '</div>';
     }
+    /* O SERVIÇO CONFIRMADO (R37): o valor ANTES do "Sim, cancelar", pela
+       tabela (grátis com 24h ou mais; 20% até 3h antes; 50% com menos), e
+       o que muda daqui a pouco. Depois do início, não se cancela por aqui. */
+    const v = p ? FONTE.ler.previaDoCancelamento(p) : null;
+    const pode = !!(v && v.pode && FONTE.ler.podeCancelar(p));
     return ''
     + cabecalho("Cancelar serviço")
     + '<div class="corpo">'
@@ -2559,20 +2649,17 @@ TELAS.cancelarPedido = {
     +     '<h2 class="titulo">Tem certeza que quer cancelar?</h2>'
     +     '<p class="apoio">A profissional já reservou esse horário na agenda dela.</p>'
     +   '</div>'
-    /* a política de cancelamento (R20) ainda é do dono: no app, o
-       cancelamento depois de pago chega com ela */
-    +   soNaMaquete('<div class="aviso">📌<div><b>Política de cancelamento</b>'
-    +     'As regras de prazo e cobrança ainda serão definidas pelo dono do projeto. '
-    +     'Neste protótipo, o cancelamento é sempre gratuito.</div></div>')
-    +   (FONTE.ler.podeCancelar(p) ? "" : '<div class="aviso">📌<div><b>Cancelar este pedido</b>'
-    +     'Para cancelar um pedido em andamento, fale com a gente pelo suporte.</div></div>')
+    +   (pode ? avisoDoValorDoCancelamento(v)
+              : '<div class="aviso">📌<div><b>Cancelar este serviço</b>'
+                + 'O serviço já começou: por aqui não dá mais para cancelar. Fale com a nossa equipe.</div></div>')
+    +   (pode ? linhaDaTabelaDoCancelamento() : "")
     + '</div>'
     /* "Manter" por último, como acima: o toque duplo não cancela */
     + '<div class="rodape">'
-    +   (FONTE.ler.podeCancelar(p)
-         ? '<button class="btn btn-perigo" data-acao="confirmarCancelamento">Sim, cancelar</button>'
-         /* o suporte (entrega 9), já citando o pedido: nenhum dinheiro é
-            decidido aqui (a política de cancelamento, R20, é do dono) */
+    +   (pode
+         ? '<button class="btn btn-perigo" data-acao="confirmarCancelamento">'
+           + (v.semCusto ? 'Sim, cancelar' : 'Sim, cancelar e pagar ' + moeda(v.multa)) + '</button>'
+         /* o suporte (entrega 9), já citando o pedido */
          : soNoApp(function(){ return botaoDoSuporte("cliente", p ? "pedido:" + p.id : ""); }))
     +   '<div class="erro-do-campo" id="cancelar-erro"></div>'
     +   '<button class="btn btn-contorno" data-acao="voltar">Manter o serviço</button>'
@@ -2580,21 +2667,31 @@ TELAS.cancelarPedido = {
   }
 };
 
-/* Cancelar: na maquete, sempre sem custo; no app, só o pedido que ainda
-   espera o pagamento ou que ainda procura profissional (quem confere é o
-   servidor). Da busca, a tela de "pedido cancelado" (a mesma dos 15
-   minutos). O botão fica desligado enquanto o pedido vai. */
+/* Cancelar: quem confere é a tomada (no app, o servidor): sem custo
+   esperando o pagamento e na busca; o confirmado, pela tabela da R37, com a
+   faixa que a tela mostrou (se o relógio passou para outra enquanto ela
+   olhava, nada é gravado, e a tela mostra o valor novo). Da busca, a tela
+   de "pedido cancelado" (a mesma dos 15 minutos); do confirmado, o pedido
+   cancelado com o que volta. O botão fica desligado enquanto o pedido vai. */
 function confirmarCancelamento(botao){
   const p = pedidoAtual();
   if(!p) return;
   const naBusca = pedidoNaBusca(p);
+  const confirmado = p.situacao === "confirmado";
+  const v = confirmado ? FONTE.ler.previaDoCancelamento(p) : null;
   mostrarErro("cancelar-erro", "");
   FONTE.cancelarPedido(p.id, function(r){
     if(r.destino) return seguirPeloErro(r);
+    if(!r.ok && r.motivo === "valor_mudou"){
+      /* a prévia nova já veio com o pedido: a tela mostra o valor de agora */
+      desenhar();
+      return mostrarErro("cancelar-erro", r.erro);
+    }
     if(!r.ok) return mostrarErro("cancelar-erro", r.erro);
     if(naBusca) return ir("buscaCancelada", { limparHistorico:true });
+    if(confirmado) return ir("detalhePedido", { limparHistorico:true });
     trocarAba("servicos");
-  }, { botao: botao || null });
+  }, { botao: botao || null, faixaVista: v ? v.faixa : null });
 }
 
 
@@ -4090,9 +4187,19 @@ function avisarNoAcompanhamento(frase){
 function textoDoPassoParaACliente(x, d){
   const nome = String(x.nome || "").split(" ")[0] || "A profissional";
   const quando = d.hoje ? "hoje" : dataPorExtenso(d.data).toLowerCase();
+  /* R37: o "algo não ficou bom" decidido pela equipe (refazer ou devolver) */
+  if(x.decisaoDoProblema)
+    return x.decisaoDoProblema.decisao === "refazer"
+      ? ["💜", "A nossa equipe decidiu", nome + " volta para refazer, sem custo. A nossa equipe combina o "
+         + "dia com você.", true]
+      : ["💜", "A nossa equipe decidiu", moeda(x.decisaoDoProblema.devolucao) + " ("
+         + Number(x.decisaoDoProblema.percentual) + "%) voltam para você. Obrigada por contar.", false];
   if(x.contestou || x.passo === "em_analise")
-    return ["📝", "Você contou um problema", "A nossa equipe vai falar com você para resolver.", true];
-  if(x.avisou.imprevisto && !x.horas.chegou && x.passo !== "terminou" && x.passo !== "concluido")
+    return ["📝", "Você contou um problema", "A nossa equipe vai falar com você para resolver em até "
+            + Number(CANCELAMENTO.diasUteisParaDecidirOProblema) + " dias úteis.", true];
+  /* R37: o imprevisto agora é sempre de quem já está lá (antes de chegar, é
+     o cancelar dela, com a vaga de volta para a busca) */
+  if(x.avisou.imprevisto && x.passo !== "terminou" && x.passo !== "concluido")
     return ["🙏", nome + " teve um imprevisto", "Ela avisou a nossa equipe, que vai falar com você.", true];
   if(x.problema === "nao_confirmou")
     return ["⏰", nome + " ainda não confirmou",

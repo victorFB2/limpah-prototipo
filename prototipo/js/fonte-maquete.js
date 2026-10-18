@@ -570,9 +570,21 @@ const FONTE = {
     pronto({ ok:true, id:pedido.id, destino:"buscando" });
   },
 
-  /* Cancelar: na maquete, sempre sem custo. */
-  cancelarPedido: function(id, pronto){
+  /* Cancelar: sem custo esperando o pagamento e na busca; o CONFIRMADO, pela
+     tabela da R37 (a mesma do servidor: dados.js), com a faixa que a tela
+     mostrou — se o relógio passou para outra, nada muda e a tela mostra o
+     valor de agora (as mesmas frases do servidor; um teste compara). */
+  cancelarPedido: function(id, pronto, opcoes){
     const p = (E.pedidos || []).find(function(x){ return x.id === id; });
+    if(p && p.situacao === "confirmado"){
+      const v = previaDoCancelamentoNaMaquete(p);
+      if(!v.pode) return pronto({ ok:false, erro:FRASE_O_SERVICO_JA_COMECOU_NA_MAQUETE });
+      if(!opcoes || opcoes.faixaVista !== v.faixa)
+        return pronto({ ok:false, motivo:"valor_mudou", erro:FRASE_O_VALOR_MUDOU_NA_MAQUETE });
+      p.acerto = { tipo:"cliente_cancelou", percentual:v.percentual, isento:false, multa:v.multa,
+                   devolucao:v.devolucao, credito:0, compensacaoDaProfissional:false,
+                   voltouParaABusca:false, problema:null };
+    }
     if(p){
       p.situacao = "cancelado";
       p.motivoDoCancelamento = "cliente";
@@ -608,14 +620,44 @@ const FONTE = {
                    "imprevisto":"imprevisto", "cliente-ausente":"clienteAusente" }[acao];
     if(!pode) return pronto({ ok:false, erro:"Não entendemos o que foi enviado." });
     if(acao === "imprevisto" && r.imprevisto) return pronto({ ok:true });
-    if(acao === "cliente-ausente" && r.clienteAusente) return pronto({ ok:true });
-    if(!e.pode[pode]) return pronto({ ok:false, erro:fraseDoPassoQueNaoAbriu(acao, r, e) });
+    if(!e.pode[pode]) return pronto({ ok:false, erro:fraseDoPassoQueNaoAbriu(acao, r, e, s) });
+    /* R37: antes do "Cheguei", o imprevisto é o cancelar dela */
+    if(acao === "imprevisto" && !r.chegou && e.passo !== "conferindo")
+      return pronto({ ok:false, erro:"Antes de chegar, o imprevisto é pelo Não vou conseguir ir: a tela "
+                                     + "mostra o que acontece." });
+    if(acao === "cliente-ausente"){
+      /* R37: o serviço desta vaga acaba aqui, com a compensação dela */
+      const c = acertoDoCancelamento("cliente", "menos_de_3h", valorPagoDoServicoNaMaquete(s),
+                                     Math.round(Number(s.receber || 0) * 100));
+      encerrarNaMaquete(s, { tipo:"cliente_ausente", consequencia:"nenhuma", substituta:false,
+                             compensacao: c.multa / 100, faltas: FONTE.ler.faltasDela() });
+      return pronto({ ok:true });
+    }
     if(acao === "confirmar") r.confirmou = agora;
     if(acao === "a-caminho"){ r.aCaminho = agora; r.confirmou = r.confirmou || agora; }
     if(acao === "terminei") r.terminou = agora;
     if(acao === "imprevisto") r.imprevisto = agora;
-    if(acao === "cliente-ausente") r.clienteAusente = agora;
     salvar();
+    pronto({ ok:true });
+  },
+
+  /* "Não vou conseguir ir" (R37), antes do "Cheguei": a consequência da
+     faixa de agora (a mesma conta do servidor). Na maquete, as faltas não
+     ficam guardadas: a tela diz o que aconteceria. */
+  cancelarOServicoDela: function(d, pronto){
+    const s = servicoDaAgendaNaMaquete(E.servicoAberto);
+    if(!s) return pronto({ ok:false, erro:"Não achamos esse serviço." });
+    const v = previaDelaNaMaquete(s);
+    if(!v.pode) return pronto({ ok:false, erro:"A janela deste serviço já terminou." });
+    if(!d || d.consequencia !== v.consequencia)
+      return pronto({ ok:false, motivo:"valor_mudou", erro:FRASE_A_CONSEQUENCIA_MUDOU_NA_MAQUETE });
+    const agora = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
+    const ate = new Date(agora + CANCELAMENTO.diasDepoisDasOutras * 86400000);
+    encerrarNaMaquete(s, { tipo:"diarista_cancelou", consequencia:v.consequencia, substituta:v.substituta,
+                           compensacao:0,
+                           faltas: v.consequencia === "falta"
+                             ? { emNoventaDias:1, depoisDasOutrasAte: diaCurto(isoDoDia(ate)), pausada:false }
+                             : FONTE.ler.faltasDela() });
     pronto({ ok:true });
   },
 
@@ -894,9 +936,12 @@ const FONTE = {
       return FONTE.ler.quemVai(p).map(function(){ return confirmado ? "exemplo" : ""; });
     },
 
-    /* Na maquete, cancelar sempre pode (e é sempre sem custo). */
+    /* Cancelar: sem custo esperando o pagamento e na busca; o confirmado,
+       até o início da janela (R37, com o valor da tabela antes). */
     podeCancelar: function(p){
-      return !!p && p.situacao !== "cancelado" && p.situacao !== "concluido";
+      if(!p || p.situacao === "cancelado" || p.situacao === "concluido") return false;
+      if(p.situacao === "confirmado") return previaDoCancelamentoNaMaquete(p).pode;
+      return true;
     },
 
     /* O botão de pagar um pedido parado esperando o pagamento: na maquete,
@@ -965,6 +1010,21 @@ const FONTE = {
     diaDela: function(a){
       const s = servicoDaAgendaNaMaquete(a);
       return s ? diaDelaNaMaquete(s) : null;
+    },
+    /* R37: o serviço que deixou de ser dela (ela cancelou, ou a cliente não
+       estava em casa), só na memória desta visita */
+    encerradoNoDia: function(a){
+      const x = ENCERRADO_NA_MAQUETE;
+      return (x && a && x.chave === "servico:" + a.oportunidadeId + ":" + a.data)
+        ? JSON.parse(JSON.stringify(x.valor)) : null;
+    },
+    /* R37: as faltas dela. Na maquete não há faltas guardadas: nada a dizer. */
+    faltasDela: function(){
+      return { emNoventaDias: 0, depoisDasOutrasAte: "", pausada: false };
+    },
+    /* R37: o valor ANTES, pela mesma tabela do servidor (dados.js) */
+    previaDoCancelamento: function(p){
+      return previaDoCancelamentoNaMaquete(p);
     },
     diaDoPedido: function(id){
       const p = (E.pedidos || []).find(function(x){ return x.id === id; });
@@ -1065,8 +1125,102 @@ function emMinutosNaMaquete(iso, r, aceito){
 
 function estadoDoDiaNaMaquete(s){
   const agora = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
-  return estadoEmMinutos(emMinutosNaMaquete(s.data, registroDoDiaNaMaquete(s), s.aceitoEm),
-                         s.inicio, s.fim, minutosDoDiaNaMaquete(s.data, agora));
+  const r = registroDoDiaNaMaquete(s);
+  /* R37: "a cliente não está em casa" pede que ela tenha chamado pela conversa */
+  const emMinutos = Object.assign(emMinutosNaMaquete(s.data, r, s.aceitoEm),
+                                  { chamou: !!r.chegou && chamouNaMaquete(s) });
+  return estadoEmMinutos(emMinutos, s.inicio, s.fim, minutosDoDiaNaMaquete(s.data, agora));
+}
+
+/* ------------------------------------------------------------------------
+   O CANCELAMENTO E A FALTA NA MAQUETE (R37): a mesma tabela do servidor
+   (dados.js, CANCELAMENTO; regras.py, seção 15). Nada é cobrado nem
+   devolvido aqui: o pedido guarda o que aconteceria.
+   ------------------------------------------------------------------------ */
+/* as mesmas frases do servidor (cancelamento.py e rotas/pedidos.py; um teste compara) */
+const FRASE_O_VALOR_MUDOU_NA_MAQUETE = "O valor mudou enquanto você olhava. Confira de novo antes de "
+  + "confirmar.";
+const FRASE_A_CONSEQUENCIA_MUDOU_NA_MAQUETE = "O que acontece mudou enquanto você olhava. Confira de "
+  + "novo antes de confirmar.";
+const FRASE_O_SERVICO_JA_COMECOU_NA_MAQUETE = "O serviço já começou: por aqui não dá mais para cancelar. "
+  + "Fale com a nossa equipe.";
+
+/* O que aconteceu com o serviço que deixou de ser dela: só na memória */
+let ENCERRADO_NA_MAQUETE = null;
+
+function encerrarNaMaquete(s, valor){
+  ENCERRADO_NA_MAQUETE = { chave: chaveDoDiaNaMaquete(s), valor: valor };
+  /* a vaga deixou de ser dela: o serviço sai da agenda */
+  const d = E.diarista;
+  if(d && Array.isArray(d.agenda))
+    d.agenda = d.agenda.filter(function(x){ return !(x.oportunidadeId === s.oportunidadeId && x.data === s.data); });
+  salvar();
+}
+
+/* Ela escreveu para a cliente na conversa deste serviço? (a maquete não
+   guarda a hora da conversa no relógio do dia: qualquer mensagem dela vale) */
+function chamouNaMaquete(s){
+  const reg = registroDaConversa(chaveDaConversaDoServico(s), false);
+  return !!(reg && (reg.mensagens || []).some(function(m){ return m.de === "diarista"; }));
+}
+
+/* O que a cliente pagou pela parte desta vaga (centavos): o pedido de
+   origem, refeito pela tabela; sem ele, o valor dela (a trava do art. 412
+   iria no mesmo lugar). */
+function valorPagoDoServicoNaMaquete(s){
+  const conta = s && s.pedido ? calcularPedido(s.pedido) : null;
+  if(conta && conta.total) return Math.round(conta.total * 100 / (conta.quantidade || 1));
+  return Math.round(Number((s && s.receber) || 0) * 100);
+}
+
+function inicioDoPedidoNaMaquete(p){
+  return momentoDoDiaNaMaquete(dataDoPedidoNaMaquete(p), janelaDoPedidoNaMaquete(p).inicio * 60);
+}
+
+function quandoDoMomentoNaMaquete(ms, agora){
+  const iso = isoDoDia(new Date(ms));
+  return quandoNaMaquete(iso, minutosDoDiaNaMaquete(iso, ms), agora);
+}
+
+function previaDoCancelamentoNaMaquete(p){
+  const nada = { pode:false, semCusto:false, faixa:null, percentual:0, multa:0, devolucao:0, proximaFaixa:null };
+  if(!p) return nada;
+  if(p.situacao === "aguardando_pagamento" || p.situacao === "buscando" || p.situacao === "aguardando_segunda")
+    return Object.assign({}, nada, { pode:true, semCusto:true,
+                                     devolucao: p.situacao === "aguardando_pagamento" ? 0 : Number(p.total || 0) });
+  if(p.situacao !== "confirmado") return nada;
+  const relogio = relogioDoDiaNaMaquete("pedido:" + p.id);
+  const agora = relogio.getTime();
+  const inicio = inicioDoPedidoNaMaquete(p);
+  if(agora >= inicio || registroDoPedidoNaMaquete(p).chegou) return nada;
+  const minutos = (inicio - agora) / 60000;
+  const faixa = faixaDoCancelamento(minutos);
+  const conta = calcularPedido(p);
+  const repasse = conta ? Math.round(conta.repasseUnitario * 100) : 0;
+  let multa = 0, devolucao = 0;
+  partesDoValor(Math.round(Number(p.total || 0) * 100), Number(p.quantidade) === 2 ? 2 : 1).forEach(function(parte){
+    const c = acertoDoCancelamento("cliente", faixa, parte, repasse);
+    multa += c.multa; devolucao += c.devolucao;
+  });
+  let proxima = null;
+  if(faixa !== "menos_de_3h"){
+    const horas = faixa === "mais_de_24h" ? CANCELAMENTO.horasParaCancelarSemCusto : CANCELAMENTO.horasEmCimaDaHora;
+    proxima = { quando: quandoDoMomentoNaMaquete(inicio - horas * 3600000, relogio),
+                percentual: PERCENTUAL_DO_CANCELAMENTO[faixa === "mais_de_24h" ? "entre_24h_e_3h" : "menos_de_3h"] };
+  }
+  return { pode:true, semCusto: multa === 0, faixa:faixa, percentual: PERCENTUAL_DO_CANCELAMENTO[faixa],
+           multa: multa / 100, devolucao: devolucao / 100, proximaFaixa: proxima };
+}
+
+/* O que acontece se ela cancelar agora (a mesma conta do servidor). */
+function previaDelaNaMaquete(s){
+  const r = registroDoDiaNaMaquete(s), e = estadoDoDiaNaMaquete(s);
+  const agora = relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime();
+  const inicio = momentoDoDiaNaMaquete(s.data, s.inicio * 60), fim = momentoDoDiaNaMaquete(s.data, s.fim * 60);
+  const minutos = (inicio - agora) / 60000;
+  const faixa = faixaDoCancelamento(minutos);
+  return { pode: !r.chegou && e.passo !== "conferindo" && agora < fim, faixa: faixa,
+           consequencia: CONSEQUENCIA_PARA_ELA[faixa], substituta: haTempoParaASubstituta(minutos) };
 }
 
 /* O dia do pedido; o pedido de exemplo sem dia (o dos testes) conta como hoje. */
@@ -1114,8 +1268,9 @@ function diaDelaNaMaquete(s){
     passo: e.passo, problema: e.problema,
     janelaAberta: minutosDoDiaNaMaquete(s.data, agora.getTime()) < s.fim * 60,
     pode: { confirmar: e.pode.confirmar, sair: e.pode.sair, chegar: e.pode.chegar, terminar: e.pode.terminar,
-            imprevisto: e.pode.imprevisto && !r.imprevisto,
-            clienteAusente: e.pode.clienteAusente && !r.clienteAusente,
+            /* R37: antes do "Cheguei", o imprevisto é o cancelar dela */
+            imprevisto: e.pode.imprevisto && !r.imprevisto && (!!r.chegou || e.passo === "conferindo"),
+            clienteAusente: e.pode.clienteAusente,
             avaliar: e.pode.avaliar && !r.avaliou },
     abre: { confirmar: horaEscrita(e.abre.confirmar), sair: horaEscrita(e.abre.sair),
             chegar: horaEscrita(e.abre.chegar) },
@@ -1123,8 +1278,14 @@ function diaDelaNaMaquete(s){
     selfiesRestantes: e.selfiesRestantes,
     horas: horasDoDiaNaMaquete(s.data, r, e),
     chegadaPelaEquipe: !!r.chegadaPelaEquipe,
-    avisou: { imprevisto: !!r.imprevisto, clienteAusente: !!r.clienteAusente },
+    avisou: { imprevisto: !!r.imprevisto, clienteAusente: false },
     avaliou: !!r.avaliou,
+    /* R37 (os mesmos campos do app) */
+    clienteAusenteAbre: e.clienteAusenteAbre !== null ? horaEscrita(e.clienteAusenteAbre) : "",
+    chamou: !!r.chegou && chamouNaMaquete(s),
+    cancelar: previaDelaNaMaquete(s),
+    decisaoDoProblema: null,
+    faltas: FONTE.ler.faltasDela(),
   };
 }
 
@@ -1152,7 +1313,7 @@ function diaDoPedidoNaMaquete(p){
 }
 
 /* A frase do passo que ainda não abriu (ou que já fechou), a mesma do servidor. */
-function fraseDoPassoQueNaoAbriu(acao, r, e){
+function fraseDoPassoQueNaoAbriu(acao, r, e, s){
   const fechou = "A janela deste serviço já terminou.";
   /* "imprevisto" só fica fechado com a janela terminada (ou o serviço) */
   const naJanela = e.pode.imprevisto;
@@ -1160,9 +1321,17 @@ function fraseDoPassoQueNaoAbriu(acao, r, e){
     return "Agora uma pessoa da nossa equipe confere. Ela já foi avisada.";
   if(acao === "terminei" && e.passo === "conferindo")
     return "A nossa equipe ainda está confirmando a sua chegada. Ela já foi avisada.";
-  if((acao === "cheguei" || acao === "cliente-ausente") && !r.aCaminho && naJanela)
-    return "Antes, toque em Estou a caminho.";
-  if(acao === "terminei" && !r.chegou && naJanela) return "Antes, toque em Cheguei.";
+  if(acao === "cheguei" && !r.aCaminho && naJanela) return "Antes, toque em Estou a caminho.";
+  if((acao === "terminei" || acao === "cliente-ausente") && !r.chegou && naJanela)
+    return "Antes, toque em Cheguei.";
+  /* R37: "a cliente não está em casa": a espera, e depois a conversa */
+  if(acao === "cliente-ausente" && naJanela && s){
+    const agora = minutosDoDiaNaMaquete(s.data, relogioDoDiaNaMaquete(chaveDoDiaNaMaquete(s)).getTime());
+    if(e.clienteAusenteAbre !== null && agora < e.clienteAusenteAbre)
+      return "Espere mais um pouco: você pode marcar que a cliente não está a partir das "
+        + horaEscrita(e.clienteAusenteAbre) + ".";
+    return "Antes, chame a cliente pela conversa.";
+  }
   if(!naJanela) return fechou;
   if(acao === "confirmar")
     return "A confirmação abre às " + horaEscrita(e.abre.confirmar) + " do dia do serviço.";
