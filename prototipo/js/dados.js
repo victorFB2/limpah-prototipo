@@ -1452,8 +1452,8 @@ const RESPOSTA_MAXIMA = 2000;
    historico_para_ela; um teste do app compara). Quem decidiu nunca aparece:
    quem responde é a Limpah.
    O que aconteceu em cada linha fica em "tipo" ("recusou", "respondeu"...;
-   no servidor, "acao"): nas telas, "acao" é o nome do código pronto dos
-   botões (a checagem do onclick, no app, olha todo "acao:"). */
+   no servidor, "acao"): nas telas, "acao" lembraria o data-acao dos
+   botões, e um nome só para cada coisa evita confusão. */
 function situacaoPelaTrilha(trilha){
   const linhas = Array.isArray(trilha) ? trilha : [];
   const daEquipe = Object.keys(DECISOES_DA_EQUIPE).map(function(n){ return DECISOES_DA_EQUIPE[n].acao; });

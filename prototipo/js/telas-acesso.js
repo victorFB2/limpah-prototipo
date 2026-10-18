@@ -53,7 +53,7 @@ function splashSemConexao(){
   return ''
   + '<div style="margin-top:46px;display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:320px">'
   +   '<div style="font-size:14px;line-height:1.5">' + esc(SPLASH_SEM_CONEXAO) + '</div>'
-  +   '<button class="btn btn-claro" onclick="tentarArranqueDeNovo()">Tentar de novo</button>'
+  +   '<button class="btn btn-claro" data-acao="tentarArranqueDeNovo">Tentar de novo</button>'
   + '</div>';
 }
 
@@ -77,14 +77,14 @@ TELAS.perfil = {
     +   '<h2 class="titulo" style="text-align:center">Como você deseja usar o Limpah?</h2>'
     +   '<p class="apoio" style="text-align:center">Escolha uma opção para continuar</p>'
 
-    +   '<button class="opcao" onclick="escolherPerfil(\'cliente\')">'
+    +   '<button class="opcao" data-acao="escolherPerfil" data-perfil="cliente">'
     +     '<div class="icone">' + icone("casaCoracao", 22) + '</div>'
     +     '<div class="txt"><b>Contratar um serviço</b>'
     +       '<span>Encontre a diarista ideal para a sua casa de forma rápida e segura.</span></div>'
     +     '<div class="seta">›</div>'
     +   '</button>'
 
-    +   '<button class="opcao" onclick="escolherPerfil(\'diarista\')">'
+    +   '<button class="opcao" data-acao="escolherPerfil" data-perfil="diarista">'
     +     '<div class="icone">' + icone("maleta", 22) + '</div>'
     +     '<div class="txt"><b>Trabalhar como diarista</b>'
     +       '<span>Receba oportunidades de trabalho e aumente sua renda.</span></div>'
@@ -92,7 +92,7 @@ TELAS.perfil = {
     +   '</button>'
 
     +   '<p class="apoio" style="text-align:center;margin-top:20px">'
-    +     'Já possui uma conta? <a href="#" onclick="ir(\'login\');return false;" '
+    +     'Já possui uma conta? <a href="#" data-acao="ir" data-tela="login" '
     +     'style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
     + '</div>';
   }
@@ -128,27 +128,27 @@ TELAS.login = {
     +       '<input id="log-senha" type="password" placeholder="Digite sua senha" '
     +         'autocomplete="current-password"' + soNaMaquete(' value="123456"')
     +         ' style="padding-right:46px">'
-    +       '<button onclick="verSenha(\'log-senha\')" aria-label="Mostrar senha" '
+    +       '<button data-acao="verSenha" data-campo="log-senha" aria-label="Mostrar senha" '
     +         'class="olho">\ud83d\udc41</button>'
     +     '</div>'
     +     erroDoCampo("log-erro", "login", "") + '</div>'
 
     +   '<p style="text-align:right;margin:-4px 0 18px">'
-    +     '<a href="#" onclick="ir(\'recuperar\');return false;" '
+    +     '<a href="#" data-acao="ir" data-tela="recuperar" '
     +     'style="color:var(--roxo);font-size:13px;font-weight:600;text-decoration:none">Esqueceu sua senha?</a></p>'
 
-    +   '<button class="btn btn-principal" onclick="fazerLogin(this)">Entrar</button>'
+    +   '<button class="btn btn-principal" data-acao="fazerLogin">Entrar</button>'
 
     +   '<div style="display:flex;align-items:center;gap:10px;margin:20px 0;color:var(--suave);font-size:12px">'
     +     '<div style="flex:1;height:1px;background:var(--borda)"></div>ou'
     +     '<div style="flex:1;height:1px;background:var(--borda)"></div></div>'
 
-    +   '<button class="btn btn-claro" onclick="entrarComOutraConta(\'google\')">Entrar com Google</button>'
-    +   '<button class="btn btn-claro" onclick="entrarComOutraConta(\'apple\')">Entrar com Apple</button>'
+    +   '<button class="btn btn-claro" data-acao="entrarComOutraConta" data-conta="google">Entrar com Google</button>'
+    +   '<button class="btn btn-claro" data-acao="entrarComOutraConta" data-conta="apple">Entrar com Apple</button>'
     +   erroDoCampo("log-outra-erro", "login", "outra_conta")
 
     +   '<p class="apoio" style="text-align:center;margin-top:22px">'
-    +     'Ainda não tem conta? <a href="#" onclick="ir(\'perfil\');return false;" '
+    +     'Ainda não tem conta? <a href="#" data-acao="ir" data-tela="perfil" '
     +     'style="color:var(--roxo);font-weight:700;text-decoration:none">Cadastre-se</a></p>'
 
     + '</div>';
@@ -243,12 +243,12 @@ TELAS.recuperar = {
     +       valorJaDigitado(CONTATO_DA_RECUPERACAO) + '>'
     +     erroDoCampo("rec-quem-erro", "recuperar", "email_ou_telefone") + '</div>'
     +   erroDoCampo("rec-erro", "recuperar", "")
-    +   '<button class="btn btn-principal" onclick="pedirCodigoDaSenha(this)">Enviar código</button>'
+    +   '<button class="btn btn-principal" data-acao="pedirCodigoDaSenha">Enviar código</button>'
     /* só no app (A28, revisão da 4): quem já recebeu um código — inclusive
        um que ela não pediu agora — vai direto digitá-lo, sem pedir outro */
     +   (FONTE.ehMaquete ? ""
-      : '<button class="btn btn-texto" onclick="jaTenhoUmCodigo()">Já tenho um código</button>')
-    +   '<button class="btn btn-texto" onclick="ir(\'login\')">Voltar para o login</button>'
+      : '<button class="btn btn-texto" data-acao="jaTenhoUmCodigo">Já tenho um código</button>')
+    +   '<button class="btn btn-texto" data-acao="ir" data-tela="login">Voltar para o login</button>'
     + '</div>';
   }
 };
@@ -303,8 +303,8 @@ TELAS.recuperarEnviado = {
     +     'do celular cadastrado em alguns instantes.</p>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'recuperarNovaSenha\')">Digitar o código</button>'
-    +   '<button class="btn btn-texto" onclick="ir(\'login\')">Voltar para o login</button>'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="recuperarNovaSenha">Digitar o código</button>'
+    +   '<button class="btn btn-texto" data-acao="ir" data-tela="login">Voltar para o login</button>'
     + '</div>';
   }
 };
@@ -335,7 +335,7 @@ TELAS.recuperarNovaSenha = {
     +     '<div style="position:relative">'
     +       '<input id="rns-senha" type="password" placeholder="Crie uma senha" '
     +         'autocomplete="new-password" style="padding-right:46px">'
-    +       '<button onclick="verSenha(\'rns-senha\')" aria-label="Mostrar senha" class="olho">'
+    +       '<button data-acao="verSenha" data-campo="rns-senha" aria-label="Mostrar senha" class="olho">'
     +         '👁</button>'
     +     '</div>'
     +     erroDoCampo("rns-senha-erro", "recuperarNovaSenha", "senha") + '</div>'
@@ -347,10 +347,10 @@ TELAS.recuperarNovaSenha = {
     +     '<div>Qualquer código de 6 números serve.</div></div>')
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" id="rns-salvar" onclick="salvarSenhaNova(this)">Salvar nova senha</button>'
-    +   '<button class="btn btn-contorno" id="rns-reenviar" onclick="mandarCodigoDaSenhaDeNovo(this)"'
+    +   '<button class="btn btn-principal" id="rns-salvar" data-acao="salvarSenhaNova">Salvar nova senha</button>'
+    +   '<button class="btn btn-contorno" id="rns-reenviar" data-acao="mandarCodigoDaSenhaDeNovo"'
     +     (falta > 0 ? ' disabled' : '') + '>' + esc(textoDoMandarDeNovo(falta)) + '</button>'
-    +   '<button class="btn btn-texto" onclick="ir(\'login\')">Voltar para o login</button>'
+    +   '<button class="btn btn-texto" data-acao="ir" data-tela="login">Voltar para o login</button>'
     + '</div>';
   },
   aoEntrar: function(){
@@ -438,7 +438,7 @@ TELAS.senhaTrocada = {
     +     'outros aparelhos.</p>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="continuarDepoisDaSenhaNova()">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="continuarDepoisDaSenhaNova">Continuar</button>'
     + '</div>';
   }
 };
@@ -535,16 +535,16 @@ TELAS.cadastroCliente = {
     +     '<div style="position:relative">'
     +       '<input id="cc-senha" type="password" placeholder="Crie uma senha" '
     +         'autocomplete="new-password" style="padding-right:46px">'
-    +       '<button onclick="verSenha(\'cc-senha\')" aria-label="Mostrar senha" class="olho">'
+    +       '<button data-acao="verSenha" data-campo="cc-senha" aria-label="Mostrar senha" class="olho">'
     +         '👁</button>'
     +     '</div>'
     +     '<div class="erro-do-campo" id="cc-senha-erro">' + esc(fraseDaSenha) + '</div></div>'
     +   erroDoCampo("cc-erro", "cadastroCliente", "")
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="cadastroClientePasso1(this)">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="cadastroClientePasso1">Continuar</button>'
     +   '<p class="apoio" style="text-align:center;margin:12px 0 0">Já tem uma conta? '
-    +     '<a href="#" onclick="ir(\'login\');return false;" style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
+    +     '<a href="#" data-acao="ir" data-tela="login" style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
     + '</div>';
   }
 };
@@ -606,7 +606,7 @@ TELAS.cadastroClienteEndereco = {
     +   '<div class="campo"><label>Cidade e estado</label><input id="ce-cidade" type="text" value="' + esc(cidadeEstado) + '"></div>'
     +   avisoDePrivacidadeDoEndereco()
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="cadastroClientePasso2()">Continuar</button></div>';
+    + '<div class="rodape"><button class="btn btn-principal" data-acao="cadastroClientePasso2">Continuar</button></div>';
   },
   aoEntrar: function(){ pedirBairrosSeFaltar(); }
 };
@@ -672,12 +672,12 @@ function campoDeBairro(id, atual, tela){
   return '<div class="campo"><label>Bairro</label>'
     +   '<input id="' + esc(id) + '-busca" class="busca-de-bairro" type="search" '
     +     'autocomplete="off" placeholder="🔍 Digite para achar o bairro" '
-    +     'oninput="filtrarBairrosDaLista(\'' + idSeguro(id) + '\')">'
+    +     'data-acao-input="filtrarBairrosDaLista" data-lista="' + idSeguro(id) + '">'
     +   '<div class="seletor"><select id="' + esc(id) + '">' + opcoesDeBairro(atual) + '</select></div>'
     +   erroDoCampo(id + "-erro", tela, "bairro")
     +   '<p class="ajuda">A lista tem os distritos da cidade. Não achou o nome do seu bairro? '
     +     'Escolha o distrito onde ele fica. '
-    +     '<a href="#" onclick="verOndeAtendemos();return false;" class="link-roxo">Veja onde atendemos</a></p>'
+    +     '<a href="#" data-acao="verOndeAtendemos" class="link-roxo">Veja onde atendemos</a></p>'
     + '</div>';
 }
 
@@ -777,7 +777,7 @@ TELAS.ondeAtendemos = {
     let lista;
     if(area){
       lista = '<div class="campo"><input id="onde-busca" class="busca-de-bairro" type="search" '
-        +   'autocomplete="off" placeholder="🔍 Procure o seu bairro" oninput="filtrarOndeAtendemos()"></div>'
+        +   'autocomplete="off" placeholder="🔍 Procure o seu bairro" data-acao-input="filtrarOndeAtendemos"></div>'
         + '<div class="cartao lista-de-bairros" id="onde-lista">'
         + area.bairros.map(function(b){
             return '<div data-bairro="' + esc(b) + '"><span class="ok">✓</span>' + esc(b) + '</div>';
@@ -787,7 +787,7 @@ TELAS.ondeAtendemos = {
         +   'A lista usa os nomes dos distritos: procure o distrito onde fica a casa.</p>';
     } else if(erro){
       lista = '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
-        + '<button class="btn btn-contorno" onclick="tentarOsBairrosDeNovo()">Tentar de novo</button>';
+        + '<button class="btn btn-contorno" data-acao="tentarOsBairrosDeNovo">Tentar de novo</button>';
     } else {
       lista = '<p class="apoio">Carregando os bairros…</p>';
     }
@@ -803,7 +803,7 @@ TELAS.ondeAtendemos = {
     +     'A lista usa os nomes dos distritos da Prefeitura: escolha o distrito onde a casa fica. '
     +     'Fora da cidade, ainda não chegamos 😔 Estamos começando por aqui, para cuidar bem de cada casa.</div></div>'
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+    + '<div class="rodape"><button class="btn btn-principal" data-acao="voltar">Voltar</button></div>';
   },
   aoEntrar: function(){
     if(FONTE.ler.areaAtendida() || (ERRO_DOS_BAIRROS && ERRO_DOS_BAIRROS.navegacao === NAVEGACAO)) return;
@@ -847,7 +847,7 @@ TELAS.cadastroClienteTermos = {
 
     /* "Quero receber ofertas" é outro consentimento (LGPD) e ainda não é
        guardado: no app ele não aparece, para não prometer o que não existe */
-    +   soNaMaquete('<div class="chave" onclick="alternarChaveVisual(this)">'
+    +   soNaMaquete('<div class="chave" data-acao="alternarChaveVisual">'
     +     '<div class="txt"><b>Quero receber ofertas</b><span>Opcional. Você pode desativar quando quiser.</span></div>'
     +     '<div class="botao"></div></div>')
 
@@ -857,7 +857,7 @@ TELAS.cadastroClienteTermos = {
     +     'Todas as diaristas passam por verificação de documentos e antecedentes.</div></div>')
     +   erroDoCampo("ct-erro", "cadastroClienteTermos", "")
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="criarContaCliente(this)">Criar minha conta</button></div>';
+    + '<div class="rodape"><button class="btn btn-principal" data-acao="criarContaCliente">Criar minha conta</button></div>';
   }
 };
 
@@ -870,11 +870,11 @@ function chaveDosTermos(papel){
   const doQue = (papel === "diarista") ? "Regras de uso da plataforma."
                                        : "Regras de uso da plataforma e política de cancelamento.";
   return ''
-  + '<div class="chave" id="chave-termos" onclick="alternarChaveVisual(this)">'
+  + '<div class="chave" id="chave-termos" data-acao="alternarChaveVisual">'
   +   '<div class="txt"><b>Aceito os termos de uso</b><span>' + doQue + '</span></div>'
   +   '<div class="botao"></div></div>'
 
-  + '<div class="chave" id="chave-privacidade" onclick="alternarChaveVisual(this)">'
+  + '<div class="chave" id="chave-privacidade" data-acao="alternarChaveVisual">'
   +   '<div class="txt"><b>Aceito a política de privacidade</b><span>Como seus dados são usados e protegidos.</span></div>'
   +   '<div class="botao"></div></div>';
 }
@@ -929,12 +929,12 @@ TELAS.boasVindas = {
   html: function(){
     const nome = FONTE.ler.cliente().primeiroNome || "por aqui";
     const depois = FONTE.ler.depoisDasBoasVindas();
-    /* o destino escrito no botão (passando por idSeguro), e não decidido
-       dentro de uma função: o teste das armadilhas (testes.js) lê os
-       destinos no onclick */
+    /* o destino escrito no botão (data-tela, passando por idSeguro), e não
+       decidido dentro de uma função: o teste das armadilhas (testes.js) lê
+       os destinos nos toques */
     const principal = (depois.tela === "cadastrarCasa")
-      ? '<button class="btn btn-principal" onclick="abrirAFichaDaCasa(null,{limparHistorico:true})">'
-      : '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(depois.tela) + '\',{limparHistorico:true})">';
+      ? '<button class="btn btn-principal" data-acao="abrirAFichaDaCasa" data-limpar="1">'
+      : '<button class="btn btn-principal" data-acao="ir" data-tela="' + idSeguro(depois.tela) + '" data-limpar="1">';
     return ''
     + '<div class="centro">'
     +   '<div class="circulo-ok">✓</div>'
@@ -944,8 +944,7 @@ TELAS.boasVindas = {
     + '<div class="rodape">'
     +   principal + esc(depois.texto) + '</button>'
     +   (depois.agoraNao
-         ? '<button class="btn btn-texto" onclick="ir(\'' + idSeguro(telaInicialDeQuemEstaUsando())
-           + '\',{limparHistorico:true})">Agora não</button>'
+         ? '<button class="btn btn-texto" data-acao="ir" data-tela="' + idSeguro(telaInicialDeQuemEstaUsando()) + '" data-limpar="1">Agora não</button>'
          : '')
     +   erroDoCampo("casas-erro", "boasVindas", "")
     + '</div>';
@@ -981,23 +980,23 @@ TELAS.codigoCelular = {
     +     (c.telefone ? '<b>' + esc(c.telefone) + '</b>' : 'o seu celular') + '.'
     /* quem digitou o número errado volta ao passo 1 para corrigir (sem
        isto, ficava presa: o código novo ia de novo ao número errado) */
-    +     (c.podeCorrigirONumero ? ' Número errado? <a href="#" onclick="corrigirONumero();return false;" '
+    +     (c.podeCorrigirONumero ? ' Número errado? <a href="#" data-acao="corrigirONumero" '
     +       'style="color:var(--roxo);font-weight:700;text-decoration:none">Corrigir o número</a>' : '')
     +   '</p>'
     +   '<div class="campo"><label>Código</label>'
     +     '<input id="cod-codigo" class="codigo" type="text" inputmode="numeric" '
     +       'autocomplete="one-time-code" maxlength="7" placeholder="000000" enterkeyhint="done" '
-    +       'onkeydown="if(event.key===\'Enter\'){event.preventDefault();confirmarCodigoPeloTeclado();}">'
+    +       'data-acao-enter="confirmarCodigoPeloTeclado">'
     +     erroDoCampo("cod-erro", "codigoCelular", "codigo") + '</div>'
     +   '<p class="ajuda" id="cod-aviso">' + esc(c.aviso) + '</p>'
     +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
     +     '<div>Qualquer código de 6 números serve. Também dá para ver a tela de quem '
     +     'precisa aceitar os termos de novo, quando eles mudam.</div>'
-    +     '<button class="btn btn-contorno" onclick="ir(\'termosNovos\')">Ver a tela dos termos novos</button></div>')
+    +     '<button class="btn btn-contorno" data-acao="ir" data-tela="termosNovos">Ver a tela dos termos novos</button></div>')
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" id="cod-confirmar" onclick="confirmarCodigo(this)">Confirmar</button>'
-    +   '<button class="btn btn-contorno" id="cod-reenviar" onclick="mandarCodigoDeNovo(this)"'
+    +   '<button class="btn btn-principal" id="cod-confirmar" data-acao="confirmarCodigo">Confirmar</button>'
+    +   '<button class="btn btn-contorno" id="cod-reenviar" data-acao="mandarCodigoDeNovo"'
     +     (falta > 0 ? ' disabled' : '') + '>' + esc(textoDoMandarDeNovo(falta)) + '</button>'
     +   botaoDeSair("codigoCelular")
     + '</div>';
@@ -1100,7 +1099,7 @@ TELAS.termosNovos = {
     +   erroDoCampo("tn-erro", "termosNovos", "")
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="aceitarTermosNovos(this)">Aceitar e continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="aceitarTermosNovos">Aceitar e continuar</button>'
     +   botaoDeSair("termosNovos")
     + '</div>';
   }
@@ -1110,7 +1109,7 @@ TELAS.termosNovos = {
    botão só de texto, que diz "Enviando…" enquanto vai, e o lugar da frase
    de quando não deu para sair (sem internet). */
 function botaoDeSair(tela){
-  return '<button class="btn btn-texto" onclick="sairDaConta(this)">Sair da conta</button>'
+  return '<button class="btn btn-texto" data-acao="sairDaConta">Sair da conta</button>'
        + erroDoCampo("sair-erro", tela, "sair");
 }
 
@@ -1172,7 +1171,7 @@ TELAS.cadastroDiarista = {
     +     '<div style="position:relative">'
     +       '<input id="dia-senha" type="password" placeholder="Crie uma senha" '
     +         'autocomplete="new-password" style="padding-right:46px">'
-    +       '<button onclick="verSenha(\'dia-senha\')" aria-label="Mostrar senha" class="olho">'
+    +       '<button data-acao="verSenha" data-campo="dia-senha" aria-label="Mostrar senha" class="olho">'
     +         '👁</button>'
     +     '</div>'
     +     '<div class="erro-do-campo" id="dia-senha-erro">' + esc(fraseDaSenha) + '</div></div>'
@@ -1188,9 +1187,9 @@ TELAS.cadastroDiarista = {
     +     'Documento só depois, quando você decidir que vale a pena.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="salvarDadosDaDiarista(this)">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="salvarDadosDaDiarista">Continuar</button>'
     +   '<p class="apoio" style="text-align:center;margin:12px 0 0">Já tem uma conta? '
-    +     '<a href="#" onclick="ir(\'login\');return false;" style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
+    +     '<a href="#" data-acao="ir" data-tela="login" style="color:var(--roxo);font-weight:700;text-decoration:none">Entrar</a></p>'
     + '</div>';
   }
 };
@@ -1217,7 +1216,7 @@ TELAS.cadastroDiaristaTermos = {
     +   chaveDosTermos("diarista")
     +   erroDoCampo("dt-erro", "cadastroDiaristaTermos", "")
     + '</div>'
-    + '<div class="rodape"><button class="btn btn-principal" onclick="criarContaDaDiarista(this)">Criar minha conta</button></div>';
+    + '<div class="rodape"><button class="btn btn-principal" data-acao="criarContaDaDiarista">Criar minha conta</button></div>';
   }
 };
 
@@ -1252,7 +1251,7 @@ TELAS.diaristaEmBreve = {
     +     'Ela entra num dos próximos passos do protótipo.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-contorno" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
+    +   '<button class="btn btn-contorno" data-acao="ir" data-tela="diaristaHome" data-limpar="1">'
     +     'Voltar ao início</button>'
     + '</div>';
   }

@@ -254,8 +254,8 @@ const TELA_EM_BREVE = {
          +   '<p class="apoio">Ainda estamos preparando esta parte do aplicativo.</p>'
          + '</div>'
          + '<div class="rodape">'
-         +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button>'
-         +   (E.logado ? '<button class="btn btn-texto" onclick="sairDaConta(this)">Sair da conta</button>'
+         +   '<button class="btn btn-principal" data-acao="voltar">Voltar</button>'
+         +   (E.logado ? '<button class="btn btn-texto" data-acao="sairDaConta">Sair da conta</button>'
                        + '<div class="erro-do-campo" id="sair-erro"></div>' : '')
          + '</div>';
   }
@@ -389,19 +389,20 @@ function pararRelogios(){
    aspa simples: sem isso, um texto com apóstrofo dentro de um atributo
    escrito com aspas simples fecharia o atributo no meio.
 
-   ATENÇÃO: dentro de um atributo de evento (onclick="...") isto NÃO
-   protege — o navegador desfaz os escapes antes de rodar o código. Ali só
-   entra idSeguro(...), Number(...) ou texto fixo (ver idSeguro, abaixo). */
+   As telas não têm atributo de evento (onclick="..."): o toque é
+   data-acao e data-*, e o ouvinte único (OS TOQUES, no fim deste arquivo)
+   lê o valor do atributo como TEXTO, nunca como código. Nos data-*, só
+   entra esc(...), idSeguro(...), Number(...) ou texto fixo (um teste
+   automático confere). */
 function esc(txt){
   return String(txt == null ? "" : txt)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")
     .replace(/'/g,"&#39;");
 }
 
-/* O que vai para DENTRO de um onclick="...". Só letras sem acento,
-   números, dois-pontos e traço passam: um nome de tela, um id, uma data.
-   Número passa por Number(...). Um teste automático reprova qualquer outro
-   valor concatenado num atributo de evento. */
+/* Um id que vai para um data-* do toque (data-tela, data-pedido...). Só
+   letras sem acento, números, dois-pontos e traço passam: um nome de tela,
+   um id, uma data. Número passa por Number(...). */
 function idSeguro(x){ return String(x == null ? "" : x).replace(/[^A-Za-z0-9:\-]/g, ""); }
 
 /* O valor de um campo da tela, ou "" se o campo não está desenhado.
@@ -549,7 +550,7 @@ function desenharFotoReduzida(endereco, pronto){
 function cabecalho(titulo, extra){
   extra = extra || {};
   const botaoVoltar = extra.semVoltar ? "" :
-    '<button class="voltar" onclick="voltar()" aria-label="Voltar">‹</button>';
+    '<button class="voltar" data-acao="voltar" aria-label="Voltar">‹</button>';
   const direita = extra.passo
     ? '<span class="passo">' + esc(extra.passo) + '</span>'
     : (extra.passos ? passos(extra.passos[0], extra.passos[1]) : "");
@@ -571,7 +572,7 @@ function abas(ativa){
     { id:"perfil",    ic:"pessoa", nome:"Perfil" },
   ];
   return '<div class="abas">' + itens.map(function(i){
-    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="trocarAba(\'' + idSeguro(i.id) + '\')">'
+    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" data-acao="trocarAba" data-aba="' + idSeguro(i.id) + '">'
          + '<span class="ic">' + icone(i.ic, 21) + '</span>' + i.nome + '</button>';
   }).join("") + '</div>';
 }
@@ -828,6 +829,273 @@ function nomePeriodoComAJanela(id, textoDaJanela){
 
 
 /* --------------------------------------------------------------------------
+   OS TOQUES — o ouvinte único das telas (entrega 10, "a tranca das telas")
+
+   Nenhuma tela escreve onclick="..." (nem oninput, onchange, onkeydown).
+   O botão diz QUAL ação quer e com QUAIS dados, em atributos:
+
+     <button data-acao="ir" data-tela="login">
+     <input data-acao-input="anotar" data-pergunta="observacoes">
+
+   e um ouvinte só, no documento, acha o elemento tocado, lê o nome e chama
+   a função da lista fechada ACOES. Nome fora da lista não faz nada. Os
+   dados chegam como TEXTO (getAttribute), e o número por Number(): nada do
+   que está no atributo vira código.
+
+   Por que isso importa: com onclick no texto, a política de segurança do
+   app precisava deixar o navegador rodar código escrito na página
+   ('unsafe-inline'). Um texto maldoso que escapasse do esc() (um nome, um
+   recado) viraria comando na tela de outra pessoa. Sem atributo de
+   evento, a política só deixa rodar os arquivos do próprio site, e esse
+   texto, mesmo escapando, não roda (limpah/rotas/telas.py).
+
+   Um atributo para cada tipo de evento:
+     data-acao          o toque (click)
+     data-acao-input    cada letra digitada (input)
+     data-acao-change   a escolha numa lista ou de uma foto (change)
+     data-acao-enter    o Enter num campo (keydown, só a tecla Enter)
+     data-acao-submit   o envio de um formulário (as telas não têm hoje)
+
+   A ação recebe o elemento (o "this" do onclick de antes) e o evento. Os
+   testes conferem que toda data-acao escrita nas telas está na lista, e
+   que toda entrada da lista é usada (app/testes/test_telas_estaticas.py).
+   -------------------------------------------------------------------------- */
+
+/* O texto de um data-* do elemento ("" se ele não tiver). */
+function dadoDoToque(el, nome){
+  const v = (el && el.getAttribute) ? el.getAttribute("data-" + nome) : null;
+  return v == null ? "" : String(v);
+}
+
+/* Um número de um data-*: o que não for número vira NaN, que não acha nada
+   (como o Number(...) que ia escrito no onclick). */
+function numeroDoToque(el, nome){ return Number(dadoDoToque(el, nome)); }
+
+function temODado(el, nome){
+  return !!(el && el.getAttribute && el.getAttribute("data-" + nome) != null);
+}
+
+/* data-limpar="1" é o { limparHistorico:true } do ir() de antes. */
+function opcoesDoToque(el){
+  return dadoDoToque(el, "limpar") === "1" ? { limparHistorico:true } : undefined;
+}
+
+/* A LISTA FECHADA. Cada entrada chama a função de mesmo nome (os testes da
+   maquete seguem o nome até ela), com os dados do atributo, na ordem de
+   antes. As funções são chamadas pelo nome na hora do toque, e não
+   guardadas aqui: algumas só existem na maquete, e um teste pode trocar
+   uma delas (o ir) por outra que só anota o destino. */
+const ACOES = {
+  /* a navegação */
+  ir:                     function(el){ ir(dadoDoToque(el, "tela"), opcoesDoToque(el)); },
+  voltar:                 function(){ voltar(); },
+  trocarAba:              function(el){ trocarAba(dadoDoToque(el, "aba")); },
+  recarregar:             function(){ location.reload(); },
+  reiniciarPrototipo:     function(){ reiniciarPrototipo(); },
+
+  /* entrar, criar a conta, a senha e o código (telas-acesso.js) */
+  tentarArranqueDeNovo:   function(){ tentarArranqueDeNovo(); },
+  escolherPerfil:         function(el){ escolherPerfil(dadoDoToque(el, "perfil")); },
+  verSenha:               function(el){ verSenha(dadoDoToque(el, "campo")); },
+  fazerLogin:             function(el){ fazerLogin(el); },
+  entrarComOutraConta:    function(el){ entrarComOutraConta(dadoDoToque(el, "conta")); },
+  pedirCodigoDaSenha:     function(el){ pedirCodigoDaSenha(el); },
+  jaTenhoUmCodigo:        function(){ jaTenhoUmCodigo(); },
+  salvarSenhaNova:        function(el){ salvarSenhaNova(el); },
+  mandarCodigoDaSenhaDeNovo: function(el){ mandarCodigoDaSenhaDeNovo(el); },
+  continuarDepoisDaSenhaNova: function(){ continuarDepoisDaSenhaNova(); },
+  cadastroClientePasso1:  function(el){ cadastroClientePasso1(el); },
+  cadastroClientePasso2:  function(){ cadastroClientePasso2(); },
+  filtrarBairrosDaLista:  function(el){ filtrarBairrosDaLista(dadoDoToque(el, "lista")); },
+  verOndeAtendemos:       function(){ verOndeAtendemos(); },
+  filtrarOndeAtendemos:   function(){ filtrarOndeAtendemos(); },
+  tentarOsBairrosDeNovo:  function(){ tentarOsBairrosDeNovo(); },
+  alternarChaveVisual:    function(el){ alternarChaveVisual(el); },
+  criarContaCliente:      function(el){ criarContaCliente(el); },
+  corrigirONumero:        function(){ corrigirONumero(); },
+  confirmarCodigoPeloTeclado: function(){ confirmarCodigoPeloTeclado(); },
+  confirmarCodigo:        function(el){ confirmarCodigo(el); },
+  mandarCodigoDeNovo:     function(el){ mandarCodigoDeNovo(el); },
+  aceitarTermosNovos:     function(el){ aceitarTermosNovos(el); },
+  sairDaConta:            function(el){ sairDaConta(el); },
+  salvarDadosDaDiarista:  function(el){ salvarDadosDaDiarista(el); },
+  criarContaDaDiarista:   function(el){ criarContaDaDiarista(el); },
+
+  /* o cliente: o início, as casas e o pedido (telas-cliente.js) */
+  abrirPedido:            function(el){ abrirPedido(dadoDoToque(el, "pedido")); },
+  abrirPerfil:            function(el){ abrirPerfil(numeroDoToque(el, "profissional")); },
+  comecarPedido:          function(){ comecarPedido(); },
+  tentarOsPedidosDeNovo:  function(){ tentarOsPedidosDeNovo(); },
+  escolherCategoria:      function(el){ escolherCategoria(dadoDoToque(el, "categoria")); },
+  usarCasa:               function(el){ usarCasa(dadoDoToque(el, "casa")); },
+  editarCasa:             function(el){ editarCasa(dadoDoToque(el, "casa")); },
+  tentarAsCasasDeNovo:    function(){ tentarAsCasasDeNovo(); },
+  novaCasa:               function(){ novaCasa(); },
+  abrirAFichaDaCasa:      function(el){ abrirAFichaDaCasa(null, opcoesDoToque(el)); },
+  escolherTipoDeImovel:   function(el){ escolherTipoDeImovel(dadoDoToque(el, "tipo")); },
+  contarNaCasa:           function(el){ contarNaCasa(dadoDoToque(el, "campo"), numeroDoToque(el, "quanto")); },
+  salvarCasa:             function(el){ salvarCasa(el); },
+  apagarCasa:             function(el){ apagarCasa(dadoDoToque(el, "casa"), el); },
+  escolherData:           function(el){ escolherData(dadoDoToque(el, "data")); },
+  escolherPeriodo:        function(el){ escolherPeriodo(dadoDoToque(el, "periodo")); },
+  escolherDataDoCalendario: function(el){ escolherDataDoCalendario(dadoDoToque(el, "data")); },
+  responder:              function(el){ responder(dadoDoToque(el, "pergunta"), dadoDoToque(el, "opcao")); },
+  contar:                 function(el){ contar(dadoDoToque(el, "pergunta"), numeroDoToque(el, "quanto")); },
+  anotar:                 function(el){ anotar(dadoDoToque(el, "pergunta"), el.value); },
+  ajustarDestaVez:        function(){ ajustarDestaVez(); },
+  alternarDuas:           function(){ alternarDuas(); },
+  depoisDosDetalhes:      function(){ depoisDosDetalhes(); },
+  alternarAdicional:      function(el){ alternarAdicional(dadoDoToque(el, "adicional")); },
+  pedirComDuas:           function(){ pedirComDuas(); },
+  tentarAContaDeNovo:     function(){ tentarAContaDeNovo(); },
+  verPedidoEsperandoPagamento: function(){ verPedidoEsperandoPagamento(); },
+  enviarPedido:           function(el){ enviarPedido(el); },
+  escolherPagamento:      function(el){ escolherPagamento(dadoDoToque(el, "pagamento")); },
+
+  /* a busca, o pedido confirmado e o acompanhamento */
+  simularNinguemAceita:   function(){ simularNinguemAceita(); },
+  continuarAguardando:    function(){ continuarAguardando(); },
+  mudarDataDaBusca:       function(){ mudarDataDaBusca(); },
+  cancelarPorEscolhaDoCliente: function(el){ cancelarPorEscolhaDoCliente(el); },
+  tentarOutroHorario:     function(){ tentarOutroHorario(); },
+  alternarFavorita:       function(el){ alternarFavorita(numeroDoToque(el, "profissional")); },
+  abrirAcompanhamento:    function(el){ abrirAcompanhamento(dadoDoToque(el, "pedido")); },
+  abrirConversaDoPedido:  function(el){
+    abrirConversaDoPedido(dadoDoToque(el, "pedido"), temODado(el, "vaga") ? numeroDoToque(el, "vaga") : undefined);
+  },
+  pagarPedido:            function(el){ pagarPedido(el); },
+  confirmarCancelamento:  function(el){ confirmarCancelamento(el); },
+  abrirAvaliacao:         function(el){ abrirAvaliacao(numeroDoToque(el, "vaga")); },
+  confirmarOFim:          function(el){ confirmarOFim(numeroDoToque(el, "vaga"), el); },
+  abrirContestacao:       function(el){ abrirContestacao(numeroDoToque(el, "vaga")); },
+  tentarOAcompanhamentoDeNovo: function(){ tentarOAcompanhamentoDeNovo(); },
+  enviarAAvaliacaoDaCliente: function(el){ enviarAAvaliacaoDaCliente(el); },
+  enviarAContestacao:     function(el){ enviarAContestacao(el); },
+  simularPassoDaProfissional: function(){ simularPassoDaProfissional(); },
+  simularODiaDoPedido:    function(el){ simularODiaDoPedido(dadoDoToque(el, "caso")); },
+
+  /* as conversas e o suporte */
+  abrirConversaPeloAviso: function(el){ abrirConversaPeloAviso(dadoDoToque(el, "papel"), dadoDoToque(el, "chave")); },
+  abrirSuporte:           function(el){ abrirSuporte(dadoDoToque(el, "sobre")); },
+  tentarAsConversasDeNovo: function(){ tentarAsConversasDeNovo(); },
+  verOOutroLado:          function(el){ verOOutroLado(dadoDoToque(el, "papel")); },
+  enviarRespostaPronta:   function(el){ enviarRespostaPronta(numeroDoToque(el, "indice")); },
+  guardarRascunho:        function(el){ guardarRascunho(dadoDoToque(el, "papel"), el.value); },
+  enviarDoCampo:          function(el){ enviarDoCampo(dadoDoToque(el, "papel")); },
+  enviarRespostaProntaNoApp: function(el){ enviarRespostaProntaNoApp(numeroDoToque(el, "indice")); },
+  enviarDoCampoNoApp:     function(el){ enviarDoCampoNoApp(dadoDoToque(el, "papel")); },
+  tentarAConversaDeNovo:  function(){ tentarAConversaDeNovo(); },
+  tentarOSuporteDeNovo:   function(){ tentarOSuporteDeNovo(); },
+  escolherOSobreDoSuporte: function(el){ escolherOSobreDoSuporte(el.value); },
+  guardarRascunhoDoSuporte: function(el){ guardarRascunhoDoSuporte(el.value); },
+  enviarDoCampoDoSuporte: function(){ enviarDoCampoDoSuporte(); },
+  usarAssuntoDoSuporte:   function(el){ usarAssuntoDoSuporte(numeroDoToque(el, "indice")); },
+
+  /* a diarista (telas-diarista.js) */
+  simularAprovacao:       function(){ simularAprovacao(); },
+  simularDecisaoDaEquipe: function(el){ simularDecisaoDaEquipe(dadoDoToque(el, "decisao")); },
+  mascararCep:            function(el){ mascararCep(el); },
+  salvarOCepDela:         function(el){ salvarOCepDela(el); },
+  /* o Enter no campo do CEP chama sem o botão (o campo não é botão) */
+  salvarOCepDelaPeloTeclado: function(){ salvarOCepDela(); },
+  acharOCepDela:          function(el){ acharOCepDela(el); },
+  tentarAsOportunidadesDeNovo: function(){ tentarAsOportunidadesDeNovo(); },
+  abrirOportunidade:      function(el){ abrirOportunidade(numeroDoToque(el, "oportunidade")); },
+  alternarDisponivel:     function(){ alternarDisponivel(); },
+  aceitarOportunidade:    function(el){ aceitarOportunidade(el); },
+  seguirNoPortaoDois:     function(){ seguirNoPortaoDois(); },
+  autorizarAVerificacao:  function(el){ autorizarAVerificacao(el); },
+  mascararCpf:            function(el){ mascararCpf(el); },
+  mascararData:           function(el){ mascararData(el); },
+  enviarOsDadosPessoais:  function(el){ enviarOsDadosPessoais(el); },
+  fotoEscolhida:          function(el){ fotoEscolhida(el, dadoDoToque(el, "tipo")); },
+  abrirACamera:           function(el){ abrirACamera(dadoDoToque(el, "campo")); },
+  simularSelfieQueNaoConfere: function(){ simularSelfieQueNaoConfere(); },
+  consultarOsAntecedentes: function(el){ consultarOsAntecedentes(el); },
+  aceitarTermosDaDiarista: function(el){ aceitarTermosDaDiarista(el); },
+  responderAEquipe:       function(el){ responderAEquipe(el); },
+  tentarASituacaoDeNovo:  function(){ tentarASituacaoDeNovo(); },
+  salvarChavePix:         function(){ salvarChavePix(); },
+  marcarEtapa:            function(el){ marcarEtapa(dadoDoToque(el, "etapa")); },
+  verComoEhOAlerta:       function(){ verComoEhOAlerta(); },
+  testarOSom:             function(){ testarOSom(); },
+  continuoDisponivel:     function(){ continuoDisponivel(); },
+  pausarAgora:            function(){ pausarAgora(); },
+  aceitarDoAlerta:        function(){ aceitarDoAlerta(); },
+  recusarDoAlerta:        function(){ recusarDoAlerta(); },
+  voltarDeOndeVeio:       function(){ voltarDeOndeVeio(); },
+  alternarPeriodoDoDia:   function(el){
+    alternarPeriodoDoDia(numeroDoToque(el, "dia"), dadoDoToque(el, "periodo"), el);
+  },
+  escolherRecorte:        function(el){ escolherRecorte(dadoDoToque(el, "recorte")); },
+  abrirServicoDaAgenda:   function(el){
+    abrirServicoDaAgenda(numeroDoToque(el, "oportunidade"), dadoDoToque(el, "data"));
+  },
+  tentarAAgendaDeNovo:    function(){ tentarAAgendaDeNovo(); },
+  abrirConversaComOCliente: function(){ abrirConversaComOCliente(); },
+  abrirODiaDoServico:     function(el){
+    abrirODiaDoServico(numeroDoToque(el, "oportunidade"), dadoDoToque(el, "data"));
+  },
+  tentarOServicoDeNovo:   function(){ tentarOServicoDeNovo(); },
+  tentarOsGanhosDeNovo:   function(){ tentarOsGanhosDeNovo(); },
+  passoDoDiaDela:         function(el){ passoDoDiaDela(dadoDoToque(el, "passo"), el); },
+  tentarODiaDeNovo:       function(){ tentarODiaDeNovo(); },
+  chegadaEscolhida:       function(el){ chegadaEscolhida(el); },
+  simularChegadaQueNaoConfere: function(){ simularChegadaQueNaoConfere(); },
+  enviarOImprevisto:      function(el){ enviarOImprevisto(el); },
+  escolherNota:           function(el){ escolherNota(dadoDoToque(el, "onde"), numeroDoToque(el, "nota")); },
+  enviarAAvaliacaoDela:   function(el){ enviarAAvaliacaoDela(el); },
+  pularODiaPara:          function(el){ pularODiaPara(dadoDoToque(el, "momento")); },
+  simularEquipeLiberaAChegada: function(){ simularEquipeLiberaAChegada(); },
+};
+
+/* Qual atributo cada tipo de evento lê. */
+const ATRIBUTO_DO_EVENTO = {
+  click:   "data-acao",
+  input:   "data-acao-input",
+  change:  "data-acao-change",
+  keydown: "data-acao-enter",
+  submit:  "data-acao-submit",
+};
+
+/* O elemento com o atributo: o tocado ou um de quem ele está dentro (o
+   toque no ícone de dentro do botão é do botão). */
+function elementoDoToque(alvo, atributo){
+  let e = alvo;
+  while(e && e.getAttribute){
+    if(e.getAttribute(atributo) != null) return e;
+    e = e.parentNode;
+  }
+  return null;
+}
+
+/* Chama a ação do elemento, se ela estiver na lista. Botão desligado não
+   age (o navegador também não entregava o toque ao onclick dele). */
+function acionarATela(el, atributo, evento){
+  if(!el || el.disabled || !el.getAttribute) return false;
+  const nome = el.getAttribute(atributo);
+  if(!nome || !Object.prototype.hasOwnProperty.call(ACOES, nome)) return false;
+  ACOES[nome](el, evento);
+  return true;
+}
+
+function ouvirOsToques(tipo){
+  document.addEventListener(tipo, function(ev){
+    if(tipo === "keydown" && ev.key !== "Enter") return;
+    const atributo = ATRIBUTO_DO_EVENTO[tipo];
+    const el = elementoDoToque(ev.target, atributo);
+    if(!el) return;
+    /* o "return false" dos links href="#" de antes; no Enter, o mesmo
+       event.preventDefault() que ia escrito no onkeydown */
+    if(tipo === "click" || tipo === "keydown" || tipo === "submit") ev.preventDefault();
+    acionarATela(el, atributo, ev);
+  });
+}
+
+Object.keys(ATRIBUTO_DO_EVENTO).forEach(ouvirOsToques);
+
+
+/* --------------------------------------------------------------------------
    LIGAR O APP
    -------------------------------------------------------------------------- */
 
@@ -844,7 +1112,7 @@ function avisoDeVersaoNova(){
     + '<h2 class="titulo">Atualizamos o app</h2>'
     + '<p class="apoio">Toque no botão para carregar a versão nova.</p>'
     + '</div><div class="rodape">'
-    + '<button class="btn btn-principal" onclick="location.reload()">Carregar a versão nova</button>'
+    + '<button class="btn btn-principal" data-acao="recarregar">Carregar a versão nova</button>'
     + '</div></div>';
 }
 

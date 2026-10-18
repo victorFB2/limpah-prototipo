@@ -517,10 +517,10 @@ function atalhoDeAprovacao(){
     +   'conferir os documentos — leva algumas horas. Aqui dá para pular a '
     +   'espera.</div>'
     + '<button class="btn btn-principal" style="margin:12px 0 0" '
-    +   'onclick="simularAprovacao()">Simular: cadastro aprovado</button>'
+    +   'data-acao="simularAprovacao">Simular: cadastro aprovado</button>'
     /* a equipe também pode recusar, sempre com o motivo escrito (5a) */
     + '<button class="btn btn-contorno" style="margin:8px 0 0;background:var(--branco)" '
-    +   'onclick="simularDecisaoDaEquipe(\'recusar\')">Simular: cadastro recusado</button></div>';
+    +   'data-acao="simularDecisaoDaEquipe" data-decisao="recusar">Simular: cadastro recusado</button></div>';
 }
 
 
@@ -547,7 +547,7 @@ function faixaDoCadastro(){
      em análise sem faixa nenhuma: completo, esperando, e sem saber disso. */
   if(!e.faixaTitulo) return "";
 
-  return '<button class="faixa-cadastro" onclick="ir(\'' + idSeguro(e.faixaDestino) + '\')">'
+  return '<button class="faixa-cadastro" data-acao="ir" data-tela="' + idSeguro(e.faixaDestino) + '">'
     +   '<div class="txt">'
     +     '<b>' + esc(e.faixaTitulo) + '</b>'
     +     (e.faixaFrase ? '<span>' + esc(e.faixaFrase) + '</span>' : "")
@@ -583,7 +583,7 @@ function interruptorTravado(){
     +   '<div class="botao"></div>'
     + '</div>'
     + '<button class="btn ' + (e.botaoContorno ? "btn-contorno" : "btn-principal") + '" '
-    +   'style="margin-bottom:14px" onclick="ir(\'' + idSeguro(e.botaoDestino) + '\')">'
+    +   'style="margin-bottom:14px" data-acao="ir" data-tela="' + idSeguro(e.botaoDestino) + '">'
     +   esc(e.botaoTexto) + '</button>';
 }
 
@@ -666,13 +666,13 @@ TELAS.diaristaRegiao = {
     +   '<div class="campo"><label for="cep-dela">CEP</label>'
     +     '<input id="cep-dela" class="cep" type="text" inputmode="numeric" '
     +       'autocomplete="postal-code" maxlength="9" placeholder="00000-000" '
-    +       'value="' + esc(valor) + '" oninput="mascararCep(this)" '
-    +       'onkeydown="if(event.key===\'Enter\'){event.preventDefault();salvarOCepDela();}">'
+    +       'value="' + esc(valor) + '" data-acao-input="mascararCep" '
+    +       'data-acao-enter="salvarOCepDelaPeloTeclado">'
     +     erroDoCampo("cep-erro", "diaristaRegiao", "cep")
     +   '</div>'
     +   (CEP_ACHADO
       ? '<p class="cep-achado">✓ Achamos o seu CEP. Confira e toque em ' + acao + '.</p>' : '')
-    +   '<button class="btn btn-texto" onclick="ir(\'diaristaSemCep\')">Não sei meu CEP</button>'
+    +   '<button class="btn btn-texto" data-acao="ir" data-tela="diaristaSemCep">Não sei meu CEP</button>'
     +   '<div class="aviso roxo">🔒<div><b>Só o CEP</b>'
     +     'Não pedimos a rua nem o número da sua casa. O cliente nunca vê o seu CEP.</div></div>'
     /* R16 revista (12/10/2026): o transporte é dela, e o valor da tela é o
@@ -687,7 +687,7 @@ TELAS.diaristaRegiao = {
     +     'a distância e o tempo até lá.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="salvarOCepDela(this)">' + acao + '</button>'
+    +   '<button class="btn btn-principal" data-acao="salvarOCepDela">' + acao + '</button>'
     +   erroDoCampo("reg-erro", "diaristaRegiao", "")
     + '</div>';
   }
@@ -730,7 +730,7 @@ TELAS.diaristaSemCep = {
     +   '<div class="campo"><label for="sem-cep-bairro">Bairro</label>'
     +     '<input id="sem-cep-bairro-busca" class="busca-de-bairro" type="search" '
     +       'autocomplete="off" placeholder="🔍 Digite para achar o bairro" '
-    +       'oninput="filtrarBairrosDaLista(\'sem-cep-bairro\')">'
+    +       'data-acao-input="filtrarBairrosDaLista" data-lista="sem-cep-bairro">'
     +     '<div class="seletor"><select id="sem-cep-bairro">' + opcoesDeBairro("") + '</select></div>'
     +     erroDoCampo("sem-cep-bairro-erro", "diaristaSemCep", "bairro")
     +     '<p class="ajuda">Não achou? Escolha o bairro maior onde a sua rua fica.</p>'
@@ -744,7 +744,7 @@ TELAS.diaristaSemCep = {
         })
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="acharOCepDela(this)">Achar meu CEP</button>'
+    +   '<button class="btn btn-principal" data-acao="acharOCepDela">Achar meu CEP</button>'
     +   erroDoCampo("sem-cep-erro", "diaristaSemCep", "")
     + '</div>';
   },
@@ -782,7 +782,7 @@ function cartaoDoCep(){
   return '<div class="aviso roxo">🏠<div><b>Falta o CEP da sua casa</b>'
     + 'Com ele, mandamos primeiro os serviços mais perto de você.</div></div>'
     + '<button class="btn btn-contorno" style="margin-bottom:14px" '
-    +   'onclick="ir(\'diaristaRegiao\')">Informar meu CEP</button>';
+    +   'data-acao="ir" data-tela="diaristaRegiao">Informar meu CEP</button>';
 }
 
 /* "a cerca de 40 min da sua casa, de ônibus ou metrô" (R34): a estimativa,
@@ -916,7 +916,7 @@ function oportunidadesAindaNao(){
   const erro = erroDasOportunidadesAgora();
   if(!erro) return '<p class="apoio">Carregando os pedidos perto de você…</p>';
   return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
-    + '<button class="btn btn-contorno" onclick="tentarAsOportunidadesDeNovo()">Tentar de novo</button>';
+    + '<button class="btn btn-contorno" data-acao="tentarAsOportunidadesDeNovo">Tentar de novo</button>';
 }
 
 /* Os adicionais do pedido, pelo nome (sem preço: o valor que ela vê é o
@@ -988,7 +988,7 @@ TELAS.diaristaHome = {
     lista.forEach(function(o){
       cards += '<button class="cartao" style="width:100%;text-align:left;border:0;font-family:inherit;'
         + 'cursor:pointer;display:block;' + (pode ? "" : "position:relative") + '" '
-        + 'onclick="abrirOportunidade(' + Number(o.id) + ')">'
+        + 'data-acao="abrirOportunidade" data-oportunidade="' + Number(o.id) + '">'
         +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
         +     '<div style="flex:1;min-width:0">'
         +       '<b style="font-size:15px">' + esc(o.quando) + ' · ' + esc(o.janela) + '</b>'
@@ -1172,7 +1172,7 @@ function assinaturaDaLista(){
    com o app fechado. */
 function blocoDoDisponivel(d){
   const comOAppAberto = ehIPhone() || !FONTE.ehMaquete;
-  return '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" onclick="alternarDisponivel()">'
+  return '<div class="chave ' + (d.disponivel ? "ligada" : "") + '" data-acao="alternarDisponivel">'
     + '<div class="txt"><b>Disponível para trabalhar</b>'
     + '<span>' + (d.disponivel
         ? (comOAppAberto
@@ -1189,7 +1189,7 @@ function blocoDoDisponivel(d){
        entrega 6c (a grade fica no servidor). */
     + '<button class="btn btn-texto" style="margin:-4px 0 12px;min-height:44px" '
     /* 📅 e não 🗓: o segundo sai como quadradinho vazio no Windows. */
-    +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
+    +   'data-acao="ir" data-tela="diaristaDisponibilidade">📅 Meus dias de trabalho ›</button>'
     + avisoDeQuePausou()
     + cartaoDoAlerta();
 }
@@ -1307,7 +1307,7 @@ function oportunidadeQueNaoVeio(){
     + '<div class="corpo"><p class="apoio">'
     + esc(frase || "Esta oportunidade não está mais disponível.") + '</p></div>'
     + '<div class="rodape"><button class="btn btn-principal" '
-    +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver outros pedidos</button></div>';
+    +   'data-acao="ir" data-tela="diaristaHome" data-limpar="1">Ver outros pedidos</button></div>';
 }
 
 TELAS.diaristaOportunidade = {
@@ -1364,8 +1364,8 @@ TELAS.diaristaOportunidade = {
     /* aceitar: na maquete, a agenda deste aparelho; no app (6a), o
        servidor, que confere tudo de novo e decide quem fica com a vaga */
     +   (pode
-      ? '<button class="btn btn-principal" onclick="aceitarOportunidade(this)">Aceitar este serviço</button>'
-        + '<button class="btn btn-texto" onclick="voltar()">Agora não</button>'
+      ? '<button class="btn btn-principal" data-acao="aceitarOportunidade">Aceitar este serviço</button>'
+        + '<button class="btn btn-texto" data-acao="voltar">Agora não</button>'
       : (function(){
           /* o botão vem da tabela de estados (R24), como o do interruptor */
           const e = situacaoDaDiarista();
@@ -1373,7 +1373,7 @@ TELAS.diaristaOportunidade = {
             + '<div><b>' + esc(e.oportunidadeTitulo) + '</b>'
             + esc(e.oportunidadeFrase) + '</div></div>'
             + '<button class="btn ' + (e.botaoContorno ? "btn-contorno" : "btn-principal") + '" '
-            +   'onclick="ir(\'' + idSeguro(e.botaoDestino) + '\')">'
+            +   'data-acao="ir" data-tela="' + idSeguro(e.botaoDestino) + '">'
             +   esc(e.oportunidadeBotao || e.botaoTexto) + '</button>';
         })())
     + '</div>';
@@ -1424,10 +1424,10 @@ TELAS.diaristaAceitou = {
         +   'ajudam você a planejar o caminho.</div></div>')
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">Voltar ao início</button>'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaHome" data-limpar="1">Voltar ao início</button>'
     /* a frase de cima aponta para a agenda — então tem que dar para ir lá */
     +   '<button class="btn btn-texto" style="min-height:44px" '
-    +     'onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver na minha agenda ›</button>'
+    +     'data-acao="ir" data-tela="diaristaAgenda" data-limpar="1">Ver na minha agenda ›</button>'
     + '</div>';
   },
   /* no app, quem recarregou a página aqui pergunta a agenda de novo */
@@ -1449,9 +1449,9 @@ function aceitouEFaltaASegunda(s){
     +     '<b>Ainda não está confirmado</b>' + esc(fraseDaSegunda(s)) + '</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">Voltar ao início</button>'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaHome" data-limpar="1">Voltar ao início</button>'
     +   '<button class="btn btn-texto" style="min-height:44px" '
-    +     'onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver na minha agenda ›</button>'
+    +     'data-acao="ir" data-tela="diaristaAgenda" data-limpar="1">Ver na minha agenda ›</button>'
     + '</div>';
 }
 
@@ -1477,7 +1477,7 @@ TELAS.diaristaCadastro = {
     const est = situacaoDaDiarista();
 
     function passo(feito, titulo, detalhe, destino, bloqueado){
-      return '<button class="item" ' + (bloqueado ? "disabled" : 'onclick="ir(\'' + idSeguro(destino) + '\')"') + '>'
+      return '<button class="item" ' + (bloqueado ? "disabled" : 'data-acao="ir" data-tela="' + idSeguro(destino) + '"') + '>'
         + '<div style="width:26px;color:' + (feito ? "var(--verde)" : "var(--roxo)") + '">'
         +   (feito ? icone("escudo", 20) : '<span style="font-size:19px">○</span>') + '</div>'
         + '<div class="txt"><b>' + esc(titulo) + '</b><span>' + esc(detalhe) + '</span></div>'
@@ -1569,7 +1569,7 @@ function blocoDaDecisaoDaEquipe(est){
   return cartaoDoQueAEquipeEscreveu(decisao)
     + (contraEla
       ? '<button class="btn btn-contorno" style="margin:0 0 12px" '
-        + 'onclick="ir(\'' + idSeguro(est.telaDaSituacao) + '\')">'
+        + 'data-acao="ir" data-tela="' + idSeguro(est.telaDaSituacao) + '">'
         + (decisao.podeResponder ? "Ler tudo e responder" : "Ler a conversa") + '</button>'
       : '');
 }
@@ -1685,7 +1685,7 @@ function antesDestePasso(){
     +   '<p class="apoio">Vamos na ordem: é rapidinho.</p>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(tela) + '\')">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="' + idSeguro(tela) + '">Continuar</button>'
     + '</div>';
 }
 
@@ -1698,7 +1698,7 @@ function passoJaFeito(titulo){
     +   '<p class="apoio">Esta parte já foi enviada.</p>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="seguirNoPortaoDois()">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="seguirNoPortaoDois">Continuar</button>'
     + '</div>';
 }
 
@@ -1712,7 +1712,7 @@ function telaDaSelfieComAEquipe(){
     +     'equipe confere, e a gente avisa você por aqui.</p>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'diaristaAnalise\',{limparHistorico:true})">'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaAnalise" data-limpar="1">'
     +     'Ver como está meu cadastro</button>'
     + '</div>';
 }
@@ -1800,14 +1800,14 @@ TELAS.diaristaAutorizacao = {
     +   '<div class="aviso roxo">🔒<div><b>O que guardamos</b>'
     +     'Só o resultado e a sua foto de perfil. A foto do documento não fica com a gente.</div></div>'
     +   '<div class="chave' + (v.autorizada ? ' ligada' : '') + '" id="chave-autorizo" '
-    +     'onclick="alternarChaveVisual(this)">'
+    +     'data-acao="alternarChaveVisual">'
     +     '<div class="txt"><b>Autorizo</b>'
     +     '<span>A conferência do meu documento, do meu rosto e dos meus antecedentes.</span></div>'
     +     '<div class="botao"></div></div>'
     +   erroDoCampo("autorizo-erro", "diaristaAutorizacao", "autorizo")
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="autorizarAVerificacao(this)">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="autorizarAVerificacao">Continuar</button>'
     +   erroDoCampo("aut-erro", "diaristaAutorizacao", "")
     + '</div>';
   }
@@ -1858,11 +1858,11 @@ TELAS.diaristaDadosPessoais = {
     +   '<p class="apoio">Como estão no seu documento.</p>'
     +   '<div class="campo"><label for="dia-cpf">CPF</label>'
     +     '<input id="dia-cpf" class="numeros-grandes" type="text" inputmode="numeric" '
-    +       'autocomplete="off" maxlength="14" placeholder="000.000.000-00" oninput="mascararCpf(this)">'
+    +       'autocomplete="off" maxlength="14" placeholder="000.000.000-00" data-acao-input="mascararCpf">'
     +     erroDoCampo("dia-cpf-erro", "diaristaDadosPessoais", "cpf") + '</div>'
     +   '<div class="campo"><label for="dia-nascimento">Data de nascimento</label>'
     +     '<input id="dia-nascimento" class="numeros-grandes" type="text" inputmode="numeric" '
-    +       'autocomplete="bday" maxlength="10" placeholder="dd/mm/aaaa" oninput="mascararData(this)">'
+    +       'autocomplete="bday" maxlength="10" placeholder="dd/mm/aaaa" data-acao-input="mascararData">'
     +     erroDoCampo("dia-nascimento-erro", "diaristaDadosPessoais", "nascimento") + '</div>'
     +   '<div class="campo"><label for="dia-mae">Nome da sua mãe</label>'
     +     '<input id="dia-mae" type="text" autocomplete="off" autocapitalize="words" maxlength="120" '
@@ -1873,7 +1873,7 @@ TELAS.diaristaDadosPessoais = {
     +     'guardado.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="enviarOsDadosPessoais(this)">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="enviarOsDadosPessoais">Continuar</button>'
     +   erroDoCampo("dados-erro", "diaristaDadosPessoais", "")
     + '</div>';
   }
@@ -1917,10 +1917,10 @@ TELAS.diaristaDocumentos = {
     +     'A foto vai só para a conferência e não fica com a gente.</div></div>'
     +   '<input type="file" id="dia-foto-documento" class="campo-de-foto" accept="image/*" '
     +     'capture="environment" aria-label="Foto do documento" '
-    +     'onchange="fotoEscolhida(this, \'documento\')">'
+    +     'data-acao-change="fotoEscolhida" data-tipo="documento">'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="abrirACamera(\'dia-foto-documento\')">'
+    +   '<button class="btn btn-principal" data-acao="abrirACamera" data-campo="dia-foto-documento">'
     +     '📷 Tirar a foto</button>'
     +   erroDoCampo("doc-erro", "diaristaDocumentos", "foto")
     + '</div>';
@@ -1949,14 +1949,14 @@ TELAS.diaristaSelfie = {
     +     'Depois que você aceitar um serviço, a cliente vê o seu rosto, para saber quem vai '
     +     'chegar.</div></div>'
     +   '<input type="file" id="dia-foto-selfie" class="campo-de-foto" accept="image/*" '
-    +     'capture="user" aria-label="Selfie" onchange="fotoEscolhida(this, \'selfie\')">'
+    +     'capture="user" aria-label="Selfie" data-acao-change="fotoEscolhida" data-tipo="selfie">'
     +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
     +     '<div>A selfie sempre confere. Para ver o que acontece quando ela não confere:</div>'
-    +     '<button class="btn btn-contorno" onclick="simularSelfieQueNaoConfere()">'
+    +     '<button class="btn btn-contorno" data-acao="simularSelfieQueNaoConfere">'
     +       'Simular: a selfie não confere</button></div>')
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="abrirACamera(\'dia-foto-selfie\')">'
+    +   '<button class="btn btn-principal" data-acao="abrirACamera" data-campo="dia-foto-selfie">'
     +     '🤳 Tirar a selfie</button>'
     +   erroDoCampo("selfie-erro", "diaristaSelfie", "foto")
     + '</div>';
@@ -1981,7 +1981,7 @@ TELAS.diaristaAntecedentes = {
     +     'O nome da sua mãe vai só para a consulta.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="consultarOsAntecedentes(this)">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="consultarOsAntecedentes">Continuar</button>'
     +   erroDoCampo("antecedentes-erro", "diaristaAntecedentes", "")
     + '</div>';
   }
@@ -2023,7 +2023,7 @@ TELAS.diaristaTermos = {
     +   '<p class="apoio">Quatro regras que valem dos dois lados.</p>'
     +   lista
     +   '<div class="chave' + (euSouDiarista().feito.termos ? ' ligada' : '') + '" id="chave-termos-dia" '
-    +     'onclick="alternarChaveVisual(this)">'
+    +     'data-acao="alternarChaveVisual">'
     +     '<div class="txt"><b>Li e aceito os termos</b>'
     /* no app, a política de cancelamento ainda não foi decidida (R20, A26) */
     +     '<span>' + (FONTE.ehMaquete ? 'Regras de conduta e política de cancelamento.'
@@ -2032,7 +2032,7 @@ TELAS.diaristaTermos = {
     +   '<div id="dia-termos-erro" style="color:var(--vermelho);font-size:13px;font-weight:600"></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="aceitarTermosDaDiarista(this)">Continuar</button>'
+    +   '<button class="btn btn-principal" data-acao="aceitarTermosDaDiarista">Continuar</button>'
     + '</div>';
   }
 };
@@ -2087,8 +2087,7 @@ function situacaoQueMudou(e){
     + '<div class="corpo">'
     +   '<div class="aviso roxo">🔄<div><b>A situação do seu cadastro mudou</b>'
     +     'Toque abaixo para ver como ele está agora.</div></div>'
-    +   '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(e.telaDaSituacao || "diaristaCadastro")
-    +     '\',{limparHistorico:true})">Ver como está meu cadastro</button>'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="' + idSeguro(e.telaDaSituacao || "diaristaCadastro") + '" data-limpar="1">Ver como está meu cadastro</button>'
     + '</div>';
 }
 
@@ -2113,7 +2112,7 @@ TELAS.diaristaAnalise = {
     +   atalhoDeAprovacao()
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaHome" data-limpar="1">'
     +     'Ver oportunidades enquanto isso</button>'
     + '</div>';
   },
@@ -2153,7 +2152,7 @@ TELAS.diaristaAprovada = {
     + '</div>'
     + (embaixo ? '<div class="corpo" style="flex:0 1 auto">' + embaixo + '</div>' : '')
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaHome" data-limpar="1">'
     +     'Ver oportunidades</button>'
     + '</div>';
   }
@@ -2190,11 +2189,11 @@ function telaDaDecisaoContraEla(qual){
     + '</div>'
     + '<div class="rodape">'
     +   (pode
-      ? '<button class="btn btn-principal" onclick="responderAEquipe(this)">Enviar resposta</button>'
+      ? '<button class="btn btn-principal" data-acao="responderAEquipe">Enviar resposta</button>'
         + erroDoCampo("resp-erro", qual, "")
       : '')
     +   '<button class="btn ' + (pode ? "btn-texto" : "btn-principal") + '" '
-    +     'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ir para o início</button>'
+    +     'data-acao="ir" data-tela="diaristaHome" data-limpar="1">Ir para o início</button>'
     + '</div>';
 }
 
@@ -2235,7 +2234,7 @@ function conversaComAEquipe(){
     const frase = erroDaSituacaoAgora();
     if(!frase) return '<p class="ajuda">Carregando a conversa com a nossa equipe…</p>';
     return '<div class="aviso ambar">⚠️<div>' + esc(frase) + '</div></div>'
-      + '<button class="btn btn-contorno" onclick="tentarASituacaoDeNovo()">Tentar de novo</button>';
+      + '<button class="btn btn-contorno" data-acao="tentarASituacaoDeNovo">Tentar de novo</button>';
   }
   if(linhas.length < 2) return "";
   return '<div class="rotulo">A conversa sobre o seu cadastro</div>'
@@ -2351,13 +2350,13 @@ function atalhosDaEquipeNaMaquete(){
   const ultima = trilha[trilha.length - 1];
   const botoes = [];
   if(chave === "aprovada")
-    botoes.push('<button class="btn btn-contorno" onclick="simularDecisaoDaEquipe(\'suspender\')">'
+    botoes.push('<button class="btn btn-contorno" data-acao="simularDecisaoDaEquipe" data-decisao="suspender">'
       + 'Simular: acesso suspenso</button>');
   if(chave === "recusada" || chave === "suspensa"){
     if(ultima && ultima.tipo === "respondeu")
-      botoes.push('<button class="btn btn-contorno" onclick="simularDecisaoDaEquipe(\'manter\')">'
+      botoes.push('<button class="btn btn-contorno" data-acao="simularDecisaoDaEquipe" data-decisao="manter">'
         + 'Simular: a equipe responde</button>');
-    botoes.push('<button class="btn btn-contorno" onclick="simularDecisaoDaEquipe(\'aprovar\')">'
+    botoes.push('<button class="btn btn-contorno" data-acao="simularDecisaoDaEquipe" data-decisao="aprovar">'
       + 'Simular: a equipe aprova de novo</button>');
   }
   if(!botoes.length) return "";
@@ -2386,7 +2385,7 @@ TELAS.diaristaRecebimento = {
     +     'você recebe do mesmo jeito.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="salvarChavePix()">Salvar</button>'
+    +   '<button class="btn btn-principal" data-acao="salvarChavePix">Salvar</button>'
     + '</div>';
   }
 };
@@ -2445,7 +2444,7 @@ TELAS.diaristaExperiencia = {
     +   '<div class="campo"><textarea placeholder="Ex.: Sou caprichosa e gosto de deixar tudo no lugar."></textarea></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="marcarEtapa(\'experiencia\')">Salvar</button>'
+    +   '<button class="btn btn-principal" data-acao="marcarEtapa" data-etapa="experiencia">Salvar</button>'
     + '</div>';
   }
 };
@@ -2614,7 +2613,7 @@ TELAS.diaristaConflito = {
     +   '</div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="ir(\'diaristaHome\',{limparHistorico:true})">'
+    +   '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaHome" data-limpar="1">'
     +     'Ver outros pedidos</button>'
     + '</div>';
   }
@@ -2872,13 +2871,13 @@ function botaoDeVerOAlerta(){
   const d = euSouDiarista();
   if(!d.disponivel || !podeAceitarServico()) return "";
   return '<button class="btn btn-texto" style="min-height:44px;margin:-10px 0 4px" '
-    +   'onclick="verComoEhOAlerta()">\ud83d\udd14 Ver como é o alerta (agora)</button>';
+    +   'data-acao="verComoEhOAlerta">\ud83d\udd14 Ver como é o alerta (agora)</button>';
 }
 
 function botaoDeTestarOSom(){
   const bloqueado = !!E.somBloqueado;
   return '<button class="btn btn-texto" style="min-height:44px;margin:-6px 0 4px" '
-    +   'onclick="testarOSom()">🔊 Testar o som do alerta</button>'
+    +   'data-acao="testarOSom">🔊 Testar o som do alerta</button>'
     + (E.testouOSom && !bloqueado
       ? '<div style="font-size:12px;color:var(--verde);text-align:center;margin-bottom:10px">'
         + 'Som enviado. Não ouviu? Confira o volume — e no iPhone, a chavinha '
@@ -3139,9 +3138,9 @@ function cartaoDoAlerta(){
       +   'Sem resposta em <b>' + tempo + '</b>, a gente pausa por você. '
       +   'Você religa quando quiser.</div>'
       + '<div style="display:flex;gap:8px;margin-top:13px">'
-      +   '<button class="btn btn-principal" style="margin:0" onclick="continuoDisponivel()">'
+      +   '<button class="btn btn-principal" style="margin:0" data-acao="continuoDisponivel">'
       +     'Estou aqui</button>'
-      +   '<button class="btn btn-claro" style="margin:0" onclick="pausarAgora()">Pausar</button>'
+      +   '<button class="btn btn-claro" style="margin:0" data-acao="pausarAgora">Pausar</button>'
       + '</div></div>';
   }
 
@@ -3168,9 +3167,9 @@ function cartaoDoAlerta(){
     +       moeda(o.receber) + '</div></div>'
     + '</div>'
     + '<div style="display:flex;gap:8px;margin-top:13px">'
-    +   '<button class="btn btn-principal" style="margin:0" onclick="aceitarDoAlerta()">'
+    +   '<button class="btn btn-principal" style="margin:0" data-acao="aceitarDoAlerta">'
     +     'Aceitar</button>'
-    +   '<button class="btn btn-claro" style="margin:0" onclick="recusarDoAlerta()">Agora não</button>'
+    +   '<button class="btn btn-claro" style="margin:0" data-acao="recusarDoAlerta">Agora não</button>'
     + '</div>'
     + '<div style="font-size:11.5px;color:var(--suave);margin-top:9px;line-height:1.5">'
     +   'Deixar passar não é falta. Não conta nada contra você.</div>'
@@ -3202,7 +3201,7 @@ TELAS.diaristaAlerta = {
       +     'novos o dia inteiro.</p>'
       + '</div>'
       + '<div class="rodape">'
-      +   '<button class="btn btn-principal" onclick="voltarDeOndeVeio()">'
+      +   '<button class="btn btn-principal" data-acao="voltarDeOndeVeio">'
       +     'Ver outros pedidos</button>'
       + '</div>';
     }
@@ -3251,9 +3250,9 @@ TELAS.diaristaAlerta = {
     +   '</div>'
 
     +   '<div class="pe">'
-    +     '<button class="btn btn-principal grandao" onclick="aceitarDoAlerta()">'
+    +     '<button class="btn btn-principal grandao" data-acao="aceitarDoAlerta">'
     +       'Aceitar agora</button>'
-    +     '<button class="btn btn-claro" onclick="recusarDoAlerta()">Agora não</button>'
+    +     '<button class="btn btn-claro" data-acao="recusarDoAlerta">Agora não</button>'
     +     '<div class="miudo">Deixar passar não é falta. Não conta nada contra você.'
     +       '<br>🔊 o som tocou <span class="toques">' + textoDosToquesDoAlerta() + '</span>'
     +       ' · repete a cada ' + DISPONIBILIDADE.repeteOSomACadaSegundos + 's</div>'
@@ -3302,7 +3301,7 @@ TELAS.diaristaDisponibilidade = {
       let botoes = "";
       PERIODOS.forEach(function(p){
         const on = tudoAberto || marcados.indexOf(p.id) >= 0;
-        botoes += '<button onclick="alternarPeriodoDoDia(' + Number(dia) + ',\'' + idSeguro(p.id) + '\',this)" '
+        botoes += '<button data-acao="alternarPeriodoDoDia" data-dia="' + Number(dia) + '" data-periodo="' + idSeguro(p.id) + '" '
           + 'style="flex:1;min-height:44px;border-radius:10px;font-family:inherit;font-size:12.5px;'
           + 'font-weight:700;cursor:pointer;border:1.5px solid '
           + (on ? "var(--roxo)" : "var(--borda)") + ';'
@@ -3334,7 +3333,7 @@ TELAS.diaristaDisponibilidade = {
     +     'Ficar indisponível não penaliza você.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="voltar()">Pronto</button>'
+    +   '<button class="btn btn-principal" data-acao="voltar">Pronto</button>'
     + '</div>';
   }
 };
@@ -3413,17 +3412,17 @@ TELAS.diaristaPerfil = {
     +   barraDoCadastro()
 
     +   '<div class="rotulo">Sua conta</div>'
-    +   '<button class="item" onclick="ir(\'diaristaCadastro\')">'
+    +   '<button class="item" data-acao="ir" data-tela="diaristaCadastro">'
     +     '<div class="txt"><b>Meu cadastro</b><span>' + p.pct + '% completo</span></div>'
     +     '<div class="seta">›</div></button>'
-    +   '<button class="item" onclick="ir(\'diaristaRegiao\')">'
+    +   '<button class="item" data-acao="ir" data-tela="diaristaRegiao">'
     /* R34: o "mudei de casa" — a mesma tela do CEP */
     +     '<div class="txt"><b>O CEP da minha casa</b><span>'
     +       esc(d.cep ? "CEP " + d.cep : "Falta informar") + '</span></div>'
     +     '<div class="seta">›</div></button>'
     /* no app, o Pix chega com o pagamento, e o suporte com a entrega 9: o
        item diz que chega em breve, em vez de prometer */
-    +   '<button class="item" onclick="ir(\'diaristaRecebimento\')">'
+    +   '<button class="item" data-acao="ir" data-tela="diaristaRecebimento">'
     +     '<div class="txt"><b>Onde eu recebo</b><span>'
     +       (!FONTE.ehMaquete ? "Chega em breve"
              : d.feito.recebimento ? "Pix cadastrado" : "ainda não informado") + '</span></div>'
@@ -3433,12 +3432,12 @@ TELAS.diaristaPerfil = {
     /* desde a entrega 9, no app, a conversa com a nossa equipe; na maquete,
        o "em construção" de sempre */
     +   (FONTE.ehMaquete
-         ? '<button class="item" onclick="ir(\'diaristaEmBreve\')">'
-         : '<button class="item" onclick="abrirSuporte(\'\')">')
+         ? '<button class="item" data-acao="ir" data-tela="diaristaEmBreve">'
+         : '<button class="item" data-acao="abrirSuporte" data-sobre="">')
     +     '<div class="txt"><b>Falar com o suporte</b><span>Uma pessoa responde</span></div>'
     +     '<div class="seta">›</div></button>'
 
-    +   '<button class="btn btn-perigo" style="margin-top:18px" onclick="sairDaConta(this)">'
+    +   '<button class="btn btn-perigo" style="margin-top:18px" data-acao="sairDaConta">'
     +     'Sair da conta</button>'
     +   erroDoCampo("sair-erro", "diaristaPerfil", "")
     + '</div>'
@@ -3906,7 +3905,7 @@ function cartaoDaRendaDoConjunto(){
   if(!situacaoDaDiarista().podeAceitar) return "";
   const r = rendaDoConjunto();
   if(r.quantidade < MINIMO_DE_DIARIAS_PARA_A_HOME) return "";
-  return '<button class="item renda-conjunto" onclick="ir(\'diaristaGanhos\')">'
+  return '<button class="item renda-conjunto" data-acao="ir" data-tela="diaristaGanhos">'
     +   '<div class="icone">' + icone("carteira", 20) + '</div>'
     +   '<div class="txt"><b>' + esc(rotuloDaRendaDoConjunto(r)) + ': '
     /* <i> e não <span>: o .item já transforma todo span de dentro em linha
@@ -3930,7 +3929,7 @@ function blocoAntesDeTrabalhar(e, nosGanhos){
   return '<div class="aviso roxo">' + icone("escudo", 18)
     +   '<div><b>' + esc(titulo) + '</b>' + esc(frase) + '</div></div>'
     + '<button class="btn ' + (e.botaoContorno ? "btn-contorno" : "btn-principal") + '" '
-    +   'onclick="ir(\'' + idSeguro(e.trabalhoDestino) + '\')">' + esc(e.trabalhoBotao) + '</button>';
+    +   'data-acao="ir" data-tela="' + idSeguro(e.trabalhoDestino) + '">' + esc(e.trabalhoBotao) + '</button>';
 }
 
 /* Sem Pix: o aviso e o caminho para a chave. Lê só a tabela de estados
@@ -3941,7 +3940,7 @@ function avisoDoPix(e, esperando){
   if(!e.pixFalta) return "";
   const titulo = esperando > 0 ? moeda(esperando) + " " + e.pixEsperando : e.pixTitulo;
   return '<div class="aviso ambar">🔑<div><b>' + esc(titulo) + '</b>' + esc(e.pixFrase) + '</div></div>'
-    + '<button class="btn btn-principal" onclick="ir(\'' + idSeguro(e.pixDestino) + '\')">'
+    + '<button class="btn btn-principal" data-acao="ir" data-tela="' + idSeguro(e.pixDestino) + '">'
     +   esc(e.pixBotao) + '</button>';
 }
 
@@ -3985,7 +3984,7 @@ function seletorDeRecorte(){
   const atual = recorteAtual();
   return '<div class="recorte">' + RECORTES_DOS_GANHOS.map(function(r){
     return '<button class="' + (r.id === atual.id ? "marcada" : "") + '" '
-      + 'onclick="escolherRecorte(\'' + idSeguro(r.id) + '\')">' + esc(r.nome) + '</button>';
+      + 'data-acao="escolherRecorte" data-recorte="' + idSeguro(r.id) + '">' + esc(r.nome) + '</button>';
   }).join("") + '</div>';
 }
 
@@ -4001,14 +4000,15 @@ function kmEscrito(km){ return String(km).replace(".", ",") + " km"; }
    informações", nas palavras do dono. Dentro dele não há outro botão — um
    botão dentro de outro o celular não sabe qual apertar.
 
-   O número e a data vão limpos para dentro do onclick: são do próprio app,
-   mas um dado estragado com aspas quebraria o toque. O número vai por
-   Number(): fora das aspas, idSeguro() apagaria o ponto e deixaria passar
-   um nome. Número estragado vira NaN, que não acha serviço nenhum (como o
-   "null" de antes). */
+   O toque são os atributos data-acao e data-* (o ouvinte único do app.js
+   os lê e chama abrirServicoDaAgenda). O número e a data vão limpos: são
+   do próprio app, mas um dado estragado com aspas quebraria o atributo. O
+   número vai por Number(); número estragado vira NaN, que não acha serviço
+   nenhum (como o "null" de antes). */
 function toqueDoDetalhe(s){
   const data = String(s.data || "").replace(/[^0-9-]/g, "");
-  return 'abrirServicoDaAgenda(' + Number(s.oportunidadeId) + ',\'' + idSeguro(data) + '\')';
+  return 'data-acao="abrirServicoDaAgenda" data-oportunidade="' + Number(s.oportunidadeId)
+       + '" data-data="' + idSeguro(data) + '"';
 }
 
 /* Quantas mensagens do cliente deste serviço ela ainda não leu — só com a
@@ -4033,7 +4033,7 @@ function marcaDeMensagemNova(s){
 function cartaoDaAgenda(s){
   const adicionais = s.extrato ? s.extrato.adicionais : (s.adicionaisDoServidor || []);
   const faltaASegunda = s.situacao === "aguardando_segunda";
-  return '<button class="cartao servico-toque" onclick="' + toqueDoDetalhe(s) + '">'
+  return '<button class="cartao servico-toque" ' + toqueDoDetalhe(s) + '>'
     /* o pedido de duas com só ela (A16): não é serviço confirmado, e ela
        sabe até quando a segunda pode aceitar */
     + (faltaASegunda
@@ -4099,7 +4099,7 @@ function blocoJaTerminouHoje(){
   return '<div class="rotulo">Já terminou hoje</div>'
     + lista.map(function(s){
         const primeiro = String(s.cliente || "").split(" ")[0];
-        return '<button class="item ja-terminou" onclick="' + toqueDoDetalhe(s) + '">'
+        return '<button class="item ja-terminou" ' + toqueDoDetalhe(s) + '>'
           +   '<div class="icone">✓</div>'
           +   '<div class="txt"><b>' + esc(s.janela) + ' · ' + esc(s.bairro) + '</b>'
           +     '<span>A conversa com ' + esc(primeiro || "o cliente") + ' fica aberta até as '
@@ -4162,13 +4162,13 @@ TELAS.diaristaAgenda = {
           + 'com o dia, o horário, o bairro e quanto você recebe. A rua e o número chegam '
           + 'na véspera, a partir das ' + HORA_DO_ENDERECO_NA_VESPERA + 'h.</p></div>'
           + '<button class="btn btn-principal" style="margin-top:14px" '
-          +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades</button>';
+          +   'data-acao="ir" data-tela="diaristaHome" data-limpar="1">Ver oportunidades</button>';
 
       /* os dias de trabalho (a grade): no app, desde a entrega 6c */
       miolo += '<button class="btn btn-texto" style="min-height:44px;margin-top:10px" '
-        +   'onclick="ir(\'diaristaDisponibilidade\')">📅 Meus dias de trabalho ›</button>'
+        +   'data-acao="ir" data-tela="diaristaDisponibilidade">📅 Meus dias de trabalho ›</button>'
         + '<button class="btn btn-texto" style="min-height:44px" '
-        +   'onclick="ir(\'diaristaGanhos\')">Os que já passaram estão em Meus ganhos ›</button>';
+        +   'data-acao="ir" data-tela="diaristaGanhos">Os que já passaram estão em Meus ganhos ›</button>';
     }
 
     return ''
@@ -4229,7 +4229,7 @@ function agendaAindaNao(){
   const erro = agendaComErro();
   if(!erro) return '<p class="apoio">Carregando sua agenda…</p>';
   return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
-    + '<button class="btn btn-contorno" onclick="tentarAAgendaDeNovo()">Tentar de novo</button>';
+    + '<button class="btn btn-contorno" data-acao="tentarAAgendaDeNovo">Tentar de novo</button>';
 }
 
 /* Teto de 6 horas por espera: um relógio de vários dias, no celular que
@@ -4387,12 +4387,12 @@ function blocoDoCliente(s){
     ? '<div class="servico-rua" style="margin-top:12px">💬 A conversa com '
       + esc(primeiro || "o cliente") + ' abre quando o serviço for confirmado.</div>'
     : s.conversaAberta
-    ? '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirConversaComOCliente()">'
+    ? '<button class="btn btn-claro" style="margin-top:14px" data-acao="abrirConversaComOCliente">'
       + '💬 Conversar com ' + esc(primeiro || "o cliente")
       + (novas ? ' · ' + novas + (novas > 1 ? ' novas' : ' nova') : "") + '</button>'
     : (s.conversaSituacao === "fechada"
       /* depois das 23h59 do dia: dá para ler, não para escrever (A18-7) */
-      ? '<button class="btn btn-claro" style="margin-top:14px" onclick="abrirConversaComOCliente()">'
+      ? '<button class="btn btn-claro" style="margin-top:14px" data-acao="abrirConversaComOCliente">'
         + '💬 Ver a conversa com ' + esc(primeiro || "o cliente") + '</button>'
         + '<div class="ajuda">A conversa fechou às 23h59 do dia do serviço. Precisa de algo? Fale com o suporte.</div>'
       /* o dia vem da mesma frase da rua: as duas chegam juntas (A18, item 2) */
@@ -4467,9 +4467,9 @@ TELAS.diaristaServico = {
         +     '<p class="apoio" style="margin:0">Os que já terminaram ficam em Meus ganhos, '
         +     'com quanto você recebeu por cada um.</p></div>'
         +   '<button class="btn btn-principal" style="margin-top:14px" '
-        +     'onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">Ver minha agenda</button>'
+        +     'data-acao="ir" data-tela="diaristaAgenda" data-limpar="1">Ver minha agenda</button>'
         +   '<button class="btn btn-texto" style="min-height:44px" '
-        +     'onclick="ir(\'diaristaGanhos\',{limparHistorico:true})">Ver meus ganhos ›</button>'
+        +     'data-acao="ir" data-tela="diaristaGanhos" data-limpar="1">Ver meus ganhos ›</button>'
         + '</div>';
     }
 
@@ -4587,7 +4587,7 @@ function botaoDoDiaDoServico(s){
   const data = String(s.data || "").replace(/[^0-9-]/g, "");
   const hoje = data === hojeIso();
   return '<button class="btn ' + (hoje ? "btn-principal" : "btn-claro") + '" style="margin:4px 0 12px" '
-    + 'onclick="abrirODiaDoServico(' + Number(s.oportunidadeId) + ',\'' + idSeguro(data) + '\')">'
+    + 'data-acao="abrirODiaDoServico" data-oportunidade="' + Number(s.oportunidadeId) + '" data-data="' + idSeguro(data) + '">'
     + '☀️ ' + (hoje ? "Abrir o dia do serviço" : "O dia do serviço") + '</button>';
 }
 
@@ -4600,8 +4600,7 @@ function cartaoDoDiaDeHoje(){
   }).map(detalhesDoServico);
   if(!lista.length) return "";
   return '<div class="rotulo">Hoje ☀️</div>' + lista.map(function(s){
-    return '<button class="item" onclick="abrirODiaDoServico(' + Number(s.oportunidadeId) + ',\''
-      + idSeguro(String(s.data || "").replace(/[^0-9-]/g, "")) + '\')">'
+    return '<button class="item" data-acao="abrirODiaDoServico" data-oportunidade="' + Number(s.oportunidadeId) + '" data-data="' + idSeguro(String(s.data || "").replace(/[^0-9-]/g, "")) + '">'
       + '<div style="font-size:22px;width:26px;text-align:center">☀️</div>'
       + '<div class="txt"><b>Hoje, ' + esc(s.janela) + '</b>'
       + '<span>' + esc(s.bairro) + ' · Abra o dia do serviço</span></div>'
@@ -4649,7 +4648,7 @@ function servicoAindaNao(){
   const erro = servicoComErro();
   if(!erro) return '<p class="apoio">Carregando o serviço…</p>';
   return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
-    + '<button class="btn btn-contorno" onclick="tentarOServicoDeNovo()">Tentar de novo</button>';
+    + '<button class="btn btn-contorno" data-acao="tentarOServicoDeNovo">Tentar de novo</button>';
 }
 
 /* Com o detalhe aberto antes das 18h da véspera, às 18h o servidor é
@@ -4774,17 +4773,17 @@ function cartaoAReceber(r, e){
         + '<div class="valor-grande">' + moeda(r.total) + '</div>'
         + '<div class="ajuda" style="margin:0">' + esc(e.aReceberFrase) + '</div>'
         + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
-        +   'onclick="ir(\'diaristaAgenda\')">Ver minha agenda ›</button>'
+        +   'data-acao="ir" data-tela="diaristaAgenda">Ver minha agenda ›</button>'
       : '<b style="font-size:14.5px">Nenhuma diária agendada agora</b>'
         + '<div class="ajuda">Quando você aceitar serviços, aparece aqui quanto você '
         +   'recebe pelo conjunto.</div>'
         + '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
-        +   'onclick="ir(\'diaristaHome\',{limparHistorico:true})">Ver oportunidades ›</button>')
+        +   'data-acao="ir" data-tela="diaristaHome" data-limpar="1">Ver oportunidades ›</button>')
     + '</div>';
 }
 
 function botaoDoExtrato(){
-  return '<button class="btn btn-claro" style="margin-top:4px" onclick="ir(\'diaristaExtrato\')">'
+  return '<button class="btn btn-claro" style="margin-top:4px" data-acao="ir" data-tela="diaristaExtrato">'
     +   'Ver extrato serviço a serviço</button>';
 }
 
@@ -4887,7 +4886,7 @@ function ganhosAindaNao(){
   const erro = ganhosComErro();
   if(!erro) return '<p class="apoio">Carregando seus ganhos…</p>';
   return '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
-    + '<button class="btn btn-contorno" onclick="tentarOsGanhosDeNovo()">Tentar de novo</button>';
+    + '<button class="btn btn-contorno" data-acao="tentarOsGanhosDeNovo">Tentar de novo</button>';
 }
 
 
@@ -4932,8 +4931,8 @@ function cartaoDoExtrato(s, pagamento){
     + '<div class="linha total"><span class="rot">Você recebe</span>'
     +   '<span class="val">' + moeda(s.valor) + '</span></div>'
     + (naAgenda
-      ? '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" onclick="'
-        + toqueDoDetalhe(s) + '">Ver detalhes do serviço ›</button>'
+      ? '<button class="btn btn-texto" style="min-height:44px;margin-top:6px" '
+        + toqueDoDetalhe(s) + '>Ver detalhes do serviço ›</button>'
       : "")
     + '</div>';
 }
@@ -5141,22 +5140,22 @@ function avisoDoProblemaDela(d){
 /* O botão principal do passo de agora (e o segundo, quando há dois). */
 function botoesDoDiaDela(d){
   if(d.pode.confirmar)
-    return '<button class="btn btn-principal" onclick="passoDoDiaDela(\'confirmar\', this)">'
+    return '<button class="btn btn-principal" data-acao="passoDoDiaDela" data-passo="confirmar">'
       + '✅ Confirmar minha presença</button>'
-      + (d.pode.sair ? '<button class="btn btn-contorno" onclick="passoDoDiaDela(\'a-caminho\', this)">'
+      + (d.pode.sair ? '<button class="btn btn-contorno" data-acao="passoDoDiaDela" data-passo="a-caminho">'
         + 'Já estou a caminho</button>' : "");
   if(d.pode.sair)
-    return '<button class="btn btn-principal" onclick="passoDoDiaDela(\'a-caminho\', this)">'
+    return '<button class="btn btn-principal" data-acao="passoDoDiaDela" data-passo="a-caminho">'
       + '🚌 Estou a caminho</button>';
   if(d.pode.chegar)
-    return '<button class="btn btn-principal" onclick="ir(\'diaristaSelfieDaChegada\')">'
+    return '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaSelfieDaChegada">'
       + '🤳 Cheguei: tirar a selfie</button>';
   if(d.pode.terminar)
-    return '<button class="btn btn-principal" onclick="passoDoDiaDela(\'terminei\', this)">'
+    return '<button class="btn btn-principal" data-acao="passoDoDiaDela" data-passo="terminei">'
       + '✨ Terminei</button>';
   if(d.pode.avaliar)
-    return '<button class="btn btn-principal" onclick="ir(\'diaristaAvaliar\')">⭐ Avaliar a casa</button>';
-  return '<button class="btn btn-contorno" onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">'
+    return '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaAvaliar">⭐ Avaliar a casa</button>';
+  return '<button class="btn btn-contorno" data-acao="ir" data-tela="diaristaAgenda" data-limpar="1">'
     + 'Ver minha agenda</button>';
 }
 
@@ -5186,11 +5185,11 @@ TELAS.diaristaDia = {
       return cabecalho("O dia do serviço") + '<div class="corpo">'
         + (FONTE.ehMaquete || erro === "sem_servico"
           ? '<div class="vazio">Não achamos esse serviço na sua agenda.</div>'
-            + '<button class="btn btn-principal" onclick="ir(\'diaristaAgenda\',{limparHistorico:true})">'
+            + '<button class="btn btn-principal" data-acao="ir" data-tela="diaristaAgenda" data-limpar="1">'
             + 'Ver minha agenda</button>'
           : erro
           ? '<div class="aviso ambar">⚠️<div>' + esc(erro) + '</div></div>'
-            + '<button class="btn btn-contorno" onclick="tentarODiaDeNovo()">Tentar de novo</button>'
+            + '<button class="btn btn-contorno" data-acao="tentarODiaDeNovo">Tentar de novo</button>'
           : '<p class="apoio">Carregando o dia do serviço…</p>')
         + '</div>';
     }
@@ -5235,17 +5234,17 @@ TELAS.diaristaDia = {
     +     '<div class="linha"><span class="rot">Quem pediu</span><span class="val">' + esc(d.cliente || "Cliente")
     +       '</span></div>'
     +   '</div>'
-    +   '<button class="btn btn-texto" style="min-height:44px" onclick="ir(\'diaristaServico\')">'
+    +   '<button class="btn btn-texto" style="min-height:44px" data-acao="ir" data-tela="diaristaServico">'
     +     'Ver detalhes do serviço ›</button>'
     +   ((d.pode.imprevisto || d.pode.clienteAusente)
       ? '<div class="rotulo">Precisa de ajuda?</div>'
         + (d.pode.clienteAusente
-          ? '<button class="item" onclick="passoDoDiaDela(\'cliente-ausente\', this)">'
+          ? '<button class="item" data-acao="passoDoDiaDela" data-passo="cliente-ausente">'
             + '<div style="font-size:19px;width:26px;text-align:center">🔔</div>'
             + '<div class="txt"><b>' + esc(primeiro) + ' não atende</b>'
             + '<span>Avisamos ela e a nossa equipe.</span></div><div class="seta">›</div></button>' : "")
         + (d.pode.imprevisto
-          ? '<button class="item" onclick="ir(\'diaristaImprevisto\')">'
+          ? '<button class="item" data-acao="ir" data-tela="diaristaImprevisto">'
             + '<div style="font-size:19px;width:26px;text-align:center">🙏</div>'
             + '<div class="txt"><b>Tive um imprevisto</b>'
             + '<span>A nossa equipe fala com você.</span></div><div class="seta">›</div></button>' : "")
@@ -5325,7 +5324,7 @@ TELAS.diaristaSelfieDaChegada = {
       return cabecalho("") + '<div class="centro">'
         + '<div class="emojao">🤳</div><h2 class="titulo">A selfie da chegada</h2>'
         + '<p class="apoio">Ela abre quando você estiver a caminho, perto do horário do serviço.</p></div>'
-        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+        + '<div class="rodape"><button class="btn btn-principal" data-acao="voltar">Voltar</button></div>';
     }
     const restantes = Number(d.selfiesRestantes) || 0;
     return cabecalho("")
@@ -5340,14 +5339,14 @@ TELAS.diaristaSelfieDaChegada = {
     +   '<div class="aviso roxo">🔒<div><b>A foto não fica guardada</b>'
     +     'A gente só confere que é você, e a cliente fica sabendo que você chegou.</div></div>'
     +   '<input type="file" id="dia-foto-chegada" class="campo-de-foto" accept="image/*" '
-    +     'capture="user" aria-label="Selfie da chegada" onchange="chegadaEscolhida(this)">'
+    +     'capture="user" aria-label="Selfie da chegada" data-acao-change="chegadaEscolhida">'
     +   soNaMaquete('<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
     +     '<div>A selfie da chegada sempre confere. Para ver o que acontece quando ela não confere:</div>'
-    +     '<button class="btn btn-contorno" onclick="simularChegadaQueNaoConfere()">'
+    +     '<button class="btn btn-contorno" data-acao="simularChegadaQueNaoConfere">'
     +       'Simular: a selfie não confere</button></div>')
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="abrirACamera(\'dia-foto-chegada\')">'
+    +   '<button class="btn btn-principal" data-acao="abrirACamera" data-campo="dia-foto-chegada">'
     +     '🤳 Tirar a selfie</button>'
     +   erroDoCampo("chegada-erro", "diaristaSelfieDaChegada", "foto")
     + '</div>';
@@ -5406,7 +5405,7 @@ TELAS.diaristaImprevisto = {
               return botaoDoSuporte("diarista", "servico:" + String((E.servicoAberto || {}).oportunidadeId || ""),
                                     "💬 Falar com a nossa equipe");
             })
-        +   '<button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+        +   '<button class="btn btn-principal" data-acao="voltar">Voltar</button></div>';
     }
     return cabecalho("")
     + '<div class="corpo">'
@@ -5421,7 +5420,7 @@ TELAS.diaristaImprevisto = {
     +     'O que acontece com o serviço, a nossa equipe combina com você e com a cliente.</div></div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="enviarOImprevisto(this)">Avisar a nossa equipe</button>'
+    +   '<button class="btn btn-principal" data-acao="enviarOImprevisto">Avisar a nossa equipe</button>'
     +   '<div class="erro-do-campo" id="imprevisto-geral"></div>'
     + '</div>';
   }
@@ -5455,8 +5454,7 @@ function estrelasParaEscolher(tela){
   let s = '<div class="notas" role="group" aria-label="Nota de 1 a 5">';
   for(let n = 1; n <= 5; n++){
     s += '<button class="' + (n <= escolhida ? "marcada" : "") + '" aria-label="' + n
-      + (n === 1 ? ' estrela' : ' estrelas') + '" onclick="escolherNota(\'' + idSeguro(tela) + '\','
-      + Number(n) + ')">' + (n <= escolhida ? "⭐" : "☆") + '</button>';
+      + (n === 1 ? ' estrela' : ' estrelas') + '" data-acao="escolherNota" data-onde="' + idSeguro(tela) + '" data-nota="' + Number(n) + '">' + (n <= escolhida ? "⭐" : "☆") + '</button>';
   }
   return s + '</div>';
 }
@@ -5477,7 +5475,7 @@ TELAS.diaristaAvaliar = {
         + '<div class="emojao">⭐</div><h2 class="titulo">'
         + (d && d.avaliou ? 'Obrigada pela avaliação!' : 'A avaliação abre quando o serviço terminar') + '</h2>'
         + '<p class="apoio">Ela ajuda a gente a cuidar de quem trabalha pelo app.</p></div>'
-        + '<div class="rodape"><button class="btn btn-principal" onclick="voltar()">Voltar</button></div>';
+        + '<div class="rodape"><button class="btn btn-principal" data-acao="voltar">Voltar</button></div>';
     }
     const primeiro = String(d.cliente || "").split(" ")[0] || "a cliente";
     const nota = notaEscolhida("diaristaAvaliar");
@@ -5495,7 +5493,7 @@ TELAS.diaristaAvaliar = {
     +     erroDoCampo("avaliacao-comentario-erro", "diaristaAvaliar", "comentario") + '</div>'
     + '</div>'
     + '<div class="rodape">'
-    +   '<button class="btn btn-principal" onclick="enviarAAvaliacaoDela(this)">Enviar avaliação</button>'
+    +   '<button class="btn btn-principal" data-acao="enviarAAvaliacaoDela">Enviar avaliação</button>'
     +   '<div class="erro-do-campo" id="avaliacao-erro"></div>'
     + '</div>';
   }
@@ -5527,15 +5525,15 @@ function quadroDoDiaNaMaquete(d){
   return '<div class="cartao maquete"><b>⚙ NA MAQUETE</b>'
     + '<div>No app, cada passo só abre na hora certa, pelo relógio do servidor. Aqui, os botões '
     + 'levam o relógio deste serviço para a hora de cada passo:</div>'
-    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'confirmar\')">⏩ ' + esc(d.abre.confirmar)
+    + '<button class="btn btn-contorno" data-acao="pularODiaPara" data-momento="confirmar">⏩ ' + esc(d.abre.confirmar)
     +   '05 do dia: confirmar</button>'
-    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'chegar\')">⏩ Perto do início: chegar</button>'
-    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'meio\')">⏩ No meio da janela</button>'
-    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'fim\')">⏩ Depois do fim</button>'
-    + '<button class="btn btn-contorno" onclick="pularODiaPara(\'agora\')">Voltar ao relógio de verdade</button>'
+    + '<button class="btn btn-contorno" data-acao="pularODiaPara" data-momento="chegar">⏩ Perto do início: chegar</button>'
+    + '<button class="btn btn-contorno" data-acao="pularODiaPara" data-momento="meio">⏩ No meio da janela</button>'
+    + '<button class="btn btn-contorno" data-acao="pularODiaPara" data-momento="fim">⏩ Depois do fim</button>'
+    + '<button class="btn btn-contorno" data-acao="pularODiaPara" data-momento="agora">Voltar ao relógio de verdade</button>'
     /* no app, quem libera é a pessoa da equipe, na fila "Hoje" */
     + (d.passo === "conferindo"
-      ? '<button class="btn btn-contorno" onclick="simularEquipeLiberaAChegada()">'
+      ? '<button class="btn btn-contorno" data-acao="simularEquipeLiberaAChegada">'
         + 'Simular: a equipe conferiu e liberou a chegada</button>' : "")
     + '</div>';
 }
@@ -5578,7 +5576,7 @@ function abasDaDiarista(ativa){
     { id:"perfil",  ic:"pessoa",     nome:"Perfil",  tela:"diaristaPerfil" },
   ];
   return '<div class="abas">' + itens.map(function(i){
-    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" onclick="ir(\'' + idSeguro(i.tela) + '\')">'
+    return '<button class="' + (i.id === ativa ? "ativa" : "") + '" data-acao="ir" data-tela="' + idSeguro(i.tela) + '">'
          + '<span class="ic">' + icone(i.ic, 21) + '</span>' + i.nome + '</button>';
   }).join("") + '</div>';
 }
